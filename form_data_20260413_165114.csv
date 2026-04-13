@@ -1,0 +1,9 @@
+﻿Название,Тип,Значение
+p-inputtext p-component p-element ng-untouched ng-pristine p-filled,text,100001
+branchCode,text,1
+sellerName,text,Susarin Mihail Aleksandrovich
+crossSellerName,text,Susarin Mihail Aleksandrovich
+partnershipDetailsCode,text,ACURA_DEPT01
+agentCode,text,ACURA_PREM01
+ql-header,select-one,Normal
+ql-font,select-one,Sans Serif

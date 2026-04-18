@@ -4,98 +4,141 @@
   <meta charset="UTF-8" />
   <title>Запись на баскетбол в Ярославле</title>
   <style>
-    body {
-      font-family: sans-serif;
-      max-width: 600px;
-      margin: 20px auto;
-      margin-bottom: 40px;
-    }
+  body {
+    font-family: sans-serif;
+    max-width: 600px;
+    margin: 20px auto;
+    margin-bottom: 40px;
 
-    label, input, button, select {
-      margin: 5px 0;
-      padding: 10px;
-      width: 100%;
-      border-radius: 4px;
-      border: 1px solid #ccc;
-      box-sizing: border-box;
-      font-size: 16px;
-    }
+    background-color: #121212;   /* тёмный фон страницы */
+    color: #e0e0e0;              /* светлый текст */
+  }
 
-    .players {
-      margin-top: 20px;
-      padding: 10px;
-      background: #f0f0f0;
-      border-radius: 5px;
-    }
+  label, input, button, select {
+    margin: 5px 0;
+    padding: 10px;
+    width: 100%;
+    border-radius: 4px;
+    border: 1px solid #404040;
+    box-sizing: border-box;
+    font-size: 16px;
 
-    table {
-      width: 100%;
-      border-collapse: collapse;
-      margin-top: 10px;
-    }
+    background-color: #2d2d2d;
+    color: #f0f0f0;
+  }
 
-    th, td {
-      padding: 8px;
-      text-align: left;
-      border: 1px solid #ccc;
-    }
+  input:focus, select:focus {
+    border-color: #00aaff;
+    outline: none;
+  }
 
-    th {
-      background: #ddd;
-    }
+  button {
+    background-color: #007acc;
+    color: #ffffff;
+    border: none;
+    cursor: pointer;
+  }
 
-    #currentDateTime {
-      margin-bottom: 15px;
-      padding: 10px;
-      background: #e0f7fa;
-      border-radius: 5px;
-      font-size: 14px;
-    }
+  button:hover {
+    background-color: #005ca3;
+  }
 
-    #nearestGameInfo {
-      margin-top: 5px;
-      font-size: 14px;
-      color: #444;
-    }
+  .players {
+    margin-top: 20px;
+    padding: 10px;
+    background: #252525;
+    border-radius: 5px;
+    border: 1px solid #404040;
+  }
 
-    #hallSelectRow {
-      margin-bottom: 10px;
-    }
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 10px;
+    background-color: #222222;
+  }
 
-    #hallSelectRow > * {
-      display: block;
-      margin: 2px 0;
-    }
+  th, td {
+    padding: 8px;
+    text-align: left;
+    border: 1px solid #404040;
+    color: #e0e0e0;
+  }
 
-    #pricingRow {
-      margin-top: 15px;
-      padding: 8px;
-      background: #dff0d8;
-      border-radius: 4px;
-      font-size: 14px;
-    }
+  th {
+    background: #333333;
+  }
 
-    .playerLine {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      margin: 5px 0;
-    }
+  #currentDateTime {
+    margin-bottom: 15px;
+    padding: 10px;
+    background: #202020;
+    border-radius: 5px;
+    font-size: 14px;
+    color: #d0ffd0;
+    border: 1px solid #404040;
+  }
 
-    .playerName {
-      flex-grow: 1;
-      margin-right: 10px;
-    }
+  #nearestGameInfo {
+    margin-top: 10px;
+    padding: 10px;
+    background: #202020;
+    border-radius: 5px;
+    font-size: 14px;
+    color: #a0e0ff;        /* светло‑голубой текст */
+    border: 1px solid #404040;
+  }
 
-    .playerName span {
-      margin-right: 10px;
-    }
+  #hallSelectRow {
+    margin-bottom: 10px;
+  }
 
-    .icons {
-      white-space: nowrap;
-      text-align: right;
-    }
-  </style>
+  #hallSelectRow > * {
+    display: block;
+    margin: 2px 0;
+  }
+
+  #pricingRow {
+    margin-top: 15px;
+    padding: 8px;
+    background: #1a4b1a;
+    border-radius: 4px;
+    font-size: 14px;
+    color: #e0ffe0;
+  }
+
+  .playerLine {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin: 5px 0;
+    border-bottom: 1px solid #303030;
+    padding-bottom: 4px;
+  }
+
+  .playerName {
+    flex-grow: 1;
+    margin-right: 10px;
+    color: #ffffff;
+  }
+
+  .playerName span {
+    margin-right: 10px;
+  }
+
+  .icons {
+    white-space: nowrap;
+    text-align: right;
+  }
+
+  .responsible {
+    margin-top: 4px;
+    margin-bottom: 8px;
+    font-size: 13px;
+    color: #a0ffa0;
+  }
+</style>
+
 </head>
 <body>
 
@@ -110,14 +153,16 @@
     <label>Выбери зал:</label>
     <select id="hallSelect">
       <option value="">Выберите зал</option>
-      <option value="hall1">Зал 1 — ЛОКОМОТИВ</option>
-      <option value="hall2">Зал 2 — АТЛАНТ</option>
+      <option value="hall1">ЛОКОМОТИВ [Отв. Андрей Дубровин]</option>
+      <option value="hall2">АТЛАНТ [Отв. Ярослав Волков]</option>
     </select>
   </div>
 
   <div id="nearestGameInfo">
     Ближайшая игра: не выбран зал
   </div>
+
+   <br> <br>
 
   <label>Введи или выбери ФИО (Фамилия Имя Отчество):</label><br />
   <input type="text" id="playerName" placeholder="Иван Иванович Иванов" list="playersList" />
@@ -200,7 +245,7 @@
         return;
       }
 
-      result.innerHTML = `<h2>Все записавшиеся в ${document.getElementById('hallSelect').selectedOptions[0].text}</h2>`;
+      result.innerHTML = `<h2>Все записавшиеся в <br> ${document.getElementById('hallSelect').selectedOptions[0].text}</h2>`;
 
       if (players.length === 0) {
         result.innerHTML += '<p>Список пока пуст.</p>';
@@ -556,6 +601,44 @@
       showNearestGame();
       showSchedule();
     });
+    
+        // выбрать ближайший зал как значение по умолчанию
+    function selectNearestHall() {
+      const now = new Date();
+      const nowWeekDay = now.getDay() || 7;
+      const nowHour = now.getHours();
+
+      let nearest = null;
+
+      scheduleDefs.forEach(item => {
+        const dayCode = getDayCode(item.day);
+        const dayDiff = (dayCode - nowWeekDay + 7) % 7;
+        const approximateHour = item.from;
+        let timeDiff = dayDiff * 24 + (approximateHour - nowHour);
+
+        if (timeDiff < 0) {
+          timeDiff += 7 * 24;
+        }
+
+        if (!nearest || timeDiff < nearest.diff) {
+          nearest = { diff: timeDiff, hall: item.hall };
+        }
+      });
+
+      if (nearest) {
+        document.getElementById('hallSelect').value = nearest.hall;
+      }
+    }
+
+    window.addEventListener("DOMContentLoaded", function () {
+      selectNearestHall();       // ✅ выбираем ближайший зал по умолчанию
+      showNearestGame();
+      showSchedule();
+      showList();
+    });
+
+
   </script>
+
 </body>
 </html>

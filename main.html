@@ -4,58 +4,558 @@
   <meta charset="UTF-8" />
   <title>Запись на баскетбол в Ярославле</title>
   <style>
-    body { font-family: sans-serif; max-width: 600px; margin: 20px auto; }
-    input, button { padding: 10px; margin: 5px 0; font-size: 16px; width: 100%; }
-    .players { margin-top: 20px; padding: 10px; background: #f0f0f0; border-radius: 5px; }
+    body {
+      font-family: sans-serif;
+      max-width: 600px;
+      margin: 20px auto;
+      margin-bottom: 40px;
+    }
+
+    label, input, button, select {
+      margin: 5px 0;
+      padding: 10px;
+      width: 100%;
+      border-radius: 4px;
+      border: 1px solid #ccc;
+      box-sizing: border-box;
+      font-size: 16px;
+    }
+
+    .players {
+      margin-top: 20px;
+      padding: 10px;
+      background: #f0f0f0;
+      border-radius: 5px;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 10px;
+    }
+
+    th, td {
+      padding: 8px;
+      text-align: left;
+      border: 1px solid #ccc;
+    }
+
+    th {
+      background: #ddd;
+    }
+
+    #currentDateTime {
+      margin-bottom: 15px;
+      padding: 10px;
+      background: #e0f7fa;
+      border-radius: 5px;
+      font-size: 14px;
+    }
+
+    #nearestGameInfo {
+      margin-top: 5px;
+      font-size: 14px;
+      color: #444;
+    }
+
+    #hallSelectRow {
+      margin-bottom: 10px;
+    }
+
+    #hallSelectRow > * {
+      display: block;
+      margin: 2px 0;
+    }
+
+    #pricingRow {
+      margin-top: 15px;
+      padding: 8px;
+      background: #dff0d8;
+      border-radius: 4px;
+      font-size: 14px;
+    }
+
+    .playerLine {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin: 5px 0;
+    }
+
+    .playerName {
+      flex-grow: 1;
+      margin-right: 10px;
+    }
+
+    .playerName span {
+      margin-right: 10px;
+    }
+
+    .icons {
+      white-space: nowrap;
+      text-align: right;
+    }
   </style>
 </head>
 <body>
 
+  <!-- Время вверху -->
+  <div id="currentDateTime">
+    Загрузка... дата и время
+  </div>
+
   <h1>Запись на баскетбол в Ярославле</h1>
 
-  <label>Введи ФИО:</label><br />
-  <input type="text" id="playerName" placeholder="Иван Иванов" />
+  <div id="hallSelectRow">
+    <label>Выбери зал:</label>
+    <select id="hallSelect">
+      <option value="">Выберите зал</option>
+      <option value="hall1">Зал 1 — ЛОКОМОТИВ</option>
+      <option value="hall2">Зал 2 — АТЛАНТ</option>
+    </select>
+  </div>
+
+  <div id="nearestGameInfo">
+    Ближайшая игра: не выбран зал
+  </div>
+
+  <label>Введи или выбери ФИО (Фамилия Имя Отчество):</label><br />
+  <input type="text" id="playerName" placeholder="Иван Иванович Иванов" list="playersList" />
+  <span id="playerNameError" style="color: red; font-size: 12px; display: none;">
+    ФИО должно состоять из трёх слов: Фамилия Имя Отчество
+  </span>
+
+  <datalist id="playersList"></datalist>
 
   <button onclick="addPlayer()">Записаться</button>
 
   <div id="result"></div>
 
-  <script>
-    // Список участников (для демонстрации, в реальности лучше хранить на сервере)
-    let players = JSON.parse(localStorage.getItem('basketballPlayers')) || [];
+  <!-- График игр (скрытый по умолчанию) -->
+  <div id="scheduleContainer" style="margin-top: 20px; display: none;">
+    <h2>График игр в выбранном зале</h2>
+    <div id="scheduleContent"></div>
+  </div>
 
-    // Показать список при открытии
+  <!-- Строка расчёта суммы -->
+  <div id="pricingRow">
+    Стоимость к оплате: не выбран зал.
+  </div>
+
+  <script>
+    const MAX_PLAYERS = 18;
+
+    // Стоимость для залов (если больше 500, считаем деление)
+    const hallPrice = {
+      "hall1": 4500,
+      "hall2": 350
+    };
+
+    // Список участников и ФИО
+    let playersByHall = {};
+    let playerNames = JSON.parse(localStorage.getItem('basketballPlayerNames')) || [];
+
+    function loadPlayers() {
+      const saved = localStorage.getItem('basketballPlayersByHall');
+      if (saved) {
+        playersByHall = JSON.parse(saved);
+      } else {
+        playersByHall = {
+          hall1: [],
+          hall2: []
+        };
+      }
+    }
+
+    // Показать текущие дата и время
+    function showCurrentDateTime() {
+      const now = new Date();
+      const options = {
+        weekday: 'short',
+        year: 'numeric',
+        month: 'short',
+        day: '2-digit',
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit'
+      };
+      const dtText = now.toLocaleString('ru-RU', options)
+        .replace(',', '')
+        .replace('г.', 'г.');
+      document.getElementById('currentDateTime').textContent =
+        'Сегодня: ' + dtText;
+    }
+
+    // Показать список участников с inline-редактированием и подсчётом суммы
     function showList() {
+      const hall = document.getElementById('hallSelect').value;
       const result = document.getElementById('result');
-      result.innerHTML = '<h2>Все записавшиеся:</h2>';
+      const priceElem = document.getElementById('pricingRow');
+      const players = playersByHall[hall] || [];
+
+      // Вывод списка
+      if (!hall) {
+        result.innerHTML = '<p>Выберите зал, чтобы увидеть список участников.</p>';
+        priceElem.textContent = 'Стоимость к оплате: не выбран зал.';
+        return;
+      }
+
+      result.innerHTML = `<h2>Все записавшиеся в ${document.getElementById('hallSelect').selectedOptions[0].text}</h2>`;
 
       if (players.length === 0) {
         result.innerHTML += '<p>Список пока пуст.</p>';
       } else {
-        const list = players.map((name, i) => `<p>${i + 1}. ${name}</p>`).join('');
+        const list = players.map((name, i) => {
+          const idx = i + 1;
+          const isLimited = idx <= MAX_PLAYERS;
+          const colorStyle = isLimited ? '' : 'color: gray;';
+          return `
+            <div class="playerLine" id="playerLine${i}" style="${colorStyle}">
+              <div class="playerName">
+                <span>${idx}. ${name}</span>
+                <input type="text" id="nameEdit${i}" value="${name}" 
+                       style="display: none; width: 250px; padding: 2px;" />
+              </div>
+              <div class="icons">
+                <span onclick="startEdit(${i})" style="cursor: pointer; margin-right: 6px;">✎</span>
+                <span onclick="submitEdit(${i})" style="display: none; cursor: pointer; margin-right: 6px; color: green;">✔</span>
+                <span onclick="cancelEdit(${i})" style="display: none; cursor: pointer; margin-right: 6px; color: gray;">✖</span>
+                <span onclick="removePlayer(${i})" style="cursor: pointer; color: red;">🗑️</span>
+              </div>
+            </div>
+          `;
+        }).join('');
         result.innerHTML += list;
       }
-    }
 
-    // Добавить игрока
-    function addPlayer() {
-      const input = document.getElementById('playerName');
-      const name = input.value.trim();
+      // Подсчёт и отображение суммы к оплате на человека
+      const hallKey = hall;
+      const price = hallPrice[hallKey] || 0;
 
-      if (!name) {
-        alert('Введите ФИО');
-        return;
+      if (price > 500 && players.length > 0) {
+        const activeCount = Math.min(MAX_PLAYERS, players.length);
+        const perPerson = (price / activeCount).toFixed(2);
+        priceElem.innerHTML = `
+          Стоимость зала: ${price} ₽.<br>
+          Оплачивать будут ${activeCount} человек (${activeCount} в пределах лимита).<br>
+          <strong>Каждому нужно заплатить: ${perPerson} ₽</strong>
+        `;
+      } else {
+        priceElem.innerHTML = `
+          Стоимость зала: ${price} ₽.<br>
+          Для этого зала не производится деление на участников или участников нет.
+        `;
       }
 
-      players.push(name);
-      localStorage.setItem('basketballPlayers', JSON.stringify(players));
-      input.value = '';
+      // Обновляем список автодополнения
+      updatePlayersList();
+    }
+
+    // Начать редактирование (показать инпут)
+    function startEdit(index) {
+      const line = document.getElementById(`playerLine${index}`);
+      const span = document.querySelector(`#playerLine${index} .playerName span`);
+      const input = document.getElementById(`nameEdit${index}`);
+
+      const startIcon = document.querySelector(`span[onclick="startEdit(${index})"]`);
+      const submitIcon = document.querySelector(`span[onclick="submitEdit(${index})"]`);
+      const cancelIcon = document.querySelector(`span[onclick="cancelEdit(${index})"]`);
+
+      span.style.display = 'none';
+      input.style.display = 'inline-block';
+      input.focus();
+
+      startIcon.style.display = 'none';
+      submitIcon.style.display = 'inline-block';
+      cancelIcon.style.display = 'inline-block';
+    }
+
+    // Сохранить редактирование
+    function submitEdit(index) {
+      const input = document.getElementById(`nameEdit${index}`);
+      const newValue = input.value.trim();
+      if (!newValue) return;
+
+      const hall = document.getElementById('hallSelect').value;
+      const oldName = playersByHall[hall][index];
+
+      playersByHall[hall][index] = newValue;
+
+      // обновить общий список ФИО
+      const idxInNames = playerNames.indexOf(oldName);
+      if (idxInNames !== -1) {
+        playerNames[idxInNames] = newValue;
+      } else {
+        playerNames.push(newValue);
+      }
+
+      localStorage.setItem('basketballPlayerNames', JSON.stringify(playerNames));
+      localStorage.setItem('basketballPlayersByHall', JSON.stringify(playersByHall));
+
       showList();
     }
 
-    // Показать список при загрузке страницы
-    showList();
-  </script>
+    // Отменить редактирование
+    function cancelEdit(index) {
+      showList();
+    }
 
+    // Удалить участника
+    function removePlayer(index) {
+      const hall = document.getElementById('hallSelect').value;
+      const name = playersByHall[hall][index];
+      if (confirm(`Удалить "${name}"?`)) {
+        playersByHall[hall].splice(index, 1);
+        localStorage.setItem('basketballPlayersByHall', JSON.stringify(playersByHall));
+        showList();
+      }
+    }
+
+    function validatePlayerName() {
+      const input = document.getElementById('playerName');
+      const error = document.getElementById('playerNameError');
+      const name = input.value.trim();
+      const words = name.split(/\s+/).filter(word => word.length > 0);
+
+      if (!name || words.length < 3) {
+        input.style.borderColor = 'red';
+        input.style.backgroundColor = '#ffeaea';
+        error.style.display = 'block';
+      } else {
+        input.style.borderColor = '#ccc';
+        input.style.backgroundColor = 'white';
+        error.style.display = 'none';
+      }
+    }
+
+    function addPlayer() {
+      const input = document.getElementById('playerName');
+      const error = document.getElementById('playerNameError');
+      const name = input.value.trim();
+      const words = name.split(/\s+/).filter(word => word.length > 0);
+
+      if (!name || words.length < 3) {
+        validatePlayerName();
+        return;
+      }
+
+      const hall = document.getElementById('hallSelect').value;
+
+      if (!hall) {
+        alert('Сначала выберите зал');
+        return;
+      }
+
+      if (!playersByHall[hall]) {
+        playersByHall[hall] = [];
+      }
+
+      if (!playerNames.includes(name)) {
+        playerNames.push(name);
+        localStorage.setItem('basketballPlayerNames', JSON.stringify(playerNames));
+      }
+
+      playersByHall[hall].push(name);
+      localStorage.setItem('basketballPlayersByHall', JSON.stringify(playersByHall));
+      input.value = '';
+      input.style.borderColor = '#ccc';
+      input.style.backgroundColor = 'white';
+      error.style.display = 'none';
+      showList();
+    }
+
+    function updatePlayersList() {
+      const list = document.getElementById('playersList');
+      list.innerHTML = ''; // очищаем
+
+      playerNames.forEach(name => {
+        const option = document.createElement('option');
+        option.value = name;
+        list.appendChild(option);
+      });
+    }
+
+    loadPlayers();
+    showCurrentDateTime();
+    setInterval(showCurrentDateTime, 1000);
+    showList();
+
+    document.getElementById('playerName').addEventListener('blur', validatePlayerName);
+    document.getElementById('hallSelect').addEventListener('change', function () {
+      showList();
+      showSchedule();
+    });
+
+    // ===============================
+    // График с максимумом 18 человек
+    // ===============================
+
+    function showSchedule() {
+      const hall = document.getElementById('hallSelect').value;
+      const container = document.getElementById('scheduleContainer');
+      const content = document.getElementById('scheduleContent');
+
+      container.style.display = 'none';
+      content.innerHTML = '';
+
+      if (hall === 'hall1') {
+        container.style.display = 'block';
+        content.innerHTML = `
+          <table border="1" style="width: 100%; border-collapse: collapse;">
+            <thead>
+              <tr style="background: #ddd;">
+                <th>День недели</th>
+                <th>Время</th>
+                <th>Стоимость</th>
+                <th>Макс. участников</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>Вторник</td>
+                <td>21:00 – 23:00</td>
+                <td>5000 ₽</td>
+                <td>18 человек</td>
+              </tr>
+              <tr>
+                <td>Четверг</td>
+                <td>21:00 – 23:00</td>
+                <td>5000 ₽</td>
+                <td>18 человек</td>
+              </tr>
+            </tbody>
+          </table>
+        `;
+      } else if (hall === 'hall2') {
+        container.style.display = 'block';
+        content.innerHTML = `
+          <table border="1" style="width: 100%; border-collapse: collapse;">
+            <thead>
+              <tr style="background: #ddd;">
+                <th>День недели</th>
+                <th>Время</th>
+                <th>Стоимость</th>
+                <th>Макс. участников</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>Пятница</td>
+                <td>21:00 – 23:00</td>
+                <td>350 ₽</td>
+                <td>18 человек</td>
+              </tr>
+            </tbody>
+          </table>
+        `;
+      }
+    }
+
+    // ===============================
+    // Ближайшая встреча: дата + день недели
+    // ===============================
+
+    const dayNamesRU = {
+      "Monday": "понедельник",
+      "Tuesday": "вторник",
+      "Wednesday": "среда",
+      "Thursday": "четверг",
+      "Friday": "пятница",
+      "Saturday": "суббота",
+      "Sunday": "воскресенье"
+    };
+
+    const scheduleDefs = [
+      { hall: "hall1", day: "Tuesday",  from: 21, to: 23 },
+      { hall: "hall1", day: "Thursday", from: 21, to: 23 },
+      { hall: "hall2", day: "Friday",   from: 21, to: 23 }
+    ];
+
+    function getDayCode(dayName) {
+      const map = {
+        "Monday": 1,
+        "Tuesday": 2,
+        "Wednesday": 3,
+        "Thursday": 4,
+        "Friday": 5,
+        "Saturday": 6,
+        "Sunday": 7
+      };
+      return map[dayName] || 0;
+    }
+
+    function getNearestGameText(hall) {
+      const now = new Date();
+      const nowWeekDay = now.getDay() || 7;
+      const nowHour = now.getHours();
+
+      let nearest = null;
+
+      scheduleDefs
+        .filter(item => item.hall === hall)
+        .forEach(item => {
+          const dayCode = getDayCode(item.day);
+          const dayDiff = (dayCode - nowWeekDay + 7) % 7;
+          const approximateHour = item.from;
+          let timeDiff = dayDiff * 24 + (approximateHour - nowHour);
+
+          if (timeDiff < 0) {
+            timeDiff += 7 * 24;
+          }
+
+          if (!nearest || timeDiff < nearest.diff) {
+            nearest = {
+              diff: timeDiff,
+              day: item.day,
+              from: item.from,
+              to: item.to
+            };
+          }
+        });
+
+      if (!nearest) {
+        return "Ближайшая игра: не найдено";
+      }
+
+      const russianDay = dayNamesRU[nearest.day];
+
+      const nearestDate = new Date(now);
+      nearestDate.setDate(now.getDate() + Math.floor(nearest.diff / 24));
+      nearestDate.setHours(nearest.from, 0, 0, 0);
+
+      const dateOptions = {
+        day: 'numeric',
+        month: 'short',
+        weekday: 'short'
+      };
+      const parts = nearestDate.toLocaleString('ru-RU', dateOptions).split(' ');
+      const dayNum = parts[1];
+      const month = parts[2].replace('.', '');
+      const weekday = parts[0].replace(',', '').charAt(0).toUpperCase() + parts[0].slice(1, -1);
+
+      const fromStr = `${nearest.from}:00`;
+      const toStr = `${nearest.to}:00`;
+
+      return `Ближайшая игра: ${weekday}, ${dayNum} ${month}, ${fromStr}–${toStr}`;
+    }
+
+    function showNearestGame() {
+      const hall = document.getElementById('hallSelect').value;
+      const info = document.getElementById('nearestGameInfo');
+
+      if (!hall) {
+        info.textContent = "Ближайшая игра: не выбран зал";
+        return;
+      }
+
+      info.textContent = getNearestGameText(hall);
+    }
+
+    document.getElementById('hallSelect').addEventListener('change', showNearestGame);
+    window.addEventListener("DOMContentLoaded", function () {
+      showNearestGame();
+      showSchedule();
+    });
+  </script>
 </body>
 </html>

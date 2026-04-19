@@ -417,15 +417,14 @@
     }
 
       // Подтвердить игру и сохранить текущий список в историю ближайшей даты
-      function confirmGame() {
+    async function confirmGame() {
       const hall = document.getElementById('hallSelect').value;
+      const players = playersByHall[hall] || [];
 
       if (!hall) {
         alert('Сначала выберите зал.');
         return;
       }
-
-      const players = playersByHall[hall] || [];
 
       if (players.length === 0) {
         alert('Список игроков пуст.');
@@ -439,26 +438,42 @@
         return;
       }
 
-      if (!historyByDate[dateStr]) {
-        historyByDate[dateStr] = {};
+      // Отправляем в API
+      try {
+        const response = await fetch(
+          'https://seleniumwebdriverdq-production.up.railway.app/api/games/confirm',
+          {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              hallId: hall,
+              date: dateStr,
+              players: players
+            })
+          }
+        );
+
+        if (!response.ok) {
+          throw new Error('Ошибка при подтверждении игры');
+        }
+
+        const result = await response.json();
+        historyByDate = result.historyByDate || {};  // обновляем локальный historyByDate
+
+        // Обновляем таблицу истории под новую версию
+        showHistoryTable();
+
+        const gameText = getNearestGameText(hall).replace('Ближайшая игра: ', '');
+
+        alert(
+          `Игра в зале "${
+            hall === 'hall1' ? 'ЛОКОМОТИВ' : 'АТЛАНТ'
+          }" на дату ${dateStr} (${gameText}) подтверждена и сохранена в истории.`
+        );
+      } catch (err) {
+        console.error('Ошибка при подтверждении игры через API:', err);
+        alert('Не удалось сохранить историю игры через API');
       }
-      historyByDate[dateStr][hall] = [...players];  // копия списка
-
-      saveHistory();
-
-      // перечитать из localStorage, чтобы таблица видела актуальные данные
-      historyByDate = JSON.parse(localStorage.getItem('basketballHistoryByDate')) || {};
-
-      // обновить таблицу истории
-      showHistoryTable();
-
-      const gameText = getNearestGameText(hall).replace('Ближайшая игра: ', '');
-
-      alert(
-        `Игра в зале "${
-          hall === 'hall1' ? 'ЛОКОМОТИВ' : 'АТЛАНТ'
-        }" на дату ${dateStr} (${gameText}) подтверждена и сохранена в истории.`
-      );
     }
 
 

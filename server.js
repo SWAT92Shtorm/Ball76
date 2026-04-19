@@ -179,6 +179,40 @@ app.delete('/api/players/:hallId/:playerIndex', (req, res) => {
   });
 });
 
+// POST /api/games/confirm — подтвердить игру и сохранить в историю
+app.post('/api/games/confirm', (req, res) => {
+  const { hallId, date, players } = req.body;
+
+  if (!hallId || !date || !Array.isArray(players)) {
+    return res.status(400).json({ error: 'Bad request' });
+  }
+
+  fs.readFile(DATA_FILE, 'utf8', (err, data) => {
+    if (err) {
+      console.error('Ошибка чтения players.json:', err.message);
+      return res.status(500).json({ error: 'Failed to read players.json' });
+    }
+
+    try {
+      const { playersByHall, historyByDate } = JSON.parse(data);
+
+      if (!historyByDate[date]) {
+        historyByDate[date] = {};
+      }
+
+      historyByDate[date][hallId] = [...players]; // делаем копию массива
+
+      const updatedData = JSON.stringify({ playersByHall, historyByDate }, null, 2);
+      fs.writeFileSync(DATA_FILE, updatedData);
+
+      res.json({ historyByDate });
+    } catch (parseErr) {
+      console.error('Ошибка парсинга/записи players.json:', parseErr.message);
+      res.status(500).json({ error: 'Failed to update players.json' });
+    }
+  });
+});
+
 
 
 // Порт

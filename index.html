@@ -417,83 +417,87 @@
     }
 
       // Подтвердить игру и сохранить текущий список в историю ближайшей даты
-  async function confirmGame() {
-    const hall = document.getElementById('hallSelect').value;
-    const players = playersByHall[hall] || [];
+    async function confirmGame() {
+      const select = document.getElementById('hallSelect');
+      const hall = select ? select.value : '';
 
-    if (!hall) {
-      alert('Сначала выберите зал.');
-      return;
-    }
+      console.log('hall:', hall); // ← удобно смотреть в DevTools
 
-    if (players.length === 0) {
-      alert('Список игроков пуст.');
-      return;
-    }
-
-    const dateStr = getNearestGameDate(hall);
-
-    if (!dateStr) {
-      alert('Не удалось определить ближайшую дату игры.');
-      return;
-    }
-
-    // 1. Сохраняем историю игры
-    try {
-      const historyResponse = await fetch(
-        'https://seleniumwebdriverdq-production.up.railway.app/api/games/confirm',
-        {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            hallId: hall,
-            date: dateStr,
-            players: players
-          })
-        }
-      );
-
-      if (!historyResponse.ok) {
-        throw new Error('Ошибка при подтверждении игры');
+      if (!hall || !['hall1', 'hall2'].includes(hall)) {
+        alert('Сначала выберите корректный зал (ЛОКОМОТИВ / АТЛАНТ).');
+        return;
       }
 
-      const historyResult = await historyResponse.json();
-      historyByDate = historyResult.historyByDate || {};
+      const players = playersByHall[hall] || [];
 
-      // 2. Очищаем всех участников в этом зале
-      const clearResponse = await fetch(
-        `https://seleniumwebdriverdq-production.up.railway.app/api/players/all/${hall}`,
-        {
-          method: 'DELETE'
-          // без headers Content-Type,
-          // т.к. тело пустое
-        }
-      );
-
-      if (!clearResponse.ok) {
-        throw new Error('Ошибка при очистке списка участников');
+      if (players.length === 0) {
+        alert('Список игроков пуст.');
+        return;
       }
 
-      const clearResult = await clearResponse.json();
-      playersByHall = clearResult.playersByHall || playersByHall;
+      const dateStr = getNearestGameDate(hall);
 
-      // Обновляем DOM
-      showList();
-      showHistoryTable();
+      if (!dateStr) {
+        alert('Не удалось определить ближайшую дату игры.');
+        return;
+      }
 
-      const gameText = getNearestGameText(hall).replace('Ближайшая игра: ', '');
+      // 1. Сохраняем историю игры
+      try {
+        const historyResponse = await fetch(
+          'https://seleniumwebdriverdq-production.up.railway.app/api/games/confirm',
+          {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              hallId: hall,
+              date: dateStr,
+              players: players
+            })
+          }
+        );
 
-      alert(
-        `Игра в зале "${
-          hall === 'hall1' ? 'ЛОКОМОТИВ' : 'АТЛАНТ'
-        }" на дату ${dateStr} (${gameText}) подтверждена, история сохранена и список участников очищен.`
-      );
-    } catch (err) {
-      console.error('Ошибка при подтверждении игры или очистке списка:', err);
-      alert('Не удалось сохранить историю игры или очистить список участников через API');
+        if (!historyResponse.ok) {
+          throw new Error('Ошибка при подтверждении игры');
+        }
+
+        const historyResult = await historyResponse.json();
+        historyByDate = historyResult.historyByDate || {};
+
+        // 2. Очищаем всех участников в этом зале
+        const clearResponse = await fetch(
+          `https://seleniumwebdriverdq-production.up.railway.app/api/players/all/${hall}`,
+          {
+            method: 'DELETE'
+            // Без headers Content-Type — тело пустое
+          }
+        );
+
+        console.log('clearResponse status:', clearResponse.status);
+
+        if (!clearResponse.ok) {
+          throw new Error('Ошибка при очистке списка участников');
+        }
+
+        const clearResult = await clearResponse.json();
+        playersByHall = clearResult.playersByHall || playersByHall;
+
+        // Обновляем DOM
+        showList();
+        showHistoryTable();
+
+        const gameText = getNearestGameText(hall).replace('Ближайшая игра: ', '');
+
+        alert(
+          `Игра в зале "${
+            hall === 'hall1' ? 'ЛОКОМОТИВ' : 'АТЛАНТ'
+          }" на дату ${dateStr} (${gameText}) подтверждена, история сохранена и список участников очищен.`
+        );
+      } catch (err) {
+        console.error('Ошибка при подтверждении игры или очистке списка:', err);
+        alert('Не удалось сохранить историю игры или очистить список участников через API');
+      }
     }
-  }
-
 
 
     // Показать список участников с inline-редактированием и подсчётом суммы

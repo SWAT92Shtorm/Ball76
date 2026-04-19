@@ -191,18 +191,30 @@
     Стоимость к оплате: не выбран зал.
   </div>
 
+  <!-- Блок подтверждения игры (скрывается/показывается по логике >10 человек) -->
+  <div id="confirmGameBlock" style="margin-top: 12px; padding: 8px; border-radius: 4px; background: #252525; border: 1px solid #404040; display: none;">
+    <button onclick="confirmGame()">
+      Подтвердить игру
+    </button>
+  </div>
+
   <!-- График игр (скрытый по умолчанию) -->
   <div id="scheduleContainer" style="margin-top: 20px; display: none;">
     <h2>График игр в выбранном зале</h2>
     <div id="scheduleContent"></div>
   </div>
 
+    <!-- Блок таблицы истории записей по датам (прямо после списка участников) -->
+  <div id="historyTableContainer" style="margin-top: 12px; display: none;"></div>
+
+
   <button onclick="clearHallPlayers()" style="background:#b22222;margin-top:10px;">
   Очистить список участников
   </button>
+  
 
   <script>
-    
+
     const MAX_PLAYERS = 18;
 
     // Стоимость для залов (если больше 500, считаем деление)
@@ -279,12 +291,179 @@
         'Сегодня: ' + dtText;
     }
 
+    // История записей: дата → зал → список участников
+    let historyByDate = JSON.parse(localStorage.getItem('basketballHistoryByDate')) || {};
+
+    function saveHistory() {
+      localStorage.setItem('basketballHistoryByDate', JSON.stringify(historyByDate));
+    }
+
+        // Показать историю записей в виде таблицы под списком участников
+         function showHistoryTable() {
+      const hall = document.getElementById('hallSelect').value;
+      const histName = hall === 'hall1' ? 'ЛОКОМОТИВ' : 'АТЛАНТ';
+
+      const historyTableContainer = document.getElementById('historyTableContainer');
+      historyTableContainer.innerHTML = '';
+      historyTableContainer.style.display = 'none';
+
+      if (!hall) {
+        return;
+      }
+
+      const entries = [];
+
+      Object.keys(historyByDate).forEach(dateStr => {
+        const hallData = historyByDate[dateStr][hall] || [];
+        if (hallData.length > 0) {
+          entries.push({
+            date: dateStr,
+            players: hallData
+          });
+        }
+      });
+
+      if (entries.length === 0) {
+        return;
+      }
+
+      historyTableContainer.style.display = 'block';
+
+      // сортируем так, чтобы самая свежая дата была первой
+      // '2026-04-19' > '2026-04-18' → в JavaScript это работает правильно
+      entries.sort((a, b) => {
+        if (a.date < b.date) return 1;   // a старше — ниже
+        if (a.date > b.date) return -1;  // a свежее — выше
+        return 0;
+      });
+
+      let rows = entries.map(entry => {
+        const dateStr = entry.date;
+        const players = entry.players;
+
+        return `
+          <tr>
+            <td style="
+              white-space: nowrap;
+              padding: 6px;
+              border: 1px solid #404040;
+              color: #e0e0e0;
+              font-size: 12px;">
+              ${dateStr}
+            </td>
+            <td style="
+              padding: 6px;
+              border: 1px solid #404040;
+              color: #e0e0e0;
+              font-size: 12px;">
+              ${players.join(', ')}
+            </td>
+          </tr>
+        `;
+      }).join('');
+
+      historyTableContainer.innerHTML = `
+        <h3 style="color: #a0e0ff; margin-top: 10px;">История записей в зале ${histName} по датам</h3>
+        <table style="
+          width: 100%;
+          border-collapse: collapse;
+          margin-top: 6px;
+          background: #222;
+          table-layout: fixed;">
+          <thead>
+            <tr style="background: #333;">
+              <th style="
+                width: 15%;
+                padding: 6px;
+                border: 1px solid #404040;
+                color: #ffffff;
+                text-align: left;
+                font-size: 13px;">
+                Дата
+              </th>
+              <th style="
+                width: 85%;
+                padding: 6px;
+                border: 1px solid #404040;
+                color: #ffffff;
+                text-align: left;
+                font-size: 13px;">
+                Участники (все 18)
+              </th>
+            </tr>
+          </thead>
+          <tbody>
+            ${rows}
+          </tbody>
+        </table>
+      `;
+    }
+
+      // Подтвердить игру и сохранить текущий список в историю ближайшей даты
+      function confirmGame() {
+      const hall = document.getElementById('hallSelect').value;
+
+      if (!hall) {
+        alert('Сначала выберите зал.');
+        return;
+      }
+
+      const players = playersByHall[hall] || [];
+
+      if (players.length === 0) {
+        alert('Список игроков пуст.');
+        return;
+      }
+
+      const dateStr = getNearestGameDate(hall);
+
+      if (!dateStr) {
+        alert('Не удалось определить ближайшую дату игры.');
+        return;
+      }
+
+      if (!historyByDate[dateStr]) {
+        historyByDate[dateStr] = {};
+      }
+      historyByDate[dateStr][hall] = [...players];  // копия списка
+
+      saveHistory();
+
+      // перечитать из localStorage, чтобы таблица видела актуальные данные
+      historyByDate = JSON.parse(localStorage.getItem('basketballHistoryByDate')) || {};
+
+      // обновить таблицу истории
+      showHistoryTable();
+
+      const gameText = getNearestGameText(hall).replace('Ближайшая игра: ', '');
+
+      alert(
+        `Игра в зале "${
+          hall === 'hall1' ? 'ЛОКОМОТИВ' : 'АТЛАНТ'
+        }" на дату ${dateStr} (${gameText}) подтверждена и сохранена в истории.`
+      );
+    }
+
+
     // Показать список участников с inline-редактированием и подсчётом суммы
     function showList() {
       const hall = document.getElementById('hallSelect').value;
       const result = document.getElementById('result');
       const priceElem = document.getElementById('pricingRow');
       const players = playersByHall[hall] || [];
+
+      const currentPlayers = players.length;
+
+      // === показать/скрыть кнопку при >10 человек ===
+      const confirmBlock = document.getElementById('confirmGameBlock');
+      if (confirmBlock) {
+        if (currentPlayers > 9) {
+          confirmBlock.style.display = 'block';
+        } else {
+          confirmBlock.style.display = 'none';
+        }
+      }
+
 
       // Вывод списка
       if (!hall) {
@@ -437,6 +616,7 @@
         `;
       }
 
+      showHistoryTable(); 
 
       // Обновляем список автодополнения
       updatePlayersList();
@@ -650,6 +830,44 @@
       };
       return map[dayName] || 0;
     }
+
+    function getNearestGameDate(hall) {
+      const now = new Date();
+      const nowWeekDay = now.getDay() || 7;
+      const nowHour = now.getHours();
+
+      let nearest = null;
+
+      scheduleDefs
+        .filter(item => item.hall === hall)
+        .forEach(item => {
+          const dayCode = getDayCode(item.day);
+          const dayDiff = (dayCode - nowWeekDay + 7) % 7;
+          const approximateHour = item.from;
+          let timeDiff = dayDiff * 24 + (approximateHour - nowHour);
+
+          if (timeDiff < 0) {
+            timeDiff += 7 * 24;
+          }
+
+          if (!nearest || timeDiff < nearest.diff) {
+            nearest = {
+              diff: timeDiff,
+              from: item.from,
+              to: item.to
+            };
+          }
+        });
+
+      if (!nearest) return null;
+
+      const nearestDate = new Date(now);
+      nearestDate.setDate(now.getDate() + Math.floor(nearest.diff / 24));
+      nearestDate.setHours(nearest.from, 0, 0, 0);
+
+      return nearestDate.toISOString().split('T')[0];  // YYYY-MM-DD
+    }
+
 
     function getNearestGameText(hall) {
       const now = new Date();

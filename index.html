@@ -314,10 +314,10 @@
         result.innerHTML += list;
       }
 
-      // Индикатор заполненности
+      // === Индикатор заполненности ===
       const activeCount = Math.min(MAX_PLAYERS, players.length);
       const perc = Math.min(100, (players.length / MAX_PLAYERS) * 100);
-      const color = players.length <= MAX_PLAYERS ? '#2e7d32' : '#c62828'; // зелёный / красный
+      const barColor = players.length < 10 ? '#c62828' : '#2e7d32';   // < 10 — красный, ≥10 — зелёный
 
       result.innerHTML += `
         <div style="margin-top: 12px; font-size: 13px; color: #b0b0b0;">
@@ -329,13 +329,14 @@
             <div style="
               height: 100%;
               width: ${perc}%;
-              background: ${color};
+              background: ${barColor};
               border-radius: 4px;
               transition: width 0.3s ease;">
             </div>
           </div>
         </div>
       `;
+
 
       // Подсчёт и отображение суммы к оплате на человека
       const hallKey = hall;

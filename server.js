@@ -4,9 +4,10 @@ import cors from 'cors';
 import fs from 'fs';
 import path from 'path';
 
-console.log('Server starting...');
+console.log('1. Импорт модулей завершён');
 
 const app = express();
+console.log('2. app создан');
 
 app.use(cors({
   origin: [
@@ -14,25 +15,27 @@ app.use(cors({
     'https://seleniumwebdriverdq-production.up.railway.app'
   ]
 }));
+console.log('3. CORS включён');
 
 app.use(express.json());
+console.log('4. express.json() включён');
 
 // Путь к файлу с данными
 const DATA_DIR = path.join(process.cwd(), 'data');
 const DATA_FILE = path.join(DATA_DIR, 'players.json');
 
-console.log('DATA_DIR:', DATA_DIR);
-console.log('DATA_FILE:', DATA_FILE);
+console.log('5. DATA_DIR:', DATA_DIR);
+console.log('6. DATA_FILE:', DATA_FILE);
 
 // Создать папку data, если её нет
 if (!fs.existsSync(DATA_DIR)) {
-  console.log('Creating DATA_DIR...');
+  console.log('7. Создаю папку data...');
   fs.mkdirSync(DATA_DIR, { recursive: true });
 }
 
 // Создать players.json, если его нет
 if (!fs.existsSync(DATA_FILE)) {
-  console.log('Creating initial players.json...');
+  console.log('8. Создаю players.json...');
   const emptyData = {
     playersByHall: { hall1: [], hall2: [] },
     historyByDate: {}
@@ -47,7 +50,7 @@ app.get('/api/players', (req, res) => {
 
   try {
     if (!fs.existsSync(DATA_FILE)) {
-      console.log('Файл DATA_FILE не существует, создаю пустой...');
+      console.log('Файл не существует, создаю пустой...');
       const emptyData = {
         playersByHall: { hall1: [], hall2: [] },
         historyByDate: {}
@@ -56,13 +59,13 @@ app.get('/api/players', (req, res) => {
     }
 
     const data = fs.readFileSync(DATA_FILE, 'utf8');
-    console.log('Содержимое файла players.json:', data);
+    console.log('Содержимое файла:', data);
 
     const json = JSON.parse(data);
     res.json(json);
 
   } catch (err) {
-    console.error('Ошибка при чтении/парсинге players.json:', err.message);
+    console.error('Ошибка при чтении/парсинге:', err.message);
     res.status(500).json({ error: 'Failed to read players.json' });
   }
 });
@@ -83,13 +86,10 @@ app.post('/api/savePlayers', (req, res) => {
     fs.writeFileSync(DATA_FILE, JSON.stringify(data, null, 2), 'utf8');
     res.json({ success: true, message: 'Players saved' });
   } catch (err) {
-    console.error('Failed to save players.json:', err.message);
+    console.error('Ошибка при записи файла:', err.message);
     res.status(500).json({ error: 'Failed to save players.json' });
   }
 });
 
-// Важно для Railway: использовать PORT из переменной среды
-const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => {
-  console.log(`Server running on port ${PORT}`);
-});
+// Порт и запуск
+const PORT = process

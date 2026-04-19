@@ -213,6 +213,53 @@ app.post('/api/games/confirm', (req, res) => {
   });
 });
 
+// POST /api/players/sync/:hallId — сохранить список игроков целиком (включая пустой массив)
+app.post('/api/players/sync/:hallId', (req, res) => {
+  const { hallId } = req.params;
+  const { players } = req.body;
+
+  console.log('POST /api/players/sync/:hallId, hallId:', hallId);
+  console.log('players:', players);
+
+  // проверка hallId
+  if (!hallId || !['hall1', 'hall2'].includes(hallId)) {
+    console.log('ERROR: invalid hallId -> 400');
+    return res.status(400).json({
+      error: 'Bad request: invalid hallId, allowed: hall1, hall2'
+    });
+  }
+
+  // проверка players
+  if (!Array.isArray(players)) {
+    console.log('ERROR: players must be array -> 400');
+    return res.status(400).json({ error: 'Bad request: players must be an array' });
+  }
+
+  fs.readFile(DATA_FILE, 'utf8', (err, data) => {
+    if (err) {
+      console.error('Ошибка чтения players.json:', err.message);
+      return res.status(500).json({ error: 'Failed to read players.json' });
+    }
+
+    try {
+      const { playersByHall, historyByDate } = JSON.parse(data);
+
+      // обновляем весь список игроков в этом зале (включая пустой массив)
+      playersByHall[hallId] = players;
+
+      const updatedData = JSON.stringify({ playersByHall, historyByDate }, null, 2);
+      fs.writeFileSync(DATA_FILE, updatedData);
+
+      console.log('Синхронизация игроков в зале', hallId, 'успешна');
+
+      res.json({ playersByHall });
+    } catch (parseErr) {
+      console.error('Ошибка парсинга/записи players.json:', parseErr.message);
+      res.status(500).json({ error: 'Failed to update players.json' });
+    }
+  });
+});
+
 // Порт
 const PORT = process.env.PORT || 8080;
 app.listen(PORT, () => {

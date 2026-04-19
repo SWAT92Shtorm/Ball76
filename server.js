@@ -6,6 +6,9 @@ import cors from 'cors';
 
 const app = express();
 
+// ===== Включаем CORS =====
+app.use(cors());  
+
 // Путь к файлу с данными
 const DATA_DIR = path.join(process.cwd(), 'data');
 const DATA_FILE = path.join(DATA_DIR, 'players.json');

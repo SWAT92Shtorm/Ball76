@@ -213,56 +213,6 @@ app.post('/api/games/confirm', (req, res) => {
   });
 });
 
-// DELETE /api/players/all/:hallId — очистить всех участников в зале
-app.delete('/api/players/all/:hallId', (req, res) => {
-  const { hallId } = req.params;
-
-  console.log('➡️ DELETE /api/players/all/:hallId, hallId:', hallId);
-
-  // 1. Проверка hallId
-  if (!hallId || !['hall1', 'hall2'].includes(hallId)) {
-    console.log('❌ DELETE /api/players/all/:hallId: invalid hallId -> 400');
-    return res.status(400).json({
-      error: 'Bad request: hallId must be "hall1" or "hall2"'
-    });
-  }
-
-  // 2. Читаем файл
-  fs.readFile(DATA_FILE, 'utf8', (err, data) => {
-    if (err) {
-      console.error('❌ Ошибка чтения players.json:', err.message);
-      console.error('Stack:', err.stack);
-      return res.status(500).json({ error: 'Failed to read players.json' });
-    }
-
-    try {
-      const { playersByHall, historyByDate } = JSON.parse(data);
-
-      // 3. Убедимся, что зал существует
-      if (!playersByHall[hallId]) {
-        console.log('⚠️ Зала', hallId, 'не было, создаём пустой массив');
-        playersByHall[hallId] = [];
-      }
-
-      // 4. Очищаем всех игроков (аналог "удаление всех по индексу")
-      playersByHall[hallId].length = 0;
-
-      // 5. Сохраняем обратно
-      const updatedData = JSON.stringify({ playersByHall, historyByDate }, null, 2);
-      fs.writeFileSync(DATA_FILE, updatedData);
-
-      console.log('✅ Очистка всех игроков в зале', hallId, 'успешна');
-      res.json({ playersByHall });
-    } catch (parseErr) {
-      console.error('❌ Ошибка парсинга/записи players.json:', parseErr.message);
-      console.error('Stack:', parseErr.stack);
-      res.status(500).json({ error: 'Failed to update players.json' });
-    }
-  });
-});
-
-
-
 // Порт
 const PORT = process.env.PORT || 8080;
 app.listen(PORT, () => {

@@ -341,7 +341,7 @@
       const hallKey = hall;
       const price = hallPrice[hallKey] || 0;
 
-            if (price > 500 && players.length > 0) {
+        if (price > 500 && players.length > 0) {
         const activeCount = Math.min(MAX_PLAYERS, players.length);
         const perPerson = (price / activeCount).toFixed(2);
         priceElem.innerHTML = `

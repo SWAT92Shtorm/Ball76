@@ -1,19 +1,22 @@
 // server.js
 import express from 'express';
+import cors from 'cors';
 import fs from 'fs';
 import path from 'path';
-import cors from 'cors';
 
-app.use(express.json());
+// === СОЗДАЁМ app ДО ВСЕХ app.use() ===
+const app = express();
 
-// ===== Включаем CORS =====
+// Включаем CORS
 app.use(cors({
   origin: [
     'https://swat92shtorm.github.io',
-    'https://seleniumwebdriverdq-production.up.railway.app',
+    'https://seleniumwebdriverdq-production.up.railway.app'
   ]
 }));
 
+// Важно: разрешить читать JSON из тела запроса
+app.use(express.json());
 
 // Путь к файлу с данными
 const DATA_DIR = path.join(process.cwd(), 'data');
@@ -32,9 +35,6 @@ if (!fs.existsSync(DATA_FILE)) {
   };
   fs.writeFileSync(DATA_FILE, JSON.stringify(emptyData, null, 2), 'utf8');
 }
-
-// Важно: разрешить читать JSON из тела запроса
-app.use(express.json());
 
 // Загрузка текущих данных (GET /api/players)
 app.get('/api/players', (req, res) => {

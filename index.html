@@ -949,16 +949,6 @@
     }
 
     document.getElementById('hallSelect').addEventListener('change', showNearestGame);
-  
-  
-    window.addEventListener("DOMContentLoaded", async function () {
-      await loadFromJSON();          // сначала загружаем JSON
-      selectNearestHall();
-      showNearestGame();
-      showSchedule();
-      showList();
-    });
-
     
         // выбрать ближайший зал как значение по умолчанию
     function selectNearestHall() {

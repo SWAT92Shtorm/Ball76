@@ -5,7 +5,7 @@ const path = require('path');
 const app = express();
 
 // Правильный путь до players.json (без создания папок)
-const DATA_FILE = '/app/players.json';   // именно сюда ты кладёшь JSON
+const DATA_FILE = '/data/players.json';   // именно сюда ты кладёшь JSON
 
 // CORS, как у тебя
 app.use((req, res, next) => {

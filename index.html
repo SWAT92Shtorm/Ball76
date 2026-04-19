@@ -257,8 +257,29 @@
 
 
     // Список участников и ФИО
-    let playersByHall = {};
-    let playerNames = JSON.parse(localStorage.getItem('basketballPlayerNames')) || [];
+    //let playersByHall = {};
+    //let playerNames = JSON.parse(localStorage.getItem('basketballPlayerNames')) || [];
+
+    // ========== Загрузка данных из JSON-файла ==========
+
+    async function loadFromJSON() {
+      try {
+        const response = await fetch('players.json');
+        if (!response.ok) {
+          throw new Error('Не удалось загрузить историю');
+        }
+        const data = await response.json();
+        playersByHall = data.playersByHall || { hall1: [], hall2: [] };
+        historyByDate = data.historyByDate || {};
+      } catch (err) {
+        console.error('Ошибка загрузки истории:', err);
+        // если файла нет/ошибка — создать пустую структуру
+        playersByHall = { hall1: [], hall2: [] };
+        historyByDate = {};
+      }
+    }
+
+
 
     function loadPlayers() {
       const saved = localStorage.getItem('basketballPlayersByHall');
@@ -941,10 +962,20 @@
     }
 
     document.getElementById('hallSelect').addEventListener('change', showNearestGame);
-    window.addEventListener("DOMContentLoaded", function () {
+    
+    //window.addEventListener("DOMContentLoaded", function () {
+    //  showNearestGame();
+    //  showSchedule();
+    // });
+  
+    window.addEventListener("DOMContentLoaded", async function () {
+      await loadFromJSON();          // сначала загружаем JSON
+      selectNearestHall();
       showNearestGame();
       showSchedule();
+      showList();
     });
+
     
         // выбрать ближайший зал как значение по умолчанию
     function selectNearestHall() {

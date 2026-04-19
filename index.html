@@ -388,12 +388,14 @@
       const words = name.split(/\s+/).filter(word => word.length > 0);
 
       if (!name || words.length < 3) {
-        input.style.borderColor = 'red';
-        input.style.backgroundColor = '#ffeaea';
+        input.style.borderColor = '#ffb347';
+        input.style.backgroundColor = '#fff3e0';
+        input.style.color = '#2b2b2b';
         error.style.display = 'block';
       } else {
         input.style.borderColor = '#ccc';
         input.style.backgroundColor = 'white';
+        input.style.color = '#000000';
         error.style.display = 'none';
       }
     }

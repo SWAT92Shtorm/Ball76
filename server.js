@@ -4,17 +4,16 @@ import fs from 'fs';
 import path from 'path';
 import cors from 'cors';
 
+app.use(express.json());
+
 // ===== Включаем CORS =====
 app.use(cors({
   origin: [
     'https://swat92shtorm.github.io',
     'https://seleniumwebdriverdq-production.up.railway.app',
-    'http://localhost:3000'
   ]
 }));
 
-// важно: только после app.use(cors())
-app.use(express.json());
 
 // Путь к файлу с данными
 const DATA_DIR = path.join(process.cwd(), 'data');

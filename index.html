@@ -388,7 +388,7 @@
                 color: #ffffff;
                 text-align: left;
                 font-size: 13px;">
-                Участники (все 18)
+                Участники
               </th>
             </tr>
           </thead>
@@ -775,29 +775,33 @@
 
       if (hall === 'hall1') {
         container.style.display = 'block';
+        const price = hallPrice['hall1'];
         content.innerHTML = `
           <div style="margin-bottom: 10px; padding: 8px; border-radius: 4px; background: #222; border: 1px solid #404040;">
             <div style="font-weight: bold; color: #a0e0ff;">Вторник, 21:00–23:00</div>
-            <div style="font-size: 13px; margin-top: 2px;">Стоимость: 5000 ₽</div>
+            <div style="font-size: 13px; margin-top: 2px;">Стоимость: ${price} ₽</div>
             <div style="font-size: 13px; color: #b0b0b0;">Макс. участников: 18</div>
           </div>
           <div style="margin-bottom: 10px; padding: 8px; border-radius: 4px; background: #222; border: 1px solid #404040;">
             <div style="font-weight: bold; color: #a0e0ff;">Четверг, 21:00–23:00</div>
-            <div style="font-size: 13px; margin-top: 2px;">Стоимость: 5000 ₽</div>
+            <div style="font-size: 13px; margin-top: 2px;">Стоимость: ${price} ₽</div>
             <div style="font-size: 13px; color: #b0b0b0;">Макс. участников: 18</div>
           </div>
         `;
       } else if (hall === 'hall2') {
         container.style.display = 'block';
+        const price = hallPrice['hall2'];
         content.innerHTML = `
           <div style="margin-bottom: 10px; padding: 8px; border-radius: 4px; background: #222; border: 1px solid #404040;">
             <div style="font-weight: bold; color: #a0e0ff;">Пятница, 21:00–23:00</div>
-            <div style="font-size: 13px; margin-top: 2px;">Стоимость: 350 ₽</div>
+            <div style="font-size: 13px; margin-top: 2px;">Стоимость: ${price} ₽</div>
             <div style="font-size: 13px; color: #b0b0b0;">Макс. участников: 18</div>
           </div>
         `;
       }
     }
+
+    
     // ===============================
     // Ближайшая встреча: дата + день недели
     // ===============================

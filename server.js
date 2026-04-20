@@ -311,6 +311,7 @@ app.patch('/api/players/:hallId/:playerIndex', (req, res) => {
 });
 
 // DELETE /api/players/:hallId/:playerIndex — удалить игрока
+/*
 app.delete('/api/players/:hallId/:playerIndex', (req, res) => {
   const { hallId, playerIndex } = req.params;
 
@@ -349,6 +350,63 @@ app.delete('/api/players/:hallId/:playerIndex', (req, res) => {
     }
   });
 });
+*/
+
+// Удалить игрока из конкретной игры (зал + дата)
+app.delete('/api/players/:hallId/:date/:name', async (req, res) => {
+  const { hallId, date, name } = req.params;
+
+  try {
+    // найти game_id по hall_id и date
+    const gameResult = await client.query(
+      `SELECT id FROM games WHERE hall_id = $1 AND date = $2`,
+      [hallId, date]
+    );
+    if (gameResult.rows.length === 0) {
+      return res.status(404).json({ error: 'Игра не найдена' });
+    }
+    const gameId = gameResult.rows[0].id;
+
+    // найти playerId по имени
+    const playerResult = await client.query(
+      `SELECT id FROM players WHERE name = $1`,
+      [name]
+    );
+    if (playerResult.rows.length === 0) {
+      return res.status(404).json({ error: 'Игрок не найден' });
+    }
+    const playerId = playerResult.rows[0].id;
+
+    // удаляем связь из game_players
+    const deleteResult = await client.query(
+      `DELETE FROM game_players
+       WHERE player_id = $1 AND game_id = $2`,
+      [playerId, gameId]
+    );
+
+    // вернуть обновлённый список игроков этой игры
+    const updatedResult = await client.query(
+      `SELECT p.name
+       FROM game_players gp
+       JOIN players p ON gp.player_id = p.id
+       JOIN games g ON gp.game_id = g.id
+       WHERE g.hall_id = $1 AND g.date = $2
+       ORDER BY p.name`,
+      [hallId, date]
+    );
+
+    const playerNames = updatedResult.rows.map(row => row.name);
+
+    res.json({
+      message: 'Игрок удалён',
+      playerNames
+    });
+  } catch (err) {
+    console.error('Ошибка удаления игрока:', err);
+    res.status(500).json({ error: 'Failed to delete player' });
+  }
+});
+
 
 // POST /api/games/confirm — подтвердить игру и сохранить в историю
 app.post('/api/games/confirm', (req, res) => {

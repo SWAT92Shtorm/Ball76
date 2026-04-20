@@ -774,48 +774,71 @@
       cancelIcon.style.display = 'inline-block';
     }
 
+  
     // Сохранить редактирование
-    async function submitEdit(index) {
-      const input = document.getElementById(`nameEdit${index}`);
-      const newValue = input.value.trim();
-      if (!newValue) return;
+    
+    // отправить изменения на сервер
+async function submitEdit(index) {
+  const input = document.getElementById(`nameEdit${index}`);
+  const newName = input.value.trim();
+  const hall = document.getElementById('hallSelect').value;
 
-      const hall = document.getElementById('hallSelect').value;
-      const oldName = playersByHall[hall][index];
+  if (!newName) {
+    alert('Пожалуйста, введите корректное ФИО');
+    return;
+  }
 
-      // Отправляем PATCH в API
-      try {
-        const response = await fetch(
-          `https://seleniumwebdriverdq-production.up.railway.app/api/players/${hall}/${index}`,
-          {
-            method: 'PATCH',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ name: newValue })
-          }
-        );
+  // проверка формата ФИО: минимум 3 слова
+  const parts = newName.split(/\s+/).filter(word => word.length > 0);
+  if (parts.length < 3) {
+    alert('ФИО должно состоять из трёх слов: Фамилия Имя Отчество');
+    return;
+  }
 
-        if (!response.ok) {
-          throw new Error('Ошибка при редактировании игрока');
-        }
+  const oldName = playersByHall[hall][index];
 
-        const result = await response.json();
-        playersByHall = result.playersByHall || playersByHall;
+  if (newName === oldName) {
+    cancelEdit(index);
+    return;
+  }
 
-        // Обновить список ФИО
-        const idxInNames = playerNames.indexOf(oldName);
-        if (idxInNames !== -1) {
-          playerNames[idxInNames] = newValue;
-        }
-
-        localStorage.setItem('basketballPlayerNames', JSON.stringify(playerNames));
-        localStorage.setItem('basketballPlayersByHall', JSON.stringify(playersByHall));
-
-        showList();
-      } catch (err) {
-        console.error('Ошибка при редактировании через API:', err);
-        alert('Не удалось отредактировать игрока через API');
+  try {
+    const response = await fetch(
+      'https://seleniumwebdriverdq-production.up.railway.app/api/player/name',
+      {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ currentName: oldName, newName })
       }
+    );
+
+    if (!response.ok) {
+      const data = await response.json();
+      throw new Error(data.error || 'Не удалось изменить игрока');
     }
+
+    const result = await response.json();
+    playersByHall = result.playersByHall;
+
+    // Обновить playerNames в глобальном списке
+    const idxInNames = playerNames.indexOf(oldName);
+    if (idxInNames !== -1) {
+      playerNames[idxInNames] = newName;
+    }
+
+    // Обновить localStorage
+    localStorage.setItem('basketballPlayerNames', JSON.stringify(playerNames));
+    localStorage.setItem('basketballPlayersByHall', JSON.stringify(playersByHall));
+
+    // перерисовать список
+    showList();
+  } catch (err) {
+    console.error('Ошибка при редактировании через API:', err);
+    alert('Не удалось отредактировать игрока через API');
+  }
+}
 
 
 
@@ -870,7 +893,7 @@
         // обновляет playersByHall, historyByDate и перерисовывает
 
         showList();
-        
+
       } catch (err) {
         console.error('Ошибка при удалении через API:', err);
         alert('Не удалось удалить игрока через API');

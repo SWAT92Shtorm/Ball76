@@ -272,6 +272,8 @@ app.post('/api/players/:hallId', async (req, res) => {
 
 
 // PATCH /api/players/:hallId/:playerIndex — изменить игрока
+
+/*
 app.patch('/api/players/:hallId/:playerIndex', (req, res) => {
   const { hallId, playerIndex } = req.params;
   const { name } = req.body;
@@ -312,6 +314,95 @@ app.patch('/api/players/:hallId/:playerIndex', (req, res) => {
     }
   });
 });
+*/
+
+// PATCH /api/player/name — изменить ФИО игрока по имени
+app.patch('/api/player/name', async (req, res) => {
+  const { currentName, newName } = req.body;
+
+  // Валидация
+  if (!currentName || !newName) {
+    return res.status(400).json({
+      error: 'currentName и newName обязательны'
+    });
+  }
+
+  if (currentName === newName) {
+    return res.json({
+      success: true,
+      message: 'Имя не изменилось',
+      newName
+    });
+  }
+
+  try {
+    // проверить, что старое имя существует
+    const selectOld = await client.query(
+      'SELECT id FROM players WHERE name = $1',
+      [currentName]
+    );
+
+    if (selectOld.rows.length === 0) {
+      return res.status(404).json({ error: 'Игрок не найден' });
+    }
+
+    const playerId = selectOld.rows[0].id;
+
+    // проверить, что такого нового имени еще нет
+    const selectNew = await client.query(
+      'SELECT * FROM players WHERE name = $1',
+      [newName]
+    );
+
+    if (selectNew.rows.length > 0) {
+      return res.status(400).json({
+        error: `Игрок с таким ФИО уже есть: ${newName}`
+      });
+    }
+
+    // обновить имя игрока
+    await client.query(
+      'UPDATE players SET name = $1 WHERE id = $2',
+      [newName, playerId]
+    );
+
+    // собрать обновлённый playersByHall (для текущего состояния)
+    const result = await client.query(
+      `SELECT
+         p.name,
+         g.hall_id
+       FROM players p
+       JOIN game_players gp ON p.id = gp.player_id
+       JOIN games g ON gp.game_id = g.id;`
+    );
+
+    const playersByHall = { hall1: [], hall2: [] };
+
+    result.rows.forEach(row => {
+      const hallId = row.hall_id;
+      const name = row.name.trim();
+
+      if (!playersByHall[hallId]) {
+        playersByHall[hallId] = [];
+      }
+
+      if (!playersByHall[hallId].includes(name)) {
+        playersByHall[hallId].push(name);
+      }
+    });
+
+    res.json({
+      success: true,
+      currentName,
+      newName,
+      playersByHall
+    });
+  } catch (err) {
+    console.error('Ошибка при редактировании игрока:', err);
+    res.status(500).json({ error: 'Failed to update player' });
+  }
+});
+
 
 // DELETE /api/players/:hallId/:playerIndex — удалить игрока
 /*

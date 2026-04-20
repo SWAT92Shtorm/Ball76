@@ -78,16 +78,16 @@ app.get('/api/players', (req, res) => {
 app.get('/api/players', async (req, res) => {
   try {
     const result = await client.query(
-        `SELECT
-                p.id,
-                p.name,
-                g.hall_id,
-                MIN(g.date) AS first_game_date
-            FROM players p
-            JOIN game_players gp ON p.id = gp.player_id
-            JOIN games g ON gp.game_id = g.id
-            GROUP BY p.id, p.name, g.hall_id
-            ORDER BY first_game_date ASC, p.name;`
+ `SELECT
+         p.id,
+         p.name,
+         g.hall_id,
+         MIN(gp.created_at) AS first_signup_time
+       FROM players p
+       JOIN game_players gp ON p.id = gp.player_id
+       JOIN games g ON gp.game_id = g.id
+       GROUP BY p.id, p.name, g.hall_id
+       ORDER BY first_signup_time ASC, p.name;`
     );
 
     const playersByHall = { hall1: [], hall2: [] };

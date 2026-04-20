@@ -1051,15 +1051,16 @@ async function submitEdit(index) {
           anim.style.display = 'block';
           anim.innerHTML = `
             <div style="display: flex; align-items: center; justify-content: center; gap: 10px;">
-              <div class="ball"></div>
+              <div class="ball">🏀</div>
+              <div class="smile">⛹🏻‍♂️</div>
               <div class="smile">👍</div>
             </div>
           `;
 
-          // Через ~1.2 секунды убираем анимацию
+          // Через ~1.5 секунды убираем анимацию
           setTimeout(() => {
             anim.style.display = 'none';
-          }, 1200);
+          }, 1500);
 
       } catch (err) {
         console.error('Ошибка при добавлении через API:', err);

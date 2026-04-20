@@ -144,60 +144,6 @@
     color: #a0ffa0;
   }
 
-/* мяч */
-#successAnimation .ball {
-  display: inline-block;
-  width: 60px;
-  height: 60px;
-  background: #ff6f00;     /* баскетбольный оранж */
-  border-radius: 50%;
-  position: relative;
-  box-shadow: inset 0 0 10px rgba(0, 0, 0, 0.4);
-}
-
-/* полоска мяча */
-#successAnimation .ball::before,
-#successAnimation .ball::after {
-  content: "";
-  position: absolute;
-  background: #000;
-  opacity: 0.8;
-}
-
-#successAnimation .ball::before {
-  width: 80%;
-  height: 4px;
-  top: 50%;
-  left: 10%;
-  margin-top: -2px;
-  border-radius: 2px;
-  transform: rotate(45deg);
-}
-
-#successAnimation .ball::after {
-  width: 2px;
-  height: 80%;
-  top: 10%;
-  left: 50%;
-  margin-left: -1px;
-  border-radius: 1px;
-  transform: rotate(45deg);
-}
-
-/* анимация прыжка мяча */
-@keyframes bounceBall {
-  0%   { transform: translateY(0) scale(1, 1); }
-  20%  { transform: translateY(-40px) scale(0.95, 1.1); }
-  40%  { transform: translateY(0) scale(1, 1); }
-  60%  { transform: translateY(-20px) scale(0.98, 1.05); }
-  80%  { transform: translateY(0) scale(1, 1); }
-  100% { transform: translateY(0) scale(1, 1); }
-}
-
-#successAnimation .ball {
-  animation: bounceBall 1.2s ease-in-out 1 forwards;
-}
-
 /* смайлик одобрения */
 #successAnimation .smile {
   font-size: 50px;
@@ -1051,7 +997,7 @@ async function submitEdit(index) {
           anim.style.display = 'block';
           anim.innerHTML = `
             <div style="display: flex; align-items: center; justify-content: center; gap: 10px;">
-              <div class="ball">🏀</div>
+              <div class="smile">🏀</div>
               <div class="smile">⛹🏻‍♂️</div>
               <div class="smile">👍</div>
             </div>

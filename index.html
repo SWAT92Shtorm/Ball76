@@ -1154,59 +1154,58 @@ async function submitEdit(index) {
 
 
     function getNearestGameText(hall) {
-      const now = new Date();
-      const nowWeekDay = now.getDay() || 7;
-      const nowHour = now.getHours();
+  const now = new Date();
+  const nowWeekDay = now.getDay() || 7;  // 1–7, где 1=пн
 
-      let nearest = null;
+  let nearest = null;
 
-      scheduleDefs
-        .filter(item => item.hall === hall)
-        .forEach(item => {
-          const dayCode = getDayCode(item.day);
-          const dayDiff = (dayCode - nowWeekDay + 7) % 7;
-          const approximateHour = item.from;
-          let timeDiff = dayDiff * 24 + (approximateHour - nowHour);
+  scheduleDefs
+    .filter(item => item.hall === hall)
+    .forEach(item => {
+      const dayCode = getDayCode(item.day);  // 1–7 из dayNamesRU
+      const dayDiff = (dayCode - nowWeekDay + 7) % 7;
 
-          if (timeDiff < 0) {
-            timeDiff += 7 * 24;
-          }
+      // Считаем не от времени, а просто от дня недели
+      // Нужна БЛИЖАЙШАЯ дата в будущем/сегодня, без учёта часов внутри дня
+      let timeDiff = dayDiff * 24;  // только дни в часах
 
-          if (!nearest || timeDiff < nearest.diff) {
-            nearest = {
-              diff: timeDiff,
-              day: item.day,
-              from: item.from,
-              to: item.to
-            };
-          }
-        });
-
-      if (!nearest) {
-        return "Ближайшая игра: не найдено";
+      if (!nearest || timeDiff < nearest.diff) {
+        nearest = {
+          diff: timeDiff,
+          day: item.day,
+          from: item.from,
+          to: item.to
+        };
       }
+    });
 
-      const russianDay = dayNamesRU[nearest.day];
+  if (!nearest) {
+    return "Ближайшая игра: не найдено";
+  }
 
-      const nearestDate = new Date(now);
-      nearestDate.setDate(now.getDate() + Math.floor(nearest.diff / 24));
-      nearestDate.setHours(nearest.from, 0, 0, 0);
+  const russianDay = dayNamesRU[nearest.day];
 
-      const dateOptions = {
-        day: 'numeric',
-        month: 'short',
-        weekday: 'short'
-      };
-      const parts = nearestDate.toLocaleString('ru-RU', dateOptions).split(' ');
-      const dayNum = parts[1];
-      const month = parts[2].replace('.', '');
-      const weekday = parts[0].replace(',', '').charAt(0).toUpperCase() + parts[0].slice(1, -1);
+  // Ближайшая дата — это now + dayDiff дней, но с нулями по часам
+  const nearestDate = new Date(now);
+  nearestDate.setDate(now.getDate() + Math.floor(nearest.diff / 24));
+  nearestDate.setHours(nearest.from, 0, 0, 0);
 
-      const fromStr = `${nearest.from}:00`;
-      const toStr = `${nearest.to}:00`;
+  const dateOptions = {
+    day: "numeric",
+    month: "short",
+    weekday: "short"
+  };
+  const parts = nearestDate.toLocaleString("ru-RU", dateOptions).split(" ");
+  const dayNum = parts[1];
+  const month = parts[2].replace(".", "");
+  const weekday = parts[0].replace(",", "").charAt(0).toUpperCase() + parts[0].slice(1, -1);
 
-      return `Ближайшая игра: ${weekday}, ${dayNum} ${month}, ${fromStr}–${toStr}`;
-    }
+  const fromStr = `${nearest.from}:00`;
+  const toStr = `${nearest.to}:00`;
+
+  return `Ближайшая игра: ${weekday}, ${dayNum} ${month}, ${fromStr}–${toStr}`;
+}
+
 
     function showNearestGame() {
       const hall = document.getElementById('hallSelect').value;

@@ -288,7 +288,6 @@
 
 
   updatePlayersList();   // ✅ обновляем datalist
-
   // после загрузки обновляем отображение списка
   showList();
   updatePlayersList();   // ✅ вот сюда
@@ -826,70 +825,6 @@
     }
 
     async function addPlayer() {
-      const input = document.getElementById('playerName');
-      const error = document.getElementById('playerNameError');
-      const name = input.value.trim();
-      const words = name.split(/\s+/).filter(word => word.length > 0);
-
-      if (!name || words.length < 3) {
-        validatePlayerName();
-        return;
-      }
-
-      const hall = document.getElementById('hallSelect').value;
-
-      if (!hall) {
-        alert('Сначала выберите зал');
-        return;
-      }
-
-      // Получаем дату ближайшей игры
-      const dateStr = getNearestGameDate(hall);
-
-      if (!dateStr) {
-        alert('Не удалось определить ближайшую дату игры');
-        return;
-      }
-
-      // Отправляем в API с датой
-      try {
-        const response = await fetch(
-          `https://seleniumwebdriverdq-production.up.railway.app/api/players/${hall}`,
-          {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ name: name, date: dateStr })
-          }
-        );
-
-        if (!response.ok) {
-          throw new Error('Ошибка при добавлении игрока');
-        }
-
-        const result = await response.json();
-        playersByHall = result.playersByHall || playersByHall;
-
-        // Обновляем список имён
-        if (!playerNames.includes(name)) {
-          playerNames.push(name);
-        }
-
-        // Сохраняем в localStorage, если нужно
-        localStorage.setItem('basketballPlayerNames', JSON.stringify(playerNames));
-        localStorage.setItem('basketballPlayersByHall', JSON.stringify(playersByHall));
-
-        input.value = '';
-        input.style.borderColor = '#ccc';
-        input.style.backgroundColor = 'white';
-        error.style.display = 'none';
-        showList();
-        updatePlayersList();
-      } catch (err) {
-        console.error('Ошибка при добавлении через API:', err);
-        alert('Не удалось добавить игрока через API');
-      }
-    }
-
       const input = document.getElementById('playerName');
       const error = document.getElementById('playerNameError');
       const name = input.value.trim();

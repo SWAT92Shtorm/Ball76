@@ -388,6 +388,52 @@ app.post('/api/players/sync/:hallId', (req, res) => {
   });
 });
 
+// GET /api/history
+app.get('/api/history', async (req, res) => {
+  try {
+    // запрос: получить все игры и привязанных к ним игроков
+    const result = await client.query(
+      `SELECT
+         g.hall_id,
+         g.date,
+         p.name
+       FROM game_players gp
+       JOIN players p ON gp.player_id = p.id
+       JOIN games g ON gp.game_id = g.id
+       ORDER BY g.date DESC, g.hall_id, p.name;`
+    );
+
+    // собрать в структуру вида historyByDate[date][hallId] = [names...]
+    const historyByDate = {};
+
+    result.rows.forEach(row => {
+      const hallId = row.hall_id;
+      const date = row.date.toISOString().split('T')[0]; // YYYY-MM-DD
+      const name = row.name.trim();
+
+      if (!historyByDate[date]) {
+        historyByDate[date] = {};
+      }
+      if (!historyByDate[date][hallId]) {
+        historyByDate[date][hallId] = [];
+      }
+
+      if (!historyByDate[date][hallId].includes(name)) {
+        historyByDate[date][hallId].push(name);
+      }
+    });
+
+    // отправить клиенту
+    res.json({ historyByDate });
+  } catch (err) {
+    console.error('❌ Ошибка чтения истории:', err);
+    res.status(500).json({
+      error: 'Failed to read history',
+      db_error: err.message
+    });
+  }
+});
+
 // Порт
 const PORT = process.env.PORT || 8080;
 app.listen(PORT, () => {

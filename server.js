@@ -79,21 +79,15 @@ app.get('/api/players', async (req, res) => {
   try {
     const result = await client.query(
         `SELECT
-            p.id,
-            p.name,
-            g.hall_id,
-            g.date
-        FROM players p
-        JOIN game_players gp ON p.id = gp.player_id
-        JOIN games g ON gp.game_id = g.id
-        WHERE g.hall_id = $1
-            AND g.date = (
-            SELECT MIN(date)
-            FROM games
-            WHERE hall_id = $1
-                AND date >= CURRENT_DATE
-            )
-        ORDER BY g.date ASC, p.name;`
+                p.id,
+                p.name,
+                g.hall_id,
+                MIN(g.date) AS first_game_date
+            FROM players p
+            JOIN game_players gp ON p.id = gp.player_id
+            JOIN games g ON gp.game_id = g.id
+            GROUP BY p.id, p.name, g.hall_id
+            ORDER BY first_game_date ASC, p.name;`
     );
 
     const playersByHall = { hall1: [], hall2: [] };

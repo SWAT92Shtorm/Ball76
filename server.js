@@ -73,6 +73,7 @@ app.get('/api/players', (req, res) => {
 });
 
 // POST /api/players/:hallId — добавить игрока в зал (hall1 / hall2)
+/*
 app.post('/api/players/:hallId', (req, res) => {
   const { hallId } = req.params;
   const { name } = req.body;
@@ -112,6 +113,99 @@ app.post('/api/players/:hallId', (req, res) => {
     }
   });
 });
+*/
+
+// POST /api/players/:hallId — добавить участника в существующую/новую игру
+app.post('/api/players/:hallId', async (req, res) => {
+  const { hallId } = req.params;
+  const { name, date } = req.body;  // теперь дата приходит с фронта
+
+  // 1. Валидация
+  if (!name || !date || !hallId || !['hall1', 'hall2'].includes(hallId)) {
+    return res.status(400).json({
+      error: 'Bad request: name, date, and hallId required'
+    });
+  }
+
+  let game;
+  let player;
+
+  try {
+    // 2. Добавить/получить игрока
+    const playerRes = await client.query(
+      `INSERT INTO players (name)
+       VALUES ($1)
+       ON CONFLICT (name) DO NOTHING
+       RETURNING *;`,
+      [name]
+    );
+
+    if (playerRes.rows.length > 0) {
+      player = playerRes.rows[0];
+    } else {
+      const selectPlayer = await client.query(
+        'SELECT * FROM players WHERE name = $1;',
+        [name]
+      );
+      player = selectPlayer.rows[0];
+    }
+
+    // 3. Найти или создать игру (hall_id, date)
+    const findGame = await client.query(
+      'SELECT * FROM games WHERE hall_id = $1 AND date = $2;',
+      [hallId, date]
+    );
+
+    if (findGame.rows.length > 0) {
+      game = findGame.rows[0];
+    } else {
+      const createGame = await client.query(
+        `INSERT INTO games (hall_id, date)
+         VALUES ($1, $2)
+         RETURNING *;`,
+        [hallId, date]
+      );
+      game = createGame.rows[0];
+    }
+
+    // 4. Связать игрока с игрой (game_players)
+    const existing = await client.query(
+      'SELECT * FROM game_players WHERE game_id = $1 AND player_id = $2;',
+      [game.id, player.id]
+    );
+
+    if (existing.rows.length > 0) {
+      return res.status(400).json({
+        error: 'Игрок уже записан на эту игру'
+      });
+    }
+
+    await client.query(
+      `INSERT INTO game_players (game_id, player_id)
+       VALUES ($1, $2);`,
+      [game.id, player.id]
+    );
+
+    // 5. Вернуть список игроков, участвующих в ЭТОЙ игре (для hall_id и date)
+    const gamePlayers = await client.query(
+      `SELECT p.name, gp.id AS participation_id
+       FROM game_players gp
+       JOIN players p ON gp.player_id = p.id
+       WHERE gp.game_id = $1;`,
+      [game.id]
+    );
+
+    const players = gamePlayers.rows.map(r => r.name);
+
+    res.json({
+      playersByHall: { [hallId]: players }
+    });
+  } catch (err) {
+    console.error('❌ Ошибка записи игрока:', err.message);
+    res.status(500).json({ error: 'Failed to register player' });
+  }
+});
+
 
 // PATCH /api/players/:hallId/:playerIndex — изменить игрока
 app.patch('/api/players/:hallId/:playerIndex', (req, res) => {

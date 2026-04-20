@@ -98,20 +98,19 @@
   #hallSelectRow {
     display: flex;
     align-items: center;
-    gap: 16px;            /* расстояние между надписью и селектом */
-    margin-bottom: 12px;
+    gap: 12px;
+    margin-bottom: 10px;
   }
 
   #hallSelectRow label {
     margin: 0;
-    padding: 0;
     white-space: nowrap;
-    font-size: 15px;
+    flex-shrink: 0;
   }
 
+  /* select получает ширину 100% из общего правила выше */
   #hallSelectRow select {
     margin: 0;
-    flex: 1;
   }
 
   #pricingRow {

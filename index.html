@@ -995,6 +995,23 @@ async function submitEdit(index) {
           throw new Error('Ошибка при добавлении игрока');
         }
 
+        // Показать анимацию успеха
+        const anim = document.getElementById('successAnimation');
+        anim.style.display = 'block';
+        anim.innerHTML = `
+          <div style="display: flex; align-items: center; justify-content: center; gap: 10px;">
+            <div class="smile">🏀</div>
+            <div class="smile">⛹🏻‍♂️</div>
+            <div class="smile">👍</div>
+          </div>
+        `;
+
+        // Через ~ 3 секунды убираем анимацию
+        setTimeout(() => {
+          anim.style.display = 'none';
+        }, 3000);
+
+
         const result = await response.json();
         playersByHall = result.playersByHall || playersByHall;
 
@@ -1013,22 +1030,6 @@ async function submitEdit(index) {
         // Обновляем историю и таблицу
         await loadFromAPI();
         // обновляет playersByHall, historyByDate и перерисовывает
-
-          // Показать анимацию успеха
-          const anim = document.getElementById('successAnimation');
-          anim.style.display = 'block';
-          anim.innerHTML = `
-            <div style="display: flex; align-items: center; justify-content: center; gap: 10px;">
-              <div class="smile">🏀</div>
-              <div class="smile">⛹🏻‍♂️</div>
-              <div class="smile">👍</div>
-            </div>
-          `;
-
-          // Через ~2 секунды убираем анимацию
-          setTimeout(() => {
-            anim.style.display = 'none';
-          }, 2000);
 
       } catch (err) {
         console.error('Ошибка при добавлении через API:', err);
@@ -1225,7 +1226,7 @@ async function submitEdit(index) {
   const fromStr = `${nearest.from}:00`;
   const toStr = `${nearest.to}:00`;
 
-  return `Ближайшая игра: ${weekday}, ${dayNum} ${month}, ${fromStr}–${toStr}`;
+  return `Ближайшая игра: ${weekday}, ${dayNum} ${month}, в ${fromStr}`;
 }
 
 

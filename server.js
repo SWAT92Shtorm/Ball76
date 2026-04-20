@@ -249,7 +249,7 @@ app.post('/api/players/:hallId', async (req, res) => {
         JOIN players p ON gp.player_id = p.id
         JOIN games g ON gp.game_id = g.id
         WHERE gp.game_id = $1
-        ORDER BY g.date ASC, p.name;`,
+        ORDER BY gp.created_at ASC, p.name;`,
         [game.id]
     );
 
@@ -389,12 +389,13 @@ app.delete('/api/players/:hallId/:date/:name', async (req, res) => {
 
     // вернуть обновлённый список игроков этой игры
     const updatedResult = await client.query(
-      `SELECT p.name
-       FROM game_players gp
-       JOIN players p ON gp.player_id = p.id
-       JOIN games g ON gp.game_id = g.id
-       WHERE g.hall_id = $1 AND g.date = $2
-       ORDER BY p.name`,
+        `SELECT
+        p.name
+        FROM game_players gp
+        JOIN players p ON gp.player_id = p.id
+        JOIN games g ON gp.game_id = g.id
+        WHERE g.hall_id = $1 AND g.date = $2
+        ORDER BY gp.created_at ASC, p.name;`,
       [hallId, date]
     );
 
@@ -497,14 +498,14 @@ app.get('/api/history', async (req, res) => {
   try {
     // запрос: получить все игры и привязанных к ним игроков
     const result = await client.query(
-      `SELECT
-         g.hall_id,
-         g.date,
-         p.name
-       FROM game_players gp
-       JOIN players p ON gp.player_id = p.id
-       JOIN games g ON gp.game_id = g.id
-       ORDER BY g.date DESC, g.hall_id, p.name;`
+        `SELECT
+        g.hall_id,
+        g.date,
+        p.name
+        FROM game_players gp
+        JOIN players p ON gp.player_id = p.id
+        JOIN games g ON gp.game_id = g.id
+        ORDER BY g.date DESC, gp.created_at ASC, p.name;`
     );
 
     // собрать в структуру вида historyByDate[date][hallId] = [names...]

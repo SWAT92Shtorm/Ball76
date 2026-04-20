@@ -98,8 +98,9 @@
 #hallSelectRow {
   display: flex;
   align-items: center;
-  gap: 14px;
-  margin-bottom: 10px;
+  gap: 10px;
+  margin-bottom: 12px;
+  max-width: 600px;   /* чтобы не вылезать за контейнер */
 }
 
 #hallSelectRow label {
@@ -109,7 +110,7 @@
   font-size: 15px;
 }
 
-/* Отключаем общий margin для селекта внутри #hallSelectRow, чтобы не было двойного сдвига */
+/* select больше не получает width: 100% от label, input, select */
 #hallSelectRow select {
   margin: 0;
   padding: 10px;
@@ -119,6 +120,8 @@
   background-color: #2d2d2d;
   color: #f0f0f0;
   box-sizing: border-box;
+  /* позволяет селекту растягиваться, но не выходить за родитель */
+  flex: 1;
 }
 
   #pricingRow {

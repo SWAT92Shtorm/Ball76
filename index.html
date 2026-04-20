@@ -177,8 +177,6 @@
     </select>
   </div>
 
-   <br> <br>
-
   <label>Введи или выбери ФИО:</label><br />
   <input type="text" id="playerName" placeholder="Иван Иванович Иванов" list="playersList" />
   <span id="playerNameError" style="color: red; font-size: 12px; display: none;">
@@ -990,6 +988,10 @@ async function submitEdit(index) {
     document.getElementById('hallSelect').addEventListener('change', function () {
       showList();
       showSchedule();
+    });
+
+    document.getElementById('durationSelect').addEventListener('change', function () {
+      showList();
     });
 
     // ===============================

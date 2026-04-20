@@ -74,6 +74,46 @@ app.get('/api/players', (req, res) => {
 });
 */
 
+// GET /api/players — отдать данные из БД, не из players.json
+app.get('/api/players', async (req, res) => {
+  try {
+    const result = await client.query(
+      `SELECT
+         p.id,
+         p.name,
+         g.hall_id,
+         MIN(g.date) AS first_game_date
+       FROM players p
+       JOIN game_players gp ON p.id = gp.player_id
+       JOIN games g ON gp.game_id = g.id
+       GROUP BY p.id, p.name, g.hall_id
+       ORDER BY first_game_date ASC, p.name;`
+    );
+
+    const playersByHall = { hall1: [], hall2: [] };
+
+    result.rows.forEach(row => {
+      const hallId = row.hall_id;
+      const name = row.name.trim();
+
+      if (!playersByHall[hallId]) {
+        playersByHall[hallId] = [];
+      }
+
+      playersByHall[hallId].push(name);
+    });
+
+    res.json({ playersByHall });
+  } catch (err) {
+    console.error('Ошибка чтения участников:', err);
+    res.status(500).json({
+      error: 'Failed to read players from database',
+      db_error: err.message
+    });
+  }
+});
+
+
 
 // POST /api/players/:hallId — добавить игрока в зал (hall1 / hall2)
 /*

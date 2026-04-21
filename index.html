@@ -504,6 +504,12 @@
 
       historyTableContainer.style.display = 'block';
 
+      entries.sort((a, b) => {
+        const dateA = new Date(a.date);
+        const dateB = new Date(b.date);
+        return isNaN(dateA) ? 1 : isNaN(dateB) ? -1 : dateB - dateA;
+      });
+      entries = entries.slice(0, 2);
 
       // формируем блочную «карточку» для каждой даты (как в расписании)
       let html = `

@@ -1087,6 +1087,12 @@ async function submitEdit(index) {
 
     function showSchedule() {
       const hall = document.getElementById('hallSelect').value;
+      const commonInfo = `
+        <div style="margin-bottom: 15px; padding: 10px; background: #1a1a1a; border-radius: 6px; border: 1px solid #505050;">
+          <strong>Общая информация по залу:</strong><br>
+          Стоимость: ${hallPrice[hall] || 0} ₽ | Мин: 10 | Макс: 18 чел.
+        </div>
+      `;
       const container = document.getElementById('scheduleContainer');
       const content = document.getElementById('scheduleContent');
 
@@ -1096,27 +1102,20 @@ async function submitEdit(index) {
       if (hall === 'hall1') {
         container.style.display = 'block';
         const price = hallPrice['hall1'];
-        content.innerHTML = `
-          <div style="margin-bottom: 10px; padding: 8px; border-radius: 4px; background: #222; border: 1px solid #404040;">
-            <div style="font-weight: bold; color: #a0e0ff;">Вторник, 21:00–23:00</div>
-            <div style="font-size: 13px; margin-top: 2px;">Стоимость: ${price} ₽</div>
-            <div style="font-size: 13px; color: #b0b0b0;">Мин. участников: 10; Макс. участников: 18</div>
+        content.innerHTML = commonInfo + `
+          <div style="margin-bottom: 10px; padding: 12px; border-radius: 4px; background: #222; border: 1px solid #404040;">
+            <div style="font-weight: bold; color: #a0e0ff; font-size: 15px;">📅 Вторник, 21:00–23:00</div>
           </div>
-          <div style="margin-bottom: 10px; padding: 8px; border-radius: 4px; background: #222; border: 1px solid #404040;">
-            <div style="font-weight: bold; color: #a0e0ff;">Четверг, 21:00–23:00</div>
-            <div style="font-size: 13px; margin-top: 2px;">Стоимость: ${price} ₽</div>
-            <div style="font-size: 13px; color: #b0b0b0;">Мин. участников: 10; Макс. участников: 18</div>
+          <div style="margin-bottom: 10px; padding: 12px; border-radius: 4px; background: #222; border: 1px solid #404040;">
+            <div style="font-weight: bold; color: #a0e0ff; font-size: 15px;">📅 Четверг, 21:00–23:00</div>
           </div>
         `;
       } else if (hall === 'hall2') {
         container.style.display = 'block';
-        const price = hallPrice['hall2'];
-        content.innerHTML = `
-          <div style="margin-bottom: 10px; padding: 8px; border-radius: 4px; background: #222; border: 1px solid #404040;">
-            <div style="font-weight: bold; color: #a0e0ff;">Пятница, 21:00–23:00</div>
-            <div style="font-size: 13px; margin-top: 2px;">Стоимость: ${price} ₽</div>
-            <div style="font-size: 13px; color: #b0b0b0;">Мин. участников: 10; Макс. участников: 18</div>
-          </div>
+        content.innerHTML = commonInfo + `
+        <div style="margin-bottom: 10px; padding: 12px; border-radius: 4px; background: #222; border: 1px solid #404040;">
+          <div style="font-weight: bold; color: #a0e0ff; font-size: 15px;">📅 Пятница, 21:00–23:00</div>
+        </div>
         `;
       }
     }

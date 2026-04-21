@@ -555,6 +555,18 @@
       historyTableContainer.innerHTML = html;
     }
 
+    // Подсчёт записей игрока в зале
+    function countPlayerVisits(historyByDate, playerName, hall) {
+      let count = 0;
+      for (let dateStr in historyByDate) {
+        const dateData = historyByDate[dateStr];
+        if (dateData[hall] && dateData[hall].includes(playerName)) {
+          count++;
+        }
+      }
+      return count;
+    }
+
     // Показать список участников с inline-редактированием и подсчётом суммы
     function showList() {
       const hall = document.getElementById('hallSelect').value;
@@ -611,7 +623,9 @@
           return `
             <div class="playerLine" id="playerLine${i}" style="${nameStyle}">
             <div class="playerName">
-              <span style="${nameStyle}">${idx}. ${name}</span>
+              <span style="${nameStyle}">${idx}. ${name} 
+              <span style="color: #a0ffa0; font-size: 12px;">[${countPlayerVisits(historyByDate, name, hall)}]</span>
+              </span>
               <input type="text" id="nameEdit${i}" value="${name}" style="display: none; width: 250px; padding: 2px;" />
             </div>
               <div class="icons">

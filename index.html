@@ -499,11 +499,14 @@
         return;
       }
 
-      // Только 2 ПОСЛЕДНИЕ!
-      entries.sort((a, b) => new Date(b.date) - new Date(a.date));
-      entries = entries.slice(0, 2);  // ← ЭТО ИЗМЕНИ!
-
       historyTableContainer.style.display = 'block';
+
+      // сортируем по дате: свежие сверху
+      entries.sort((a, b) => {
+        if (a.date < b.date) return 1;
+        if (a.date > b.date) return -1;
+        return 0;
+      });
 
       // формируем блочную «карточку» для каждой даты (как в расписании)
       let html = `
@@ -1002,7 +1005,7 @@ async function submitEdit(index) {
       // Отправляем в API с датой
       try {
         const response = await fetch(
-          `https://ball76.up.railway.app/api/players/${hall}/${dateStr}`,
+          `https://ball76.up.railway.app/api/players/${hall}`,
           {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },

@@ -503,11 +503,11 @@
 
       // сортируем по дате: свежие сверху
       entries.sort((a, b) => {
+        if (a.date > b.date) return -1;  // ← ПРОТИВОПоложно!
         if (a.date < b.date) return 1;
-        if (a.date > b.date) return -1;
         return 0;
       });
-      entries = entries.slice(0, 2); 
+      entries = entries.slice(0, 2);     // Первые 2 = новые!
 
       // формируем блочную «карточку» для каждой даты (как в расписании)
       let html = `

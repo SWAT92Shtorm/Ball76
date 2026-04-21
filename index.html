@@ -483,7 +483,7 @@
       }
 
       // собрать записи только для этого зала: { date: "2026-04-19", players: [...] }
-      const entries = [];
+      let entries = [];
 
       Object.keys(historyByDate).forEach(dateStr => {
         const hallData = historyByDate[dateStr][hall] || [];
@@ -500,18 +500,6 @@
       }
 
       historyTableContainer.style.display = 'block';
-
-      let entries = [];  // ← let вместо const!
-
-      Object.keys(historyByDate).forEach(dateStr => {
-        const hallData = historyByDate[dateStr][hall] || [];
-        if (hallData.length > 0) {
-          entries.push({
-            date: dateStr,
-            players: hallData
-          });
-        }
-      });
 
       // Твоя сортировка + 2 записи
       entries.sort((a, b) => {

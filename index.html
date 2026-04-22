@@ -1191,42 +1191,44 @@ async function submitEdit(index) {
     }
 
     function getNearestGameDate(hall) {
-  const now = new Date();
-  const nowWeekDay = now.getDay() || 7;  // 1–7; 1 = пн
+      const now = new Date();
+      const nowWeekDay = now.getDay() || 7;
+      const nowHour = now.getHours();
 
-  // 1. Найти все подходящие дни недели в scheduleDefs для этого зала
-  const hallDefs = scheduleDefs.filter(item => item.hall === hall);
+      let nearest = null;
 
-  if (hallDefs.length === 0) return null;
+      scheduleDefs
+        .filter(item => item.hall === hall)
+        .forEach(item => {
+          const dayCode = getDayCode(item.day);
+          const dayDiff = (dayCode - nowWeekDay + 7) % 7;
+          const approximateHour = item.from;
+          let timeDiff = dayDiff * 24 + (approximateHour - nowHour);
 
-  // 2. Собрать все возможные дни недели (как числа 1–7)
-  const targetDays = hallDefs.map(item => getDayCode(item.day));
+          if (timeDiff < 0) {
+            timeDiff += 7 * 24;
+          }
 
-  // 3. Найти ближайший день
-  let daysToAdd = 7;  // большее значение, чем максимально возможное
+          if (!nearest || timeDiff < nearest.diff) {
+            nearest = {
+              diff: timeDiff,
+              from: item.from,
+              to: item.to
+            };
+          }
+        });
 
-  for (const day of targetDays) {
-    // разница до ближайшего такого дня недели
-    const diff = (day - nowWeekDay + 7) % 7;
+      if (!nearest) return null;
 
-    if (diff === 0) {
-      // если сегодня подходящий день → ближайший день = сегодня
-      daysToAdd = 0;
-      break;
+      const nearestDate = new Date(now);
+      nearestDate.setDate(now.getDate() + Math.floor(nearest.diff / 24));
+      nearestDate.setHours(nearest.from, 0, 0, 0);
+
+      console.log('❗ getNearestGameDate(hall):', hall, '→', nearestDate.toISOString().split('T'));
+      return nearestDate.toISOString().split('T');
+
+      return nearestDate.toISOString().split('T')[0];  // YYYY-MM-DD
     }
-    if (diff < daysToAdd) {
-      daysToAdd = diff;
-    }
-  }
-
-  // 4. Сформировать дату
-  const nearestDate = new Date(now);
-  nearestDate.setDate(now.getDate() + daysToAdd);
-  // обнуляем время, чтобы было чисто "дата"
-  nearestDate.setHours(0, 0, 0, 0);
-
-  return nearestDate.toISOString().split('T')[0];  // YYYY-MM-DD
-}
 
 
     function getNearestGameText(hall) {

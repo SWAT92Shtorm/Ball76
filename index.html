@@ -1224,6 +1224,9 @@ async function submitEdit(index) {
       nearestDate.setDate(now.getDate() + Math.floor(nearest.diff / 24));
       nearestDate.setHours(nearest.from, 0, 0, 0);
 
+      console.log('❗ getNearestGameDate(hall):', hall, '→', nearestDate.toISOString().split('T'));
+      return nearestDate.toISOString().split('T');
+
       return nearestDate.toISOString().split('T')[0];  // YYYY-MM-DD
     }
 

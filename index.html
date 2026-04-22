@@ -1189,8 +1189,6 @@ async function submitEdit(index) {
       };
       return map[dayName] || 0;
     }
-
-    console.log('scheduleDefs:', scheduleDefs);
     
     function getNearestGameDate(hall) {
   const now = new Date();
@@ -1215,7 +1213,6 @@ async function submitEdit(index) {
   nearestDate.setDate(now.getDate() + nearest.dayDiff);
   nearestDate.setHours(21, 0, 0, 0);  // жёстко 21:00
 
-  console.log('getNearestGameDate(hall):', hall, '→', nearestDate.toISOString().split('T')[0]);
   return nearestDate.toISOString().split('T')[0];
 }
 

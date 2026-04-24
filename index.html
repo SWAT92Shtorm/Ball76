@@ -1482,13 +1482,11 @@ document.getElementById('hallSelect').addEventListener('change', showNearestGame
           </div>
 
           <div class="team-main">
-            <span class="team-main-label">Основа:</span>
             ${basePlayers.length ? basePlayers.map(n => `<span class="team-main-item">${n}</span>`).join('') : '<span style="color: #a0a0a0; font-size: 13px;">нет игроков</span>'}
           </div>
 
           ${substitutes.length ? `
             <div class="team-sub">
-              <span class="team-sub-label">Замена:</span>
               ${substitutes.map(n => `<span class="team-sub-item">${n}</span>`).join('')}
             </div>
           ` : ''}

@@ -1512,9 +1512,9 @@ document.getElementById('hallSelect').addEventListener('change', showNearestGame
               // если это 6‑й игрок, добавляем отступ
               const extraStyle = i === 5 ? 'margin-top: 8px;' : '';
               return `
-                <li class="team-player-item" style="margin: 2px 0; ${extraStyle}">
-                  ${name}
-                </li>
+                <ol class="team-main-ol" style="margin: 0; padding-left: 20px; list-style-type: decimal;">
+                  ${items}
+                </ol>
               `;
             }).join('');
 

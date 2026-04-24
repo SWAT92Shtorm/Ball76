@@ -1445,93 +1445,96 @@ document.getElementById('hallSelect').addEventListener('change', showNearestGame
       }
     }
 
-  function openTeamsModal() {
-    const hall = document.getElementById('hallSelect').value;
-    const players = playersByHall[hall] || [];
 
-    if (players.length === 0) {
-      alert("Сначала запишитесь хотя бы один участник.");
-      return;
-    }
 
-    const modal = document.getElementById('teamsModal');
-    const content = document.getElementById('teamsContent');
 
-    content.innerHTML = '';
-
-    const numTeams = players.length >= 15 ? 3 : 2;
-
-    const shuffled = [...players].sort(() => 0.5 - Math.random());
-
-    const teams = Array.from({ length: numTeams }, () => []);
-    for (let i = 0; i < shuffled.length; i++) {
-      teams[i % numTeams].push(shuffled[i]);
-    }
-
-    let inner = `
-      <p style="margin-bottom: 8px; font-weight: 500;">Всего игроков: <strong>${players.length}</strong></p>
-      <p style="margin-bottom: 12px; font-weight: 500;">Сформировано команд: <strong>${numTeams}</strong></p>
-    `;
-
-    teams.forEach((team, idx) => {
-      const number = idx + 1;
-      const basePlayers = team.slice(0, 5);
-      const substitutes = team.slice(5);
-
-      inner += `
-        <div class="team-card">
-          <div class="team-title">
-            Команда ${number} (${basePlayers.length} игроков + ${substitutes.length} замена)
-          </div>
-
-          <div class="team-main">
-            ${basePlayers.length ? basePlayers.map(n => `<span class="team-main-item">${n}</span>`).join('') : '<span style="color: #a0a0a0; font-size: 13px;">нет игроков</span>'}
-          </div>
-
-          ${substitutes.length ? `
-            <div class="team-sub">
-              ${substitutes.map(n => `<span class="team-sub-item">${n}</span>`).join('')}
-            </div>
-          ` : ''}
-        </div>
-      `;
+    window.addEventListener("DOMContentLoaded", async function () {
+      await loadFromAPI();          // вместо loadFromJSON
+      selectNearestHall();
+      showNearestGame();
+      showSchedule();
+      showList();
     });
 
-    content.innerHTML = inner;
-    modal.classList.add('open');
-  }
+    function openTeamsModal() {
+      const hall = document.getElementById('hallSelect').value;
+      const players = playersByHall[hall] || [];
 
-function closeTeamsModal() {
-  const modal = document.getElementById('teamsModal');
-  modal.style.display = 'none';
-}
+      if (players.length === 0) {
+        alert("Сначала запишитесь хотя бы один участник.");
+        return;
+      }
 
+      const modal = document.getElementById('teamsModal');
+      const content = document.getElementById('teamsContent');
 
-window.addEventListener("DOMContentLoaded", async function () {
-  await loadFromAPI();          // вместо loadFromJSON
-  selectNearestHall();
-  showNearestGame();
-  showSchedule();
-  showList();
-});
+      content.innerHTML = '';
+
+      const numTeams = players.length >= 15 ? 3 : 2;
+
+      const shuffled = [...players].sort(() => 0.5 - Math.random());
+
+      const teams = Array.from({ length: numTeams }, () => []);
+      for (let i = 0; i < shuffled.length; i++) {
+        teams[i % numTeams].push(shuffled[i]);
+      }
+
+      let inner = `
+        <p style="margin-bottom: 8px; font-weight: 500;">Всего игроков: <strong>${players.length}</strong></p>
+        <p style="margin-bottom: 12px; font-weight: 500;">Сформировано команд: <strong>${numTeams}</strong></p>
+      `;
+
+      teams.forEach((team, idx) => {
+        const number = idx + 1;
+        const basePlayers = team.slice(0, 5);
+        const substitutes = team.slice(5);
+
+        inner += `
+          <div class="team-card">
+            <div class="team-title">
+              Команда ${number} (${basePlayers.length} игроков + ${substitutes.length} замена)
+            </div>
+
+            <div class="team-main">
+              ${basePlayers.length ? basePlayers.map(n => `<span class="team-main-item">${n}</span>`).join('') : '<span style="color: #a0a0a0; font-size: 13px;">нет игроков</span>'}
+            </div>
+
+            ${substitutes.length ? `
+              <div class="team-sub">
+                ${substitutes.map(n => `<span class="team-sub-item">${n}</span>`).join('')}
+              </div>
+            ` : ''}
+          </div>
+        `;
+      });
+
+      content.innerHTML = inner;
+      modal.classList.add('open');
+    }
+
+    function closeTeamsModal() {
+      const modal = document.getElementById('teamsModal');
+      modal.style.display = 'none';
+    }
     
   </script>
 
-    <!-- Модальное окно -->
-<div id="teamsModal">
-  <div class="modal-content">
-    <div class="modal-header">
-      <strong>Сформированные команды</strong>
-      <span class="modal-close-btn" onclick="closeTeamsModal()">×</span>
-    </div>
+  <!-- Модальное окно -->
+  <div id="teamsModal">
+    <div class="modal-content">
+      <div class="modal-header">
+        <strong>Сформированные команды</strong>
+        <span class="modal-close-btn" onclick="closeTeamsModal()">×</span>
+      </div>
 
-    <div id="teamsContent" class="teams-list"></div>
+      <div id="teamsContent" class="teams-list"></div>
 
-    <div class="modal-footer">
-      <button class="modal-btn-close" onclick="closeTeamsModal()">Закрыть</button>
+      <div class="modal-footer">
+        <button class="modal-btn-close" onclick="closeTeamsModal()">Закрыть</button>
+      </div>
     </div>
   </div>
-</div>
+  
 
 </body>
 </html>

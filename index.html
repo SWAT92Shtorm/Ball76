@@ -369,25 +369,7 @@
   Очистить список участников
   </button>
   -->  
-
-  <!-- Модальное окно -->
-<div id="teamsModal">
-  <div class="modal-content">
-    <div class="modal-header">
-      <strong>Сформированные команды</strong>
-      <span class="modal-close-btn" onclick="closeTeamsModal()">×</span>
-    </div>
-
-    <div id="teamsContent" class="teams-list"></div>
-
-    <div class="modal-footer">
-      <button class="modal-btn-close" onclick="closeTeamsModal()">Закрыть</button>
-    </div>
-  </div>
-</div>
-
   
-
   <script>
 
     const MAX_PLAYERS = 18;
@@ -1533,6 +1515,22 @@ window.addEventListener("DOMContentLoaded", async function () {
 });
     
   </script>
+
+    <!-- Модальное окно -->
+<div id="teamsModal">
+  <div class="modal-content">
+    <div class="modal-header">
+      <strong>Сформированные команды</strong>
+      <span class="modal-close-btn" onclick="closeTeamsModal()">×</span>
+    </div>
+
+    <div id="teamsContent" class="teams-list"></div>
+
+    <div class="modal-footer">
+      <button class="modal-btn-close" onclick="closeTeamsModal()">Закрыть</button>
+    </div>
+  </div>
+</div>
 
 </body>
 </html>

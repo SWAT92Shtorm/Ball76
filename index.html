@@ -1518,6 +1518,11 @@ document.getElementById('hallSelect').addEventListener('change', showNearestGame
     modal.style.display = 'flex';
   }
 
+function closeTeamsModal() {
+  const modal = document.getElementById('teamsModal');
+  modal.style.display = 'none';
+  }
+
 
 window.addEventListener("DOMContentLoaded", async function () {
   await loadFromAPI();          // вместо loadFromJSON

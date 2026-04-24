@@ -1340,72 +1340,6 @@ document.getElementById('hallSelect').addEventListener('change', showNearestGame
       }
     }
 
-// ============== Модальное окно с командами ==============
-
-function openTeamsModal() {
-  const hall = document.getElementById('hallSelect').value;
-  const players = playersByHall[hall] || [];
-
-  if (players.length === 0) {
-    alert("Сначала запишитесь хотя бы один участник.");
-    return;
-  }
-
-  const modal = document.getElementById('teamsModal');
-  const content = document.getElementById('teamsContent');
-
-  content.innerHTML = '';
-
-  const numTeams = players.length >= 15 ? 3 : 2;
-
-  const shuffled = [...players].sort(() => 0.5 - Math.random());
-
-  const teams = Array.from({ length: numTeams }, () => []);
-  for (let i = 0; i < shuffled.length; i++) {
-    teams[i % numTeams].push(shuffled[i]);
-  }
-
-  let inner = `
-    <p style="margin-bottom: 8px; font-weight: 500;">Всего игроков: <strong>${players.length}</strong></p>
-    <p style="margin-bottom: 12px; font-weight: 500;">Сформировано команд: <strong>${numTeams}</strong></p>
-  `;
-
-  teams.forEach((team, idx) => {
-    const number = idx + 1;
-    const basePlayers = team.slice(0, 5);
-    const substitutes = team.slice(5); // замены
-
-    inner += `
-      <div style="margin-bottom: 16px; padding: 10px; border: 1px dashed #404040; border-radius: 4px;">
-        <div style="font-weight: 600; margin-bottom: 6px; color: #a0e0ff;">
-          Команда ${number} (${basePlayers.length} игроков + ${substitutes.length} замена)
-        </div>
-
-        <div style="margin-bottom: 8px;">
-          <span style="font-weight: 500;">Основа:</span>
-          ${basePlayers.length ? basePlayers.map(n => `<span style="display: block; margin-left: 12px; margin-top: 2px;">${n}</span>`).join('') : '<span style="color: #a0a0a0; font-size: 13px;">нет игроков</span>'}
-        </div>
-
-        ${substitutes.length ? `
-          <div>
-            <span style="font-weight: 500;">Замена:</span>
-            ${substitutes.map(n => `<span style="display: block; margin-left: 12px; margin-top: 2px; color: #a0ffa0;">${n}</span>`).join('')}
-          </div>
-        ` : ''}
-      </div>
-    `;
-  });
-
-  content.innerHTML = inner;
-  modal.style.display = 'flex';
-}
-
-function closeTeamsModal() {
-  const modal = document.getElementById('teamsModal');
-  modal.style.display = 'none';
-}
-
-
 window.addEventListener("DOMContentLoaded", async function () {
   await loadFromAPI();          // вместо loadFromJSON
   selectNearestHall();
@@ -1415,62 +1349,6 @@ window.addEventListener("DOMContentLoaded", async function () {
 });
     
   </script>
-
-
-<!-- Модальное окно -->
-<div id="teamsModal" style="
-  display: none;
-  position: fixed;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 100%;
-  background: rgba(0,0,0,0.7);
-  z-index: 1000;
-  justify-content: center;
-  align-items: center;
-  flex-direction: column;
-">
-  <div style="
-    width: 400px;
-    max-width: 90%;
-    padding: 16px;
-    background: #222222;
-    border-radius: 6px;
-    border: 1px solid #404040;
-    color: #e0e0e0;
-    font-size: 14px;
-  ">
-    <div style="
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      margin-bottom: 12px;
-      padding-bottom: 8px;
-      border-bottom: 1px solid #333;">
-      <strong>Сформированные команды</strong>
-      <span
-        style="cursor: pointer; color: #ff6b6b; font-size: 18px;"
-        onclick="closeTeamsModal()">×</span>
-    </div>
-
-    <div id="teamsContent"></div>
-
-    <div style="margin-top: 16px; text-align: right;">
-      <button
-        onclick="closeTeamsModal()"
-        style="
-          padding: 6px 12px;
-          background: #333;
-          color: #e0e0e0;
-          border: 1px solid #404040;
-          border-radius: 4px;
-          cursor: pointer;">
-        Закрыть
-      </button>
-    </div>
-  </div>
-</div>
 
 </body>
 </html>

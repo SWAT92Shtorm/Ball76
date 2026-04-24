@@ -1508,6 +1508,16 @@ document.getElementById('hallSelect').addEventListener('change', showNearestGame
       teams.forEach((team, idx) => {
         const number = idx + 1;
 
+        const items = team.map((name, i) => {
+        // если это 6‑й игрок, добавляем небольшой отступ сверху
+        const extraStyle = i === 5 ? 'margin-top: 6px;' : '';
+        return `
+          <li class="team-player-item" style="${extraStyle}">
+            ${name}
+          </li>
+        `;
+        }).join('');
+
         inner += `
           <div class="team-card">
             <div class="team-title">

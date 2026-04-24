@@ -1488,6 +1488,7 @@ document.getElementById('hallSelect').addEventListener('change', showNearestGame
 
       const numTeams = players.length >= 15 ? 3 : 2;
 
+      // перемешать
       const shuffled = [...players].sort(() => 0.5 - Math.random());
 
       const teams = Array.from({ length: numTeams }, () => []);
@@ -1516,16 +1517,20 @@ document.getElementById('hallSelect').addEventListener('change', showNearestGame
             </div>
 
             <div class="team-main">
-              ${basePlayers.map(name => `
-                <span class="team-main-item">${name}</span>
-              `).join('')}
+              <ol class="team-main-ol" style="margin: 0; padding-left: 20px; list-style-type: decimal;">
+                ${basePlayers.map(name => `
+                  <li class="team-main-item">${name}</li>
+                `).join('')}
+              </ol>
             </div>
 
             ${substitutes.length > 0 ? `
               <div class="team-sub">
-                ${substitutes.map(name => `
-                  <span class="team-sub-item">${name}</span>
-                `).join('')}
+                <ol class="team-sub-ol" style="margin: 0; padding-left: 20px; list-style-type: decimal;">
+                  ${substitutes.map(name => `
+                    <li class="team-sub-item">${name}</li>
+                  `).join('')}
+                </ol>
               </div>
             ` : ''}
           </div>
@@ -1534,9 +1539,8 @@ document.getElementById('hallSelect').addEventListener('change', showNearestGame
 
       content.innerHTML = inner;
 
-      modal.style.display = 'flex'; // или: modal.classList.add('open');
+      modal.style.display = 'flex';
     }
-
 
     function closeTeamsModal() {
       const modal = document.getElementById('teamsModal');

@@ -1510,10 +1510,18 @@ document.getElementById('hallSelect').addEventListener('change', showNearestGame
       // 1. Сначала выбираем ближайший зал
       selectNearestHall();
 
-      // 2. Загружаем данные и показываем информацию (showNearestGame вызывает loadFromAPI)
-      await showNearestGame();
+      // 2. Загружаем данные для выбранного зала
+      await loadFromAPI();
 
-      // 3. Показываем расписание
+      // 3. Обновляем текст ближайшей игры и дату
+      const hall = document.getElementById('hallSelect').value;
+      if (hall) {
+        const newNearestDate = getNearestGameDate(hall);
+        lastNearestDate = newNearestDate;
+        document.getElementById('nearestGameInfo').textContent = getNearestGameText(hall);
+      }
+
+      // 4. Показываем расписание
       showSchedule();
 
       // Установить длительность ТОЛЬКО при первом открытии

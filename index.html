@@ -431,6 +431,10 @@
   
   <script>
 
+    // Базовый URL API
+    const API_BASE_URL = 'http://localhost:8080';                     // локальный Docker
+    // const API_BASE_URL = 'https://ball76.up.railway.app';          // продакшен (Railway)
+
     const MAX_PLAYERS = 18;
 
     // Стоимость для залов (если больше 500, считаем деление)
@@ -494,7 +498,7 @@
   /*
   async function loadFromAPI() {
     try {
-      const response = await fetch('https://ball76.up.railway.app/api/players');
+      const response = await fetch(`${API_BASE_URL}/api/players`);
       if (!response.ok) throw new Error('Не удалось загрузить участников');
       const data = await response.json();
 
@@ -531,7 +535,7 @@
       const hall = document.getElementById('hallSelect').value;
       const dateStr = getNearestGameDate(hall);
       const response = await fetch(
-        `https://ball76.up.railway.app/api/players/${hall}/${dateStr}`
+        `${API_BASE_URL}/api/players/${hall}/${dateStr}`
       );
 
       if (!response.ok) throw new Error('Не удалось загрузить участников');
@@ -544,7 +548,7 @@
 
       // 2. НОВЫЙ БЛОК: история записей из базы (все игры)
       const historyResponse = await fetch(
-        'https://ball76.up.railway.app/api/history'
+        `${API_BASE_URL}/api/history`
       );
 
       if (!historyResponse.ok) throw new Error('Не удалось загрузить историю');
@@ -986,7 +990,7 @@ async function submitEdit(index) {
 
   try {
     const response = await fetch(
-      'https://ball76.up.railway.app/api/player/name',
+      `${API_BASE_URL}/api/player/name`,
       {
         method: 'PATCH',
         headers: {
@@ -1048,7 +1052,7 @@ async function submitEdit(index) {
 
       try {
         const response = await fetch(
-          `https://ball76.up.railway.app/api/players/${hall}/${dateStr}/${encodeURIComponent(name)}`,
+          `${API_BASE_URL}/api/players/${hall}/${dateStr}/${encodeURIComponent(name)}`,
           {
             method: 'DELETE',
             headers: { 'Content-Type': 'application/json' }
@@ -1132,7 +1136,7 @@ async function submitEdit(index) {
       try {
         const dateStr = getNearestGameDate(hall);
         const response = await fetch(
-          `https://ball76.up.railway.app/api/players/${hall}/${dateStr}`,
+          `${API_BASE_URL}/api/players/${hall}/${dateStr}`,
           {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -1198,7 +1202,7 @@ async function submitEdit(index) {
       // Отправляем в API с датой
       try {
         const response = await fetch(
-          `https://ball76.up.railway.app/api/players/${hall}`,
+          `${API_BASE_URL}/api/players/${hall}`,
           {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },

@@ -459,8 +459,8 @@
       showList();
     }
 
-    // ========== Загрузка данных из JSON-файла ==========
-  <!--
+    // ========== Загрузка данных из JSON-файла (старая версия) ==========
+  /*
   async function loadFromAPI() {
     try {
       const response = await fetch('https://ball76.up.railway.app/api/players');
@@ -492,7 +492,7 @@
     showList();
     updatePlayersList();   // ✅ вот сюда
   }
-  -->
+  */
 
   async function loadFromAPI() {
     try {
@@ -1073,7 +1073,7 @@ async function submitEdit(index) {
       }
     }
 
-    <!--
+    /*
     async function addPlayer() {
       const input = document.getElementById('playerName');
       const error = document.getElementById('playerNameError');
@@ -1136,7 +1136,7 @@ async function submitEdit(index) {
         alert('Не удалось добавить игрока через API');
       }
     }
-    -->
+    */
 
     async function addPlayer() {
       const input = document.getElementById('playerName');
@@ -1266,7 +1266,7 @@ async function submitEdit(index) {
         ">
           <div style="font-weight: 600; color: #a0e0ff; margin-bottom: 6px;">📋 Общая информация по залу</div>
           <div style="color: #e0e0e0; font-weight: 500;">
-            Стоимость: <span style="color: #a0e0ff; font-weight: 600;">${hallPrice[hall] || 0} ₽</span> 
+            Стоимость: <span style="color: #a0e0ff; font-weight: 600;">${hallPriceByDuration[hall]?.full || hallPrice[hall] || 0} ₽</span>
             | Мин: <span style="color: #a0e0ff; font-weight: 600;">10</span> чел. 
             | Макс: <span style="color: #a0e0ff; font-weight: 600;">${MAX_PLAYERS}</span> чел.
           </div>
@@ -1439,10 +1439,7 @@ async function showNearestGame() {
 // Подписываемся на изменение зала
 document.getElementById('hallSelect').addEventListener('change', showNearestGame);
 
-
-    document.getElementById('hallSelect').addEventListener('change', showNearestGame);
-    
-        // выбрать ближайший зал как значение по умолчанию
+    // выбрать ближайший зал как значение по умолчанию
     function selectNearestHall() {
       const now = new Date();
       const nowWeekDay = now.getDay() || 7;

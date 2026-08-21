@@ -1431,8 +1431,7 @@ async function showNearestGame() {
   // ПРИ СМЕНЕ ДАТЫ — ПЕРЕЗАГРУЗИТЬ СПИСОК
   if (newNearestDate !== lastNearestDate) {
     lastNearestDate = newNearestDate;
-    await loadFromAPI();  // Полная перезагрузка
-    showList();           // Перерисовка под новую дату
+    await loadFromAPI();  // Полная перезагрузка (loadFromAPI сам вызывает showList)
   }
 }
 
@@ -1473,9 +1472,8 @@ document.getElementById('hallSelect').addEventListener('change', showNearestGame
     window.addEventListener("DOMContentLoaded", async function () {
       await loadFromAPI();          // вместо loadFromJSON
       selectNearestHall();
-      showNearestGame();
+      await showNearestGame();      // дожидаемся загрузки данных для выбранного зала
       showSchedule();
-      showList();
 
       // Установить длительность ТОЛЬКО при первом открытии
       const durationSelect = document.getElementById('durationSelect');

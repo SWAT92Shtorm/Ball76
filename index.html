@@ -1446,6 +1446,8 @@ async function submitEdit(index) {
 }
 
 
+let isInitialLoad = true;
+
 async function showNearestGame() {
   const hall = document.getElementById('hallSelect').value;
   const info = document.getElementById('nearestGameInfo');
@@ -1460,6 +1462,11 @@ async function showNearestGame() {
 
   // Всегда обновляем текст ближайшей игры
   info.textContent = newNearestText;
+
+  // При первой загрузке — только текст, данные загрузит DOMContentLoaded
+  if (isInitialLoad) {
+    return;
+  }
 
   // ПРИ СМЕНЕ ДАТЫ — ПЕРЕЗАГРУЗИТЬ СПИСОК
   if (newNearestDate !== lastNearestDate) {
@@ -1507,17 +1514,16 @@ document.getElementById('hallSelect').addEventListener('change', showNearestGame
 
 
     window.addEventListener("DOMContentLoaded", async function () {
-      // 1. Сначала выбираем ближайший зал
+      // 1. Выбираем ближайший зал (showNearestGame сработает, но isInitialLoad=true → только текст)
       selectNearestHall();
 
-      // 2. Загружаем данные для выбранного зала
+      // 2. Загружаем данные
       await loadFromAPI();
 
-      // 3. Обновляем текст ближайшей игры и дату
+      // 3. Фиксируем дату и обновляем текст (на случай если loadFromAPI перетёр)
       const hall = document.getElementById('hallSelect').value;
       if (hall) {
-        const newNearestDate = getNearestGameDate(hall);
-        lastNearestDate = newNearestDate;
+        lastNearestDate = getNearestGameDate(hall);
         document.getElementById('nearestGameInfo').textContent = getNearestGameText(hall);
       }
 
@@ -1526,8 +1532,11 @@ document.getElementById('hallSelect').addEventListener('change', showNearestGame
 
       // Установить длительность ТОЛЬКО при первом открытии
       const durationSelect = document.getElementById('durationSelect');
-      const currentPlayers = playersByHall[document.getElementById('hallSelect').value]?.length || 0;
+      const currentPlayers = playersByHall[hall]?.length || 0;
       durationSelect.value = currentPlayers >= 15 ? 'full' : 'short';
+
+      // 5. Снимаем флаг первой загрузки
+      isInitialLoad = false;
     });
 
     // ========== Модальное окно с командами  ==========

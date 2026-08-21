@@ -1457,12 +1457,18 @@ async function showNearestGame() {
 
   const newNearestText = getNearestGameText(hall);
   const newNearestDate = getNearestGameDate(hall);
+
+  // Всегда обновляем текст ближайшей игры
   info.textContent = newNearestText;
 
   // ПРИ СМЕНЕ ДАТЫ — ПЕРЕЗАГРУЗИТЬ СПИСОК
   if (newNearestDate !== lastNearestDate) {
     lastNearestDate = newNearestDate;
-    await loadFromAPI();  // Полная перезагрузка (loadFromAPI сам вызывает showList)
+    try {
+      await loadFromAPI();  // Полная перезагрузка (loadFromAPI сам вызывает showList)
+    } catch (e) {
+      console.error('Ошибка загрузки в showNearestGame:', e);
+    }
   }
 }
 
@@ -1501,9 +1507,13 @@ document.getElementById('hallSelect').addEventListener('change', showNearestGame
 
 
     window.addEventListener("DOMContentLoaded", async function () {
-      await loadFromAPI();          // вместо loadFromJSON
+      // 1. Сначала выбираем ближайший зал
       selectNearestHall();
-      await showNearestGame();      // дожидаемся загрузки данных для выбранного зала
+
+      // 2. Загружаем данные и показываем информацию (showNearestGame вызывает loadFromAPI)
+      await showNearestGame();
+
+      // 3. Показываем расписание
       showSchedule();
 
       // Установить длительность ТОЛЬКО при первом открытии

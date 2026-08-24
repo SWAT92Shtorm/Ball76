@@ -49,10 +49,10 @@ if ps aux | grep -E "zrok share public.*${ZROK_NAME}" | grep -v grep > /dev/null
 else
   echo "🌐 Запускаю zrok-туннель (имя: ball76)..."
   if [ "$1" = "--bg" ]; then
-    nohup zrok share public "http://localhost:${PORT}" -n "${ZROK_NAME}" \
+    nohup zrok share public "http://localhost:${PORT}" -n "${ZROK_NAME}" --headless \
       > .zrok.log 2>&1 &
     echo $! > .zrok.pid
-    sleep 3
+    sleep 4
     echo "   Tуннель в фоне, PID=$(cat .zrok.pid), лог: .zrok.log"
   else
     # Foreground: Ctrl+C остановит tуннель, но Docker останется работать

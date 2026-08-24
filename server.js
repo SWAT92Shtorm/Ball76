@@ -667,9 +667,12 @@ app.get('/api/history', async (req, res) => {
   }
 });
 
-// Порт
+// Порт. Слушаем на 0.0.0.0 (все интерфейсы), чтобы:
+// - работал локальный доступ (localhost)
+// - работал Docker-порт-маппинг (контейнер → хост)
+// - работал zrok-туннель (проксирует на localhost:8080)
 const PORT = process.env.PORT || 8080;
-const server = app.listen(PORT, '127.0.0.1', () => {
+const server = app.listen(PORT, '0.0.0.0', () => {
   console.log('✅ Server listening on http://localhost:' + PORT);
   console.log('📄 Файл данных:', DATA_FILE);
 });

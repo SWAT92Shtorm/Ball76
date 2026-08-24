@@ -1,1 +1,4 @@
 .DS_Store
+.zrok.pid
+.zrok.log
+node_modules/

@@ -406,12 +406,6 @@
     <!-- Блок таблицы истории записей по датам (прямо после списка участников) -->
   <div id="historyTableContainer" style="margin-top: 12px; display: none;"></div>
 
-  <!--
-  <button onclick="clearHallPlayers()" style="background:#b22222;margin-top:10px;">
-  Очистить список участников
-  </button>
-  -->  
-
   <!-- Модальное окно -->
   <div id="teamsModal">
     <div class="modal-content">
@@ -478,57 +472,6 @@
         console.error('Не удалось скопировать телефон:', err);
       }
     }
-
-    function clearHallPlayers() {
-      const hall = document.getElementById('hallSelect').value;
-      if (!hall) {
-        alert('Сначала выбери зал.');
-        return;
-      }
-
-      const hallName = hall === 'hall1' ? 'ЛОКОМОТИВ' : 'АТЛАНТ';
-      if (!confirm(`Очистить весь список зала ${hallName}?`)) return;
-
-      playersByHall[hall] = [];
-      localStorage.setItem('basketballPlayersByHall', JSON.stringify(playersByHall));
-
-      showList();
-    }
-
-    // ========== Загрузка данных из JSON-файла (старая версия) ==========
-  /*
-  async function loadFromAPI() {
-    try {
-      const response = await fetch(`${API_BASE_URL}/api/players`);
-      if (!response.ok) throw new Error('Не удалось загрузить участников');
-      const data = await response.json();
-
-      playersByHall = data.playersByHall || { hall1: [], hall2: [] };
-      historyByDate = data.historyByDate || {};
-
-      // === собрать всеИмена из серверного JSON в playerNames
-      const allNames = new Set();
-      Object.values(playersByHall).forEach(hallPlayers => {
-        hallPlayers.forEach(name => {
-          if (name) allNames.add(name);
-        });
-      });
-      playerNames = Array.from(allNames);
-
-    } catch (err) {
-      console.error('Ошибка при запросе API:', err);
-      playersByHall = { hall1: [], hall2: [] };
-      historyByDate = {};
-      playerNames = [];
-    }
-
-
-    updatePlayersList();   // ✅ обновляем datalist
-    // после загрузки обновляем отображение списка
-    showList();
-    updatePlayersList();   // ✅ вот сюда
-  }
-  */
 
   async function loadFromAPI() {
     try {
@@ -608,10 +551,6 @@
         .replace('г.', 'г.');
       document.getElementById('currentDateTime').textContent =
         'Сегодня: ' + dtText;
-    }
-
-    function saveHistory() {
-      localStorage.setItem('basketballHistoryByDate', JSON.stringify(historyByDate));
     }
 
     // ФИО из истории
@@ -1108,71 +1047,6 @@ async function submitEdit(index) {
         error.style.display = 'none';
       }
     }
-
-    /*
-    async function addPlayer() {
-      const input = document.getElementById('playerName');
-      const error = document.getElementById('playerNameError');
-      const name = input.value.trim();
-      const words = name.split(/\s+/).filter(word => word.length > 0);
-
-      if (!name || words.length < 3) {
-        validatePlayerName();
-        return;
-      }
-
-      const hall = document.getElementById('hallSelect').value;
-
-      if (!hall) {
-        alert('Сначала выберите зал');
-        return;
-      }
-
-      // Если массива для зала нет — создаём
-      if (!playersByHall[hall]) {
-        playersByHall[hall] = [];
-      }
-
-      // Отправляем в API
-      try {
-        const dateStr = getNearestGameDate(hall);
-        const response = await fetch(
-          `${API_BASE_URL}/api/players/${hall}/${dateStr}`,
-          {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ name: name, date: dateStr })
-          }
-        );
-
-        if (!response.ok) {
-          throw new Error('Ошибка при добавлении игрока');
-        }
-
-        const result = await response.json();
-        playersByHall = result.playersByHall || playersByHall;
-
-        // Обновляем список имён
-        if (!playerNames.includes(name)) {
-          playerNames.push(name);
-        }
-
-        // Сохраняем в localStorage, если нужно
-        localStorage.setItem('basketballPlayerNames', JSON.stringify(playerNames));
-        localStorage.setItem('basketballPlayersByHall', JSON.stringify(playersByHall));
-
-        input.value = '';
-        input.style.borderColor = '#ccc';
-        input.style.backgroundColor = 'white';
-        error.style.display = 'none';
-        showList();
-        updatePlayersList();
-      } catch (err) {
-        console.error('Ошибка при добавлении через API:', err);
-        alert('Не удалось добавить игрока через API');
-      }
-    }
-    */
 
     async function addPlayer() {
       const input = document.getElementById('playerName');

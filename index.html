@@ -336,6 +336,64 @@
   margin-right: 8px;
 }
 
+/* ==== Тосты (уведомления) ==== */
+#toastContainer {
+  position: fixed;
+  top: 16px;
+  right: 16px;
+  z-index: 2000;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-width: 340px;
+}
+
+.toast {
+  padding: 10px 14px;
+  border-radius: 6px;
+  font-size: 14px;
+  line-height: 1.4;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
+  animation: toastIn 0.25s ease-out;
+  word-break: break-word;
+}
+
+.toast.success {
+  background: #1a4b1a;
+  border: 1px solid #2e7d32;
+  color: #e0ffe0;
+}
+
+.toast.error {
+  background: #501010;
+  border: 1px solid #a03030;
+  color: #ffe0e0;
+}
+
+.toast.info {
+  background: #1a3a5c;
+  border: 1px solid #00aaff;
+  color: #d0f0ff;
+}
+
+.toast.hiding {
+  animation: toastOut 0.3s ease-in forwards;
+}
+
+@keyframes toastIn {
+  from { opacity: 0; transform: translateX(30px); }
+  to   { opacity: 1; transform: translateX(0); }
+}
+
+@keyframes toastOut {
+  from { opacity: 1; transform: translateX(0); }
+  to   { opacity: 0; transform: translateX(30px); }
+}
+
+button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
 
 </style>
 
@@ -381,6 +439,9 @@
 
   <!-- мини-анимация после записи -->
   <div id="successAnimation" style="display: none; text-align: center; margin-top: 15px;"></div>
+
+  <!-- Контейнер для тостов -->
+  <div id="toastContainer"></div>
   <div id="result"></div>
 
   <!-- Строка расчёта суммы -->
@@ -463,13 +524,28 @@
 
     document.getElementById('durationSelect').value = 'full';
 
-// Копировать телефон в буфер (без alert)
+// ==== Тосты (уведомления) ====
+    function showToast(message, type = 'info', duration = 3500) {
+      const container = document.getElementById('toastContainer');
+      const toast = document.createElement('div');
+      toast.className = `toast ${type}`;
+      toast.textContent = message;
+      container.appendChild(toast);
+
+      setTimeout(() => {
+        toast.classList.add('hiding');
+        toast.addEventListener('animationend', () => toast.remove());
+      }, duration);
+    }
+
+// Копировать телефон в буфер
     async function copyPhoneToClipboard(phone) {
       try {
         await navigator.clipboard.writeText(phone);
-        // можно оставить небольшую подсказку в консоли или скрытом тултипе
+        showToast('Телефон скопирован', 'success', 2000);
       } catch (err) {
         console.error('Не удалось скопировать телефон:', err);
+        showToast('Не удалось скопировать телефон', 'error');
       }
     }
 
@@ -894,10 +970,17 @@
       span.style.display = 'none';
       input.style.display = 'inline-block';
       input.focus();
+      input.select();
 
       startIcon.style.display = 'none';
       submitIcon.style.display = 'inline-block';
       cancelIcon.style.display = 'inline-block';
+
+      // Enter — сохранить, ESC — отменить
+      input.onkeydown = function (e) {
+        if (e.key === 'Enter') { e.preventDefault(); submitEdit(index); }
+        if (e.key === 'Escape') { e.preventDefault(); cancelEdit(index); }
+      };
     }
 
   
@@ -910,14 +993,14 @@ async function submitEdit(index) {
   const hall = document.getElementById('hallSelect').value;
 
   if (!newName) {
-    alert('Пожалуйста, введите корректное ФИО');
+    showToast('Введите корректное ФИО', 'error');
     return;
   }
 
   // проверка формата ФИО: минимум 3 слова
   const parts = newName.split(/\s+/).filter(word => word.length > 0);
   if (parts.length < 3) {
-    alert('ФИО должно состоять из трёх слов: Фамилия Имя Отчество');
+    showToast('ФИО должно состоять из трёх слов: Фамилия Имя Отчество', 'error');
     return;
   }
 
@@ -961,16 +1044,17 @@ async function submitEdit(index) {
     
     // перерисовать список
     showList();
+    showToast(`Игрок переименован в «${newName}»`, 'success');
 
   } catch (err) {
     console.error('Ошибка при редактировании через API:', err);
-    alert('Не удалось отредактировать игрока через API');
+    showToast(err.message || 'Не удалось отредактировать игрока', 'error');
   }
 }
 
 
 
-    // Отменить редактирование
+    // Отменить редактирование (ESC или ✖)
     function cancelEdit(index) {
       showList();
     }
@@ -981,12 +1065,12 @@ async function submitEdit(index) {
       const hall = document.getElementById('hallSelect').value;
       const name = playersByHall[hall][index];
 
-      if (!confirm(`Удалить "${name}" через API?`)) return;
+      if (!confirm(`Удалить «${name}» из списка?`)) return;
 
       // Получаем ближайшую дату записи для этого зала
       const dateStr = getNearestGameDate(hall);
       if (!dateStr) {
-        alert('Не удалось определить ближайшую дату игры.');
+        showToast('Не удалось определить ближайшую дату игры', 'error');
         return;
       }
 
@@ -1021,10 +1105,11 @@ async function submitEdit(index) {
         // обновляет playersByHall, historyByDate и перерисовывает
 
         showList();
+        showToast(`«${name}» удалён из списка`, 'success');
 
       } catch (err) {
         console.error('Ошибка при удалении через API:', err);
-        alert('Не удалось удалить игрока через API');
+        showToast(err.message || 'Не удалось удалить игрока', 'error');
       }
     }
 
@@ -1035,15 +1120,16 @@ async function submitEdit(index) {
       const name = input.value.trim();
       const words = name.split(/\s+/).filter(word => word.length > 0);
 
-      if (!name || words.length < 3) {
+      // показываем ошибку только если пользователь уже что-то ввёл
+      if (name && words.length < 3) {
         input.style.borderColor = '#ffb347';
-        input.style.backgroundColor = '#fff3e0';
-        input.style.color = '#2b2b2b';
+        input.style.backgroundColor = '#3a2f1a';
+        input.style.color = '#ffe8c0';
         error.style.display = 'block';
       } else {
-        input.style.borderColor = '#ccc';
-        input.style.backgroundColor = 'white';
-        input.style.color = '#000000';
+        input.style.borderColor = '#404040';
+        input.style.backgroundColor = '#2d2d2d';
+        input.style.color = '#f0f0f0';
         error.style.display = 'none';
       }
     }
@@ -1062,7 +1148,7 @@ async function submitEdit(index) {
       const hall = document.getElementById('hallSelect').value;
 
       if (!hall) {
-        alert('Сначала выберите зал');
+        showToast('Сначала выберите зал', 'error');
         return;
       }
 
@@ -1070,9 +1156,15 @@ async function submitEdit(index) {
       const dateStr = getNearestGameDate(hall);
 
       if (!dateStr) {
-        alert('Не удалось определить ближайшую дату игры');
+        showToast('Не удалось определить ближайшую дату игры', 'error');
         return;
       }
+
+      // Блокируем кнопку на время запроса
+      const btn = document.querySelector('button[onclick="addPlayer()"]');
+      const originalBtnText = btn.textContent;
+      btn.disabled = true;
+      btn.textContent = 'Запись...';
 
       // Отправляем в API с датой
       try {
@@ -1086,7 +1178,12 @@ async function submitEdit(index) {
         );
 
         if (!response.ok) {
-          throw new Error('Ошибка при добавлении игрока');
+          let serverError = 'Ошибка при добавлении игрока';
+          try {
+            const errData = await response.json();
+            if (errData.error) serverError = errData.error;
+          } catch (_) {}
+          throw new Error(serverError);
         }
 
         // Показать анимацию успеха
@@ -1115,8 +1212,9 @@ async function submitEdit(index) {
         }
 
         input.value = '';
-        input.style.borderColor = '#ccc';
-        input.style.backgroundColor = 'white';
+        input.style.borderColor = '#404040';
+        input.style.backgroundColor = '#2d2d2d';
+        input.style.color = '#f0f0f0';
         error.style.display = 'none';
         showList();
         updatePlayersList();
@@ -1125,9 +1223,13 @@ async function submitEdit(index) {
         await loadFromAPI();
         // обновляет playersByHall, historyByDate и перерисовывает
 
+        showToast(`${name} записан на игру`, 'success');
       } catch (err) {
         console.error('Ошибка при добавлении через API:', err);
-        alert('Не удалось добавить игрока через API');
+        showToast(err.message || 'Не удалось добавить игрока', 'error');
+      } finally {
+        btn.disabled = false;
+        btn.textContent = originalBtnText;
       }
     }
 
@@ -1148,7 +1250,21 @@ async function submitEdit(index) {
     showCurrentDateTime();
     setInterval(showCurrentDateTime, 1000);
 
+    // Автообновление списка раз в 30 секунд (чужие записи становятся видны)
+    setInterval(async () => {
+      if (document.hidden) return;           // не грузим на скрытой вкладке
+      try {
+        await loadFromAPI();
+      } catch (e) {
+        console.error('Ошибка автообновления:', e);
+      }
+    }, 30000);
+
     document.getElementById('playerName').addEventListener('blur', validatePlayerName);
+    // Enter в поле ФИО — записаться
+    document.getElementById('playerName').addEventListener('keydown', function (e) {
+      if (e.key === 'Enter') addPlayer();
+    });
     document.getElementById('hallSelect').addEventListener('change', function () {
       showList();
       showSchedule();
@@ -1425,7 +1541,7 @@ document.getElementById('hallSelect').addEventListener('change', showNearestGame
       const players = playersByHall[hall] || [];
 
       if (players.length === 0) {
-        alert("Сначала запишитесь хотя бы один участник.");
+        showToast("Сначала запишитесь хотя бы один участник", 'error');
         return;
       }
 

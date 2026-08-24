@@ -1,0 +1,371 @@
+/* ============================================================
+   Ball76 — стили страницы записи на баскетбол
+   ============================================================ */
+
+/* ==== Базовые стили ==== */
+
+body {
+  font-family: sans-serif;
+  max-width: 600px;
+  margin: 20px auto;
+  margin-bottom: 40px;
+
+  background-color: #121212;   /* тёмный фон страницы */
+  color: #e0e0e0;              /* светлый текст */
+}
+
+label, input, button, select {
+  margin: 5px 0;
+  padding: 10px;
+  width: 100%;
+  border-radius: 4px;
+  border: 1px solid #404040;
+  box-sizing: border-box;
+  font-size: 16px;
+
+  background-color: #2d2d2d;
+  color: #f0f0f0;
+}
+
+input:focus, select:focus {
+  border-color: #00aaff;
+  outline: none;
+}
+
+button {
+  background-color: #007acc;
+  color: #ffffff;
+  border: none;
+  cursor: pointer;
+}
+
+button:hover {
+  background-color: #005ca3;
+}
+
+button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+/* ==== Таблицы (история) ==== */
+
+.players {
+  margin-top: 20px;
+  padding: 10px;
+  background: #252525;
+  border-radius: 5px;
+  border: 1px solid #404040;
+}
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-top: 10px;
+  background-color: #222222;
+}
+
+th, td {
+  padding: 8px;
+  text-align: left;
+  border: 1px solid #404040;
+  color: #e0e0e0;
+}
+
+th {
+  background: #333333;
+}
+
+/* ==== Шапка: дата/время и ближайшая игра ==== */
+
+#currentDateTime {
+  margin-bottom: 15px;
+  padding: 10px;
+  background: #202020;
+  border-radius: 5px;
+  font-size: 14px;
+  color: #d0ffd0;
+  border: 1px solid #404040;
+}
+
+#nearestGameInfo {
+  margin-top: 10px;
+  padding: 10px;
+  background: #202020;
+  border-radius: 5px;
+  font-size: 14px;
+  color: #a0e0ff;        /* светло‑голубой текст */
+  border: 1px solid #404040;
+}
+
+/* ==== Формы: строки "подпись + инпут/селект" ==== */
+
+.form-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 8px 0;
+  height: 40px;
+  max-width: 600px;
+}
+
+.form-row label {
+  margin: 0;
+  white-space: nowrap;
+  flex-shrink: 0;
+  width: 163px;
+  font-size: 15px;
+}
+
+.form-row input,
+.form-row select {
+  margin: 0;
+  padding: 10px 12px;
+  border: 1px solid #404040;
+  border-radius: 4px;
+  font-size: 16px;
+  background-color: #2d2d2d;
+  color: #f0f0f0;
+  box-sizing: border-box;
+  flex: 1;
+  width: auto;
+  height: 40px;
+  line-height: 1.4;
+}
+
+/* ==== Стоимость к оплате ==== */
+
+#pricingRow {
+  margin-top: 15px;
+  padding: 8px;
+  background: #1a4b1a;
+  border-radius: 4px;
+  font-size: 14px;
+  color: #e0ffe0;
+}
+
+/* ==== Список участников ==== */
+
+.playerLine {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin: 5px 0;
+  border-bottom: 1px solid #303030;
+  padding-bottom: 4px;
+}
+
+.playerName {
+  flex-grow: 1;
+  margin-right: 10px;
+  color: #ffffff;
+}
+
+.playerName span {
+  margin-right: 10px;
+}
+
+.icons {
+  white-space: nowrap;
+  text-align: right;
+}
+
+.responsible {
+  margin-top: 4px;
+  margin-bottom: 8px;
+  font-size: 13px;
+  color: #a0ffa0;
+}
+
+/* ==== Анимация после успешной записи ==== */
+
+#successAnimation .smile {
+  font-size: 50px;
+  display: inline-block;
+  margin-left: 10px;
+  animation: bounceSmile 1.2s ease-in-out 1 forwards;
+
+  margin-top: 0;
+  margin-bottom: 0;
+}
+
+@keyframes bounceSmile {
+  0%   { transform: translateY(-10px) rotate(0deg); }
+  25%  { transform: translateY(0px) rotate(3deg); }
+  50%  { transform: translateY(-20px) rotate(-3deg); }
+  75%  { transform: translateY(-5px) rotate(1.5deg); }
+  100% { transform: translateY(-10px) rotate(0deg); }
+}
+
+/* ==== Модальное окно с командами ==== */
+
+#teamsModal {
+  display: none;
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(0, 0, 0, 0.7);
+  z-index: 1000;
+  justify-content: center;
+  align-items: center;
+}
+
+#teamsModal.open {
+  display: flex;
+}
+
+#teamsModal .modal-content {
+  width: 400px;
+  max-width: 90%;
+  padding: 16px;
+  background: #222222;
+  border-radius: 6px;
+  border: 1px solid #404040;
+  color: #e0e0e0;
+  font-size: 14px;
+}
+
+#teamsModal .modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid #333;
+  font-weight: 600;
+}
+
+#teamsModal .modal-header strong {
+  color: #ffffff;
+}
+
+#teamsModal .modal-close-btn {
+  cursor: pointer;
+  color: #ff6b6b;
+  font-size: 18px;
+}
+
+#teamsModal .teams-list {
+  margin-top: 8px;
+}
+
+#teamsModal .team-card {
+  margin-bottom: 16px;
+  padding: 10px;
+  border: 1px dashed #404040;
+  border-radius: 4px;
+}
+
+#teamsModal .team-title {
+  font-weight: 600;
+  margin-bottom: 6px;
+  color: #a0e0ff;
+}
+
+#teamsModal .team-main {
+  margin-bottom: 8px;
+}
+
+#teamsModal .team-main-label {
+  font-weight: 500;
+}
+
+#teamsModal .team-main-item {
+  margin-left: 12px;
+  margin-top: 2px;
+}
+
+#teamsModal .team-sub {
+  margin-top: 4px;
+}
+
+#teamsModal .team-sub-label {
+  font-weight: 500;
+}
+
+#teamsModal .team-sub-item {
+  margin-left: 12px;
+  margin-top: 2px;
+  color: #a0ffa0;
+}
+
+#teamsModal .modal-footer {
+  margin-top: 16px;
+  text-align: right;
+}
+
+#teamsModal .modal-btn-close {
+  padding: 6px 12px;
+  background: #333;
+  color: #e0e0e0;
+  border: 1px solid #404040;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+#teamsModal .reroll-btn {
+  background-color: #007acc;
+  color: #ffffff;
+  border: none;
+  cursor: pointer;
+  padding: 6px 12px;
+  border-radius: 4px;
+  margin-right: 8px;
+}
+
+/* ==== Тосты (уведомления) ==== */
+
+#toastContainer {
+  position: fixed;
+  top: 16px;
+  right: 16px;
+  z-index: 2000;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-width: 340px;
+}
+
+.toast {
+  padding: 10px 14px;
+  border-radius: 6px;
+  font-size: 14px;
+  line-height: 1.4;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
+  animation: toastIn 0.25s ease-out;
+  word-break: break-word;
+}
+
+.toast.success {
+  background: #1a4b1a;
+  border: 1px solid #2e7d32;
+  color: #e0ffe0;
+}
+
+.toast.error {
+  background: #501010;
+  border: 1px solid #a03030;
+  color: #ffe0e0;
+}
+
+.toast.info {
+  background: #1a3a5c;
+  border: 1px solid #00aaff;
+  color: #d0f0ff;
+}
+
+.toast.hiding {
+  animation: toastOut 0.3s ease-in forwards;
+}
+
+@keyframes toastIn {
+  from { opacity: 0; transform: translateX(30px); }
+  to   { opacity: 1; transform: translateX(0); }
+}
+
+@keyframes toastOut {
+  from { opacity: 1; transform: translateX(0); }
+  to   { opacity: 0; transform: translateX(30px); }
+}

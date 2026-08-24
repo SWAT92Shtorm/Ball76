@@ -55,6 +55,20 @@ app.get('/', (req, res) => {
   res.send('Server works!');
 });
 
+// Лимит игроков на одну игру (должен совпадать с MAX_PLAYERS на клиенте)
+const MAX_PLAYERS = 18;
+
+// Форматирование даты в московском времени: YYYY-MM-DD
+// (pg отдаёт date/timestamp как JS Date; toISOString() даёт UTC и может сдвинуть день)
+function formatDateMSK(date) {
+  return new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Europe/Moscow',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit'
+  }).format(date); // en-CA → именно YYYY-MM-DD
+}
+
 // GET /api/players — отдать данные из БД
 app.get('/api/players', async (req, res) => {
   try {
@@ -157,7 +171,19 @@ app.post('/api/players/:hallId', async (req, res) => {
       console.log('7️⃣ Новая игра создана:', game.id);
     }
 
-    // 4. Связываем игрока с игрой
+    // 4. Проверка лимита игроков на игру
+    const countRes = await client.query(
+      'SELECT COUNT(*)::int AS count FROM game_players WHERE game_id = $1;',
+      [game.id]
+    );
+    if (countRes.rows[0].count >= MAX_PLAYERS) {
+      console.log('⚠️ Лимит игроков на игру достигнут:', countRes.rows[0].count);
+      return res.status(400).json({
+        error: `Игра заполнена: максимум ${MAX_PLAYERS} человек`
+      });
+    }
+
+    // 5. Связываем игрока с игрой
     console.log('8️⃣ Проверяем, записан ли игрок уже на эту игру');
     const existing = await client.query(
       'SELECT * FROM game_players WHERE game_id = $1 AND player_id = $2;',
@@ -397,7 +423,7 @@ app.get('/api/history', async (req, res) => {
 
     result.rows.forEach(row => {
       const hallId = row.hall_id;
-      const date = row.date.toISOString().split('T')[0]; // YYYY-MM-DD
+      const date = formatDateMSK(row.date); // YYYY-MM-DD в московском времени
       const name = row.name.trim();
 
       if (!historyByDate[date]) {

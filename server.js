@@ -43,11 +43,12 @@ if (!fs.existsSync(DATA_FILE)) {
   fs.writeFileSync(DATA_FILE, JSON.stringify(defaultData, null, 2));
 }
 
-// CORS: разрешаем GitHub Pages (продакшен) и локальные origins (localhost/127.0.0.1)
+// CORS: разрешаем GitHub Pages (продакшен), zrok-туннель и локальные origins (localhost/127.0.0.1)
 app.use((req, res, next) => {
   const origin = req.headers.origin;
   const isAllowed =
     origin === 'https://swat92shtorm.github.io' ||
+    origin === 'https://ball76.shares.zrok.io' ||
     /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(origin || '');
 
   if (isAllowed) {

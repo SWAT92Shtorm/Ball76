@@ -6,10 +6,20 @@ const app = express();
 
 const { Client } = require('pg');
 
-// Подключение к PostgreSQL в Railway (по DATABASE_URL)
-const client = new Client({
-  connectionString: process.env.DATABASE_URL
-});
+// Подключение к PostgreSQL:
+// - если задан DATABASE_URL (Railway/продакшен) — используем его
+// - иначе локально — Docker-контейнер Ball76-postgres на localhost:5432
+const DB_CONFIG = process.env.DATABASE_URL
+  ? { connectionString: process.env.DATABASE_URL }
+  : {
+      host: 'localhost',
+      port: 5432,
+      database: 'Ball76',
+      user: 'Ball76',
+      password: 'Ball76'
+    };
+
+const client = new Client(DB_CONFIG);
 
 // попытаться подключиться при старте
 client.connect()
@@ -33,11 +43,14 @@ if (!fs.existsSync(DATA_FILE)) {
   fs.writeFileSync(DATA_FILE, JSON.stringify(defaultData, null, 2));
 }
 
-// CORS, как у тебя
+// CORS: разрешаем GitHub Pages (продакшен) и локальные origins (localhost/127.0.0.1)
 app.use((req, res, next) => {
-  const allowedOrigin = 'https://swat92shtorm.github.io';
   const origin = req.headers.origin;
-  if (origin === allowedOrigin) {
+  const isAllowed =
+    origin === 'https://swat92shtorm.github.io' ||
+    /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(origin || '');
+
+  if (isAllowed) {
     res.header('Access-Control-Allow-Origin', origin);
   }
   res.header('Access-Control-Allow-Methods', 'GET, POST, PATCH, DELETE, OPTIONS');
@@ -655,7 +668,15 @@ app.get('/api/history', async (req, res) => {
 
 // Порт
 const PORT = process.env.PORT || 8080;
-app.listen(PORT, () => {
-  console.log('✅ Server listening on port', PORT);
+const server = app.listen(PORT, '127.0.0.1', () => {
+  console.log('✅ Server listening on http://localhost:' + PORT);
   console.log('📄 Файл данных:', DATA_FILE);
+});
+
+// Если PostgreSQL не подключился — завершаем процесс с ошибкой,
+// чтобы было понятно, что сервер не готов принимать запросы к БД
+process.on('uncaughtException', (err) => {
+  console.error('❌ Непредвиденная ошибка:', err);
+  server.close();
+  process.exit(1);
 });

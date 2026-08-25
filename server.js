@@ -207,6 +207,7 @@ app.get('/api/status', async (req, res) => {
 // Единственный источник правды: клиент получает его через GET /api/config,
 // дублировать эти значения в index.html/app.js больше не нужно.
 const APP_CONFIG = {
+  apiUrl: 'https://ball76api.loca.lt',
   maxPlayers: 18,
   halls: {
     hall1: {

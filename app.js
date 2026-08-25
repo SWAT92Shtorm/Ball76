@@ -19,6 +19,10 @@
 //     что и страница.
 //  3. GitHub Pages — продакшен на Railway.
 //  4. Остальное (localhost, IP, file://) — локальный Docker.
+// Дефолтный адрес туннеля (из серверного APP_CONFIG.apiUrl).
+// Если пользователь не вводил адрес вручную — используем этот.
+const DEFAULT_TUNNEL_URL = 'https://ball76api.loca.lt';
+
 function detectApiBase() {
   const host = location.hostname;
 
@@ -35,9 +39,9 @@ function detectApiBase() {
     return saved.replace(/\/+$/, '');
   }
 
-  // GitHub Pages без сохранённого туннеля — заглушка (API недоступен).
+  // GitHub Pages без сохранённого туннеля — дефолт из серверного конфига.
   // Локальная разработка — Docker на localhost.
-  if (host === 'swat92shtorm.github.io') return '';
+  if (host === 'swat92shtorm.github.io') return DEFAULT_TUNNEL_URL;
   return 'http://localhost:8080';
 }
 

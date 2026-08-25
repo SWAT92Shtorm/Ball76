@@ -93,29 +93,57 @@ if [ -n "$LT_URL" ] && is_alive $LT_PID; then
       echo "      Для API-запросов из кода: заголовок bypass-tunnel-reminder: 1"
       echo ""
       echo "   Остановить: ./tunnel.sh stop"
+      echo ""
 
-      # Режим watch: фоновый цикл проверки каждые 15 минут
+      # Режим watch: скрипт остаётся в терминале и печатает статус
+      # каждые 15 минут. Ctrl+C — остановит туннель и завершит скрипт.
       if [ "$WATCH_MODE" = true ]; then
-        (
-          while true; do
-            sleep 900
-            # Проверка: процесс жив + API отвечает через туннель
-            if ! kill -0 "$LT_PID" 2>/dev/null; then
-              echo "[$(date '+%H:%M')] ⚠️ Туннель умер, перезапускаю..."
-              break
-            fi
-            CHECK=$(curl -s -m 10 -H "bypass-tunnel-reminder: 1" "$LT_URL/api/status" 2>/dev/null)
-            if ! echo "$CHECK" | grep -q '"db"'; then
-              echo "[$(date '+%H:%M')] ⚠️ Туннель не отвечает, перезапускаю..."
-              break
-            fi
-          done
-          # Перезапуск (рекурсивно, без --watch чтобы не плодить циклы)
-          exec ./tunnel.sh
-        ) &
-        WATCH_PID=$!
-        echo "   👁️ Watch-режим: проверка каждые 15 мин (PID $WATCH_PID)"
-        echo ""
+        trap 'echo ""; echo "🛑 Останавливаю туннель..."; ./tunnel.sh stop; exit 0' INT TERM
+
+        while true; do
+          sleep 600
+          TS=$(date '+%Y-%m-%d %H:%M')
+          # Проверка: процесс жив + API отвечает через туннель
+          if ! kill -0 "$LT_PID" 2>/dev/null; then
+            echo "[$TS] ⚠️  Туннель умер, перезапускаю..."
+            stop_all
+            # Повторный запуск (без watch — родительский цикл продолжит мониторинг)
+            nohup npx --yes localtunnel --port "$PORT" -s "$SUBDOMAIN" > .lt.log 2>&1 &
+            LT_PID=$!
+            for i in $(seq 1 10); do
+              sleep 4
+              NEW_URL=$(grep -a -o 'https://[a-z0-9-]*\.loca\.lt' .lt.log 2>/dev/null | head -1)
+              if [ -n "$NEW_URL" ]; then
+                LT_URL="$NEW_URL"
+                echo "$LT_PID" > .tunnel.pid
+                echo "$LT_URL" > .tunnel.url
+                echo "[$(date '+%H:%M')] ✅ Туннель перезапущен: $LT_URL"
+                break
+              fi
+            done
+            continue
+          fi
+          CHECK=$(curl -s -m 10 -H "bypass-tunnel-reminder: 1" "$LT_URL/api/status" 2>/dev/null)
+          if ! echo "$CHECK" | grep -q '"db"'; then
+            echo "[$TS] ⚠️  Туннель не отвечает, перезапускаю..."
+            stop_all
+            nohup npx --yes localtunnel --port "$PORT" -s "$SUBDOMAIN" > .lt.log 2>&1 &
+            LT_PID=$!
+            for i in $(seq 1 10); do
+              sleep 4
+              NEW_URL=$(grep -a -o 'https://[a-z0-9-]*\.loca\.lt' .lt.log 2>/dev/null | head -1)
+              if [ -n "$NEW_URL" ]; then
+                LT_URL="$NEW_URL"
+                echo "$LT_PID" > .tunnel.pid
+                echo "$LT_URL" > .tunnel.url
+                echo "[$(date '+%H:%M')] ✅ Туннель перезапущен: $LT_URL"
+                break
+              fi
+            done
+            continue
+          fi
+          echo "[$TS] ✅ Туннель жив: $LT_URL"
+        done
       fi
       exit 0
     fi

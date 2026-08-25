@@ -128,8 +128,22 @@
     <p>Для записи на баскетбол включите JavaScript в браузере.</p>
   </noscript>
 
-  <footer class="app-version">v2026.08.25-i</footer>
+  <footer class="app-version" id="appVersion" onclick="openChangelogModal()" title="Нажмите для просмотра изменений">v2026.08.25-j</footer>
 
-  <script src="app.js?v=20260825i"></script>
+  <!-- Модалка changelog -->
+  <div id="changelogModal" class="modal-overlay">
+    <div class="modal-content changelog-modal-content">
+      <div class="modal-header">
+        <strong>📋 История версий</strong>
+        <span class="modal-close-btn" onclick="closeChangelogModal()">×</span>
+      </div>
+      <div id="changelogContent" class="changelog-list"></div>
+      <div class="modal-footer">
+        <button class="modal-btn modal-btn-cancel" onclick="closeChangelogModal()">Закрыть</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="app.js?v=20260825j"></script>
 </body>
 </html>

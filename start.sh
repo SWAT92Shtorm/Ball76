@@ -25,7 +25,25 @@ if ! docker ps --format '{{.Names}}' | grep -q "^${POSTGRES}$"; then
   docker start "${POSTGRES}" > /dev/null
 fi
 
-if ! docker ps --format '{{.Names}}' | grep -q "^${NODE}$"; then
+# Node-сервер: bridge-сеть + проброс порта + DATABASE_URL через host.docker.internal
+# (Docker Desktop на macOS не поддерживает --network host для доступа к хосту)
+NODE_RUNNING=$(docker ps --format '{{.Names}}' | grep -c "^${NODE}$" || true)
+if [ "$NODE_RUNNING" -eq 0 ]; then
+  echo "⬆️  Запускаю ${NODE}..."
+  # Если контейнер существует, но не работает — пересоздаём (IP мог измениться)
+  if docker ps -a --format '{{.Names}}' | grep -q "^${NODE}$"; then
+    docker rm "${NODE}" > /dev/null 2>&1
+  fi
+  docker run -d --name "${NODE}" \
+    -p "${PORT}:8080" \
+    -e DATABASE_URL="postgres://Ball76:Ball76@host.docker.internal:5432/Ball76" \
+    --add-host host.docker.internal:host-gateway \
+    -v "$(pwd)/server.js:/app/server.js" \
+    -v "$(pwd)/swagger.js:/app/swagger.js" \
+    -v "$(pwd)/package.json:/app/package.json" \
+    -v "$(pwd)/node_modules:/app/node_modules" \
+    -w /app node:20-alpine node server.js > /dev/null
+else
   echo "⬆️  Поднимаю ${NODE}..."
   docker start "${NODE}" > /dev/null
 fi

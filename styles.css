@@ -963,14 +963,65 @@ th {
   to   { opacity: 0; transform: translateX(30px); }
 }
 
-/* ==== Версия приложения (незаметно внизу) ==== */
+/* ==== Версия приложения (незаметно внизу, кликабельна) ==== */
 .app-version {
   text-align: center;
   font-size: 10px;
-  color: #444;
+  color: #555;
   margin-top: 24px;
   padding-bottom: 8px;
   user-select: none;
+  cursor: pointer;
+  transition: color 0.2s;
+}
+.app-version:hover {
+  color: #888;
+  text-decoration: underline;
+}
+
+/* ==== Модалка changelog ==== */
+.changelog-modal-content {
+  max-height: 80vh;
+  overflow-y: auto;
+}
+.changelog-list {
+  padding: 8px 0;
+}
+.changelog-entry {
+  padding: 10px 0;
+  border-bottom: 1px solid #3a3a3a;
+}
+.changelog-entry:last-child {
+  border-bottom: none;
+}
+.changelog-version {
+  font-weight: bold;
+  color: #4fc3f7;
+  font-size: 14px;
+  margin-bottom: 4px;
+}
+.changelog-date {
+  font-size: 11px;
+  color: #777;
+  margin-left: 8px;
+}
+.changelog-items {
+  list-style: none;
+  padding: 0;
+  margin: 4px 0 0 0;
+}
+.changelog-items li {
+  font-size: 13px;
+  color: #ccc;
+  padding: 2px 0;
+  padding-left: 12px;
+  position: relative;
+}
+.changelog-items li::before {
+  content: '•';
+  position: absolute;
+  left: 0;
+  color: #666;
 }
 
 /* ==== Модальное окно ввода туннеля ==== */

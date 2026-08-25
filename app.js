@@ -256,14 +256,26 @@ function showToast(message, type = 'info', duration = 3500) {
   }, duration);
 }
 
-// Копировать телефон в буфер
+// Копировать телефон в буфер + открыть Сбербанк (СБП) на мобильных
 async function copyPhoneToClipboard(phone) {
+  // Форматируем номер для tel:/deep-link: +79611544411
+  const digits = phone.replace(/[^\d+]/g, '');
+  const telFormat = digits.startsWith('+') ? digits : '+7' + digits.replace(/^8/, '');
+
   try {
     await navigator.clipboard.writeText(phone);
     showToast('Телефон скопирован', 'success', 2000);
   } catch (err) {
     console.error('Не удалось скопировать телефон:', err);
     showToast('Не удалось скопировать телефон', 'error');
+  }
+
+  // На мобильных открываем Сбербанк через deep link (СБП-перевод)
+  const isMobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+  if (isMobile) {
+    setTimeout(() => {
+      window.location.href = 'sberbank://pay?account=' + encodeURIComponent(telFormat);
+    }, 500); // даём тосту показаться перед переходом
   }
 }
 
@@ -1039,7 +1051,7 @@ function renderPricingRow(hall, playersCount) {
     <div class="phone-block${isUnder10 ? ' phone-block-warn' : ''}">
       Для оплаты переведите деньги на телефон:
       <br />
-      <span class="phone-number" id="displayPhone" title="Нажмите, чтобы скопировать">${escapeHtml(phone)}</span>
+      <span class="phone-number" id="displayPhone" title="Нажмите: копирует номер и открывает Сбербанк">${escapeHtml(phone)}</span>
       <button class="phone-copy-btn" onclick="copyPhoneToClipboard('${escapeHtml(phone)}')" title="Копировать телефон">📋</button>
     </div>
   `;
@@ -1322,6 +1334,70 @@ function closeTeamsModal() {
   document.getElementById('teamsModal').style.display = 'none';
 }
 
+// ==================== 7.5. CHANGELOG (модалка истории версий) ====================
+
+const CHANGELOG = [
+  {
+    version: 'v2026.08.25-j',
+    date: '25.08.2026',
+    items: [
+      'Тап по номеру телефона открывает Сбербанк (СБП) на мобильных',
+      'Кликабельная версия внизу — показывает историю изменений'
+    ]
+  },
+  {
+    version: 'v2026.08.25-i',
+    date: '25.08.2026',
+    items: [
+      'Автоматический фолбэк на дефолтный туннель при мусорном URL в localStorage',
+      'Валидация сохранённого API-адреса (отсекает некорректные значения)',
+      'Заголовок bypass-tunnel-reminder для всех fetch-запросов через loca.lt'
+    ]
+  },
+  {
+    version: 'v2026.08.25-h',
+    date: '25.08.2026',
+    items: [
+      'CORS: сервер разрешает заголовок bypass-tunnel-reminder',
+      'loca.lt не показывает модальное окно с запросом IP хоста'
+    ]
+  },
+  {
+    version: 'v2026.08.25-g',
+    date: '25.08.2026',
+    items: [
+      'Динамическое определение API-базы (локально / туннель / GitHub Pages)',
+      'Модалка ввода адреса туннеля при недоступности API',
+      'Автообновление списка каждые 30 секунд',
+      'Инлайн-редактирование имён игроков',
+      'Модалка подтверждения удаления',
+      'Автодополнение ФИО из истории',
+      'Индикатор заполненности зала',
+      'Формирование команд (🎲)'
+    ]
+  }
+];
+
+function openChangelogModal() {
+  const modal = document.getElementById('changelogModal');
+  const content = document.getElementById('changelogContent');
+
+  content.innerHTML = CHANGELOG.map(entry => `
+    <div class="changelog-entry">
+      <div class="changelog-version">${entry.version}<span class="changelog-date">${entry.date}</span></div>
+      <ul class="changelog-items">
+        ${entry.items.map(item => `<li>${escapeHtml(item)}</li>`).join('')}
+      </ul>
+    </div>
+  `).join('');
+
+  modal.style.display = 'flex';
+}
+
+function closeChangelogModal() {
+  document.getElementById('changelogModal').style.display = 'none';
+}
+
 // ==================== 8. INIT ====================
 
 window.addEventListener('DOMContentLoaded', async function () {
@@ -1429,14 +1505,17 @@ window.addEventListener('DOMContentLoaded', async function () {
     if (teams.style.display === 'flex') closeTeamsModal();
     const del = document.getElementById('deleteModal');
     if (del.style.display === 'flex') closeDeleteModal();
+    const cl = document.getElementById('changelogModal');
+    if (cl.style.display === 'flex') closeChangelogModal();
   });
 
-  ['teamsModal', 'deleteModal'].forEach(id => {
+  ['teamsModal', 'deleteModal', 'changelogModal'].forEach(id => {
     const modal = document.getElementById(id);
     modal.addEventListener('click', function (e) {
       if (e.target === modal) { // клик именно по подложке, не по содержимому
         if (id === 'teamsModal') closeTeamsModal();
-        else closeDeleteModal();
+        else if (id === 'deleteModal') closeDeleteModal();
+        else closeChangelogModal();
       }
     });
   });

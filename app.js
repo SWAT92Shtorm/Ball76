@@ -23,6 +23,22 @@
 // Если пользователь не вводил адрес вручную — используем этот.
 const DEFAULT_TUNNEL_URL = 'https://ball76api.loca.lt';
 
+// Валидация URL: должен начинаться с http(s):// и содержать домен с точкой
+// или быть localhost/IP. Отсекает мусор вроде "123123".
+function isValidApiUrl(url) {
+  if (!url) return false;
+  try {
+    const u = new URL(url);
+    if (u.protocol !== 'http:' && u.protocol !== 'https:') return false;
+    // localhost / IP — валидно
+    if (u.hostname === 'localhost' || /^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$/.test(u.hostname)) return true;
+    // Домен с точкой (например ball76api.loca.lt)
+    return u.hostname.includes('.');
+  } catch (_) {
+    return false;
+  }
+}
+
 function detectApiBase() {
   const host = location.hostname;
 
@@ -35,11 +51,15 @@ function detectApiBase() {
   }
 
   const saved = localStorage.getItem('ball76_api');
-  if (saved) {
+  if (saved && isValidApiUrl(saved)) {
     return saved.replace(/\/+$/, '');
   }
+  // Мусорный/невалидный URL в localStorage — очищаем
+  if (saved) {
+    try { localStorage.removeItem('ball76_api'); } catch (_) {}
+  }
 
-  // GitHub Pages без сохранённого туннеля — дефолт из серверного конфига.
+  // GitHub Pages без сохранённого туннеля — дефолтный адрес туннеля.
   // Локальная разработка — Docker на localhost.
   if (host === 'swat92shtorm.github.io') return DEFAULT_TUNNEL_URL;
   return 'http://localhost:8080';
@@ -50,9 +70,13 @@ let API_BASE_URL = detectApiBase();
 // Заголовки для bypass'а tunnel-reminder от loca.lt:
 // без них loca.lt показывает страницу-подтверждение (ввести IP хоста),
 // и все fetch-запросы получают HTML вместо JSON.
-const TUNNEL_HEADERS = /\.loca\.lt$/.test(API_BASE_URL)
-  ? { 'bypass-tunnel-reminder': '1' }
-  : {};
+// Функция (не константа) — потому что API_BASE_URL может смениться
+// в loadConfig() при фолбэке на DEFAULT_TUNNEL_URL.
+function getTunnelHeaders() {
+  return /\.loca\.lt$/.test(API_BASE_URL)
+    ? { 'bypass-tunnel-reminder': '1' }
+    : {};
+}
 
 // Конфиг приходит ТОЛЬКО с сервера. Без заглушки: если API недоступен —
 // страница честно показывает ошибку, а не имитирует работу.
@@ -63,18 +87,43 @@ async function loadConfig() {
     openTunnelModal('Адрес API не задан. Введите адрес туннеля:');
     return false;
   }
+  // Был ли адрес взят из localStorage (а не определён автоматически)?
+  const fromStorage = (() => {
+    try { return !!localStorage.getItem('ball76_api'); } catch (_) { return false; }
+  })();
   try {
     const ctrl = new AbortController();
     const t = setTimeout(() => ctrl.abort(), 5000);
-    const response = await fetch(`${API_BASE_URL}/api/config`, { headers: TUNNEL_HEADERS, signal: ctrl.signal });
+    const response = await fetch(`${API_BASE_URL}/api/config`, { headers: getTunnelHeaders(), signal: ctrl.signal });
     clearTimeout(t);
     if (!response.ok) throw new Error('HTTP ' + response.status);
     CONFIG = await response.json();
     return true;
   } catch (err) {
-    // Мёртвый/неверный туннель — очищаем и показываем модалку с ошибкой.
-    if (/\.loca\.lt$|localhost|127\.0\.0\.1/.test(API_BASE_URL)) {
+    // Мёртвый/неверный туннель — очищаем и пробуем дефолтный адрес.
+    // Если дефолтный тоже не работает — показываем модалку для ввода.
+    if (fromStorage || /\.loca\.lt$|localhost|127\.0\.0\.1/.test(API_BASE_URL)) {
       try { localStorage.removeItem('ball76_api'); } catch (_) {}
+
+      // Пробуем дефолтный туннельный адрес
+      if (API_BASE_URL !== DEFAULT_TUNNEL_URL) {
+        try {
+          const ctrl2 = new AbortController();
+          const t2 = setTimeout(() => ctrl2.abort(), 5000);
+          const resp2 = await fetch(`${DEFAULT_TUNNEL_URL}/api/config`, {
+            headers: { 'bypass-tunnel-reminder': '1' },
+            signal: ctrl2.signal
+          });
+          clearTimeout(t2);
+          if (resp2.ok) {
+            CONFIG = await resp2.json();
+            API_BASE_URL = DEFAULT_TUNNEL_URL;
+            try { localStorage.setItem('ball76_api', DEFAULT_TUNNEL_URL); } catch (_) {}
+            return true;
+          }
+        } catch (_) { /* дефолт тоже не работает */ }
+      }
+
       openTunnelModal(`⚠️ API (${API_BASE_URL}) недоступен: ${err.message}. Введите правильный адрес:`);
     } else {
       showApiError(`API (${API_BASE_URL}) недоступен: ${err.message}`);
@@ -290,7 +339,7 @@ function setApiStatus(online) {
 // и блокируем кнопку «Записаться» (запись всё равно не пройдёт на сервере).
 async function checkDbStatus() {
   try {
-    const response = await fetch(`${API_BASE_URL}/api/status`, { headers: TUNNEL_HEADERS });
+    const response = await fetch(`${API_BASE_URL}/api/status`, { headers: getTunnelHeaders() });
     const data = await response.json();
     const online = !!data.db && response.ok;
     if (online !== dbOnline) {
@@ -353,7 +402,7 @@ async function loadFromAPI({ silent = false, refreshHall = true } = {}) {
       const dateStr = getNearestGameDate(currentHall);
       const response = await fetch(
         `${API_BASE_URL}/api/players/${currentHall}/${dateStr}`,
-        { headers: TUNNEL_HEADERS }
+        { headers: getTunnelHeaders() }
       );
       if (!response.ok) throw new Error('Не удалось загрузить участников');
       playersData = await response.json();
@@ -363,7 +412,7 @@ async function loadFromAPI({ silent = false, refreshHall = true } = {}) {
     playersByHall = playersData.playersByHall || { hall1: [], hall2: [] };
 
     // 2. История записей из базы (все игры)
-    const historyResponse = await fetch(`${API_BASE_URL}/api/history`, { headers: TUNNEL_HEADERS });
+    const historyResponse = await fetch(`${API_BASE_URL}/api/history`, { headers: getTunnelHeaders() });
     if (!historyResponse.ok) throw new Error('Не удалось загрузить историю');
     const historyData = await historyResponse.json();
     historyByDate = historyData.historyByDate || {};
@@ -440,7 +489,7 @@ async function addPlayer() {
   try {
     const response = await fetch(`${API_BASE_URL}/api/players/${hall}`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', ...TUNNEL_HEADERS },
+      headers: { 'Content-Type': 'application/json', ...getTunnelHeaders() },
       body: JSON.stringify({ name, date: dateStr })
     });
 
@@ -526,7 +575,7 @@ async function doRemovePlayer(index) {
   try {
     const response = await fetch(
       `${API_BASE_URL}/api/players/${hall}/${dateStr}/${encodeURIComponent(name)}`,
-      { method: 'DELETE', headers: { 'Content-Type': 'application/json', ...TUNNEL_HEADERS } }
+      { method: 'DELETE', headers: { 'Content-Type': 'application/json', ...getTunnelHeaders() } }
     );
 
     if (!response.ok) {
@@ -580,7 +629,7 @@ async function submitEdit(index) {
   try {
     const response = await fetch(`${API_BASE_URL}/api/player/name`, {
       method: 'PATCH',
-      headers: { 'Content-Type': 'application/json', ...TUNNEL_HEADERS },
+      headers: { 'Content-Type': 'application/json', ...getTunnelHeaders() },
       body: JSON.stringify({ currentName: oldName, newName })
     });
 

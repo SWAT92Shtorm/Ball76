@@ -835,28 +835,32 @@ function renderPricingRow(hall, playersCount) {
   priceElem.style.background = mainBg;
   priceElem.style.borderColor = borderCol;
 
-  let pricingLines;
+  // Единая формулировка для обоих залов: «Каждому нужно заплатить: N ₽».
+  // Разница только в том, как считается N:
+  //  - АТЛАНТ (perPerson задан): фиксированная сумма, не зависит от числа игроков;
+  //  - ЛОКОМОТИВ: стоимость аренды делится на всех записавшихся.
+  let perPersonAmount;
+  let payNote;
   if (perPersonFixed) {
-    // АТЛАНТ: фиксированная сумма с человека, аренда не делится
-    pricingLines = `
-      <div style="font-size: 13px; margin-bottom: 4px;">Стоимость аренды зала: ${price} ₽ (фиксированно)</div>
-      <div style="font-size: 13px; margin-bottom: 4px;">Время аренды: ${durationText}</div>
-      <div style="font-size: 13px;">Сумма не делится на участников.</div>
-      <div style="font-size: 13px; margin-top: 4px;"><strong>Каждый платит: ${perPersonFixed} ₽</strong></div>
-    `;
-  } else {
-    // ЛОКОМОТИВ: стоимость аренды делится на всех записавшихся
+    perPersonAmount = String(perPersonFixed);
+    payNote = 'Сумма фиксированная, не делится на участников.';
+  } else if (playersCount > 0) {
     const activeCount = Math.min(maxPlayers(), playersCount);
-    const perPerson = playersCount > 0 ? (price / activeCount).toFixed(2) : null;
-    pricingLines = `
-      <div style="font-size: 13px; margin-bottom: 4px;">Стоимость зала: ${price} ₽</div>
-      <div style="font-size: 13px; margin-bottom: 4px;">Время аренды: ${durationText}</div>
-      ${playersCount > 0
-        ? `<div style="font-size: 13px;">Оплачивать будут ${activeCount} человек (${activeCount} в пределах лимита)</div>
-           <div style="font-size: 13px; margin-top: 4px;"><strong>Каждому нужно заплатить: ${perPerson} ₽</strong></div>`
-        : '<div style="font-size: 13px;">Участников пока нет — запишитесь первым!</div>'}
-    `;
+    perPersonAmount = (price / activeCount).toFixed(2);
+    payNote = `Оплачивать будут ${activeCount} чел. (в пределах лимита ${maxPlayers()}).`;
+  } else {
+    perPersonAmount = null;
+    payNote = 'Участников пока нет — запишитесь первым!';
   }
+
+  const pricingLines = `
+    <div style="font-size: 13px; margin-bottom: 4px;">Стоимость аренды зала: ${price} ₽${perPersonFixed ? ' (фиксированно)' : ''}</div>
+    <div style="font-size: 13px; margin-bottom: 4px;">Время аренды: ${durationText}</div>
+    <div style="font-size: 13px;">${payNote}</div>
+    ${perPersonAmount !== null
+      ? `<div style="font-size: 13px; margin-top: 4px;"><strong>Каждому нужно заплатить: ${perPersonAmount} ₽</strong></div>`
+      : ''}
+  `;
 
   priceElem.innerHTML = `
     ${pricingLines}

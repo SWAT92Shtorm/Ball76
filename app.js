@@ -1338,6 +1338,12 @@ function closeTeamsModal() {
 
 const CHANGELOG = [
   {
+    version: 'l',
+    items: [
+      '🎨 Единый стиль всех модальных окон'
+    ]
+  },
+  {
     version: 'k',
     items: [
       '🎨 Красивая модалка истории изменений'

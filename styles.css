@@ -799,6 +799,40 @@ th {
   background: #005ca3;
 }
 
+/* ==== Единый стиль шапки модалок (заголовок + кнопка закрытия) ==== */
+
+.modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid #333;
+  font-weight: 600;
+}
+
+.modal-header strong {
+  color: #ffffff;
+}
+
+.modal-close-btn {
+  cursor: pointer;
+  color: #ff6b6b;
+  font-size: 22px;
+  line-height: 1;
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  transition: background 0.15s ease;
+}
+
+.modal-close-btn:hover {
+  background: rgba(255, 107, 107, 0.15);
+}
+
 /* ==== Модальное окно с командами ==== */
 
 #teamsModal {
@@ -811,26 +845,6 @@ th {
 
 #teamsModal .modal-content {
   width: 400px;
-}
-
-#teamsModal .modal-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 12px;
-  padding-bottom: 8px;
-  border-bottom: 1px solid #333;
-  font-weight: 600;
-}
-
-#teamsModal .modal-header strong {
-  color: #ffffff;
-}
-
-#teamsModal .modal-close-btn {
-  cursor: pointer;
-  color: #ff6b6b;
-  font-size: 18px;
 }
 
 #teamsModal .teams-list {
@@ -983,9 +997,7 @@ th {
 .changelog-modal-content {
   max-height: 80vh;
   overflow-y: auto;
-  background: linear-gradient(145deg, #1e1e2f, #16161e);
-  border: 1px solid #333;
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+  width: 380px;
 }
 .changelog-list {
   padding: 4px 0;

@@ -53,7 +53,7 @@ let CONFIG = null;
 
 async function loadConfig() {
   if (!API_BASE_URL) {
-    showTunnelInput('Адрес API не задан. Введите адрес туннеля:');
+    openTunnelModal('Адрес API не задан. Введите адрес туннеля:');
     return false;
   }
   try {
@@ -65,10 +65,10 @@ async function loadConfig() {
     CONFIG = await response.json();
     return true;
   } catch (err) {
-    // Мёртвый туннель в localStorage — очищаем и даём ввести новый адрес.
-    if (/\.loca\.lt$/.test(API_BASE_URL)) {
+    // Мёртвый/неверный туннель — очищаем и показываем модалку с ошибкой.
+    if (/\.loca\.lt$|localhost|127\.0\.0\.1/.test(API_BASE_URL)) {
       try { localStorage.removeItem('ball76_api'); } catch (_) {}
-      showTunnelInput(`Туннель (${API_BASE_URL}) мёртв. Введите новый адрес:`);
+      openTunnelModal(`⚠️ API (${API_BASE_URL}) недоступен: ${err.message}. Введите правильный адрес:`);
     } else {
       showApiError(`API (${API_BASE_URL}) недоступен: ${err.message}`);
     }
@@ -76,7 +76,10 @@ async function loadConfig() {
   }
 }
 
-function showTunnelInput(message) {
+let _tunnelModalEl = null;
+
+function openTunnelModal(message) {
+  closeTunnelModal();
   const main = document.querySelector('main');
   if (!main) return;
   const div = document.createElement('div');
@@ -85,29 +88,62 @@ function showTunnelInput(message) {
     <div class="tunnel-modal-box">
       <div class="tunnel-modal-icon">🔌</div>
       <h3 class="tunnel-modal-title">Нет соединения с сервером</h3>
-      <p class="tunnel-modal-text">${message}</p>
+      <p class="tunnel-modal-text" id="tunnelModalMsg">${message}</p>
       <div class="tunnel-modal-row">
-        <input type="url" id="tunnelUrlInput" class="tunnel-modal-input"
+        <input type="text" id="tunnelUrlInput" class="tunnel-modal-input"
                placeholder="https://xxx.loca.lt" autocomplete="off" spellcheck="false">
-        <button onclick="saveTunnelUrl()" class="tunnel-modal-btn">Подключить</button>
+        <button id="tunnelModalBtn" class="tunnel-modal-btn">Подключить</button>
       </div>
       <p class="tunnel-modal-hint">Адрес выдаёт команда <code>./tunnel.sh</code></p>
     </div>`;
   main.prepend(div);
-  // Фокус на поле ввода
+  _tunnelModalEl = div;
   setTimeout(() => document.getElementById('tunnelUrlInput')?.focus(), 100);
-  // Enter в поле → сохранить
-  document.getElementById('tunnelUrlInput')?.addEventListener('keydown', e => {
-    if (e.key === 'Enter') saveTunnelUrl();
+  document.getElementById('tunnelUrlInput').addEventListener('keydown', e => {
+    if (e.key === 'Enter') connectTunnel();
   });
+  document.getElementById('tunnelModalBtn').addEventListener('click', connectTunnel);
 }
 
-function saveTunnelUrl() {
+function closeTunnelModal() {
+  if (_tunnelModalEl) { _tunnelModalEl.remove(); _tunnelModalEl = null; }
+}
+
+function setTunnelModalError(msg) {
+  const el = document.getElementById('tunnelModalMsg');
+  if (el) { el.textContent = msg; el.style.color = '#e74c3c'; }
+}
+
+async function connectTunnel() {
   const input = document.getElementById('tunnelUrlInput');
-  const url = (input?.value || '').trim().replace(/\/+$/, '');
-  if (!url) return;
-  try { localStorage.setItem('ball76_api', url); } catch (_) {}
-  location.reload();
+  let url = (input?.value || '').trim().replace(/\/+$/, '');
+  if (!url) { setTunnelModalError('Введите адрес туннеля'); return; }
+  // Автодополнение протокола
+  if (!/^https?:\/\//i.test(url)) url = 'https://' + url;
+  // Базовая валидация
+  try { new URL(url); } catch { setTunnelModalError('Некорректный URL. Пример: https://ball76api.loca.lt'); return; }
+
+  const btn = document.getElementById('tunnelModalBtn');
+  btn.disabled = true;
+  btn.textContent = 'Проверка…';
+
+  // Проверяем что API отвечает ПЕРЕД сохранением
+  try {
+    const ctrl = new AbortController();
+    const t = setTimeout(() => ctrl.abort(), 5000);
+    const resp = await fetch(`${url}/api/status`, { signal: ctrl.signal });
+    clearTimeout(t);
+    if (!resp.ok) throw new Error('HTTP ' + resp.status);
+    // Успех — сохраняем и перезагружаем
+    try { localStorage.setItem('ball76_api', url); } catch (_) {}
+    location.reload();
+  } catch (err) {
+    // Ошибка — показываем в модалке, НЕ перезагружаем
+    setTunnelModalError(`⚠️ ${url} недоступен: ${err.message}. Попробуйте другой адрес.`);
+    btn.disabled = false;
+    btn.textContent = 'Подключить';
+    input.select();
+  }
 }
 
 function showApiError(message) {

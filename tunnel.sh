@@ -25,8 +25,14 @@ stop_all() {
   sleep 1
 }
 
+WATCH_MODE=false
+if [ "${1:-}" = "--watch" ] || [ "${1:-}" = "-w" ]; then
+  WATCH_MODE=true
+fi
+
 if [ "${1:-}" = "stop" ]; then
   stop_all
+  pkill -f "tunnel.sh.*watch" 2>/dev/null
   echo "✅ Туннель остановлен"
   exit 0
 fi
@@ -87,6 +93,30 @@ if [ -n "$LT_URL" ] && is_alive $LT_PID; then
       echo "      Для API-запросов из кода: заголовок bypass-tunnel-reminder: 1"
       echo ""
       echo "   Остановить: ./tunnel.sh stop"
+
+      # Режим watch: фоновый цикл проверки каждые 15 минут
+      if [ "$WATCH_MODE" = true ]; then
+        (
+          while true; do
+            sleep 900
+            # Проверка: процесс жив + API отвечает через туннель
+            if ! kill -0 "$LT_PID" 2>/dev/null; then
+              echo "[$(date '+%H:%M')] ⚠️ Туннель умер, перезапускаю..."
+              break
+            fi
+            CHECK=$(curl -s -m 10 -H "bypass-tunnel-reminder: 1" "$LT_URL/api/status" 2>/dev/null)
+            if ! echo "$CHECK" | grep -q '"db"'; then
+              echo "[$(date '+%H:%M')] ⚠️ Туннель не отвечает, перезапускаю..."
+              break
+            fi
+          done
+          # Перезапуск (рекурсивно, без --watch чтобы не плодить циклы)
+          exec ./tunnel.sh
+        ) &
+        WATCH_PID=$!
+        echo "   👁️ Watch-режим: проверка каждые 15 мин (PID $WATCH_PID)"
+        echo ""
+      fi
       exit 0
     fi
     sleep 8

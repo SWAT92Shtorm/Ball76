@@ -62,9 +62,9 @@ for i in {1..30}; do
   fi
 done
 
-# 2. Запускаем туннель (localtunnel)
-#    Скрипт сам проверит, что запросы проходят, и сохранит URL в .tunnel.url
-./tunnel.sh
+# 2. Запускаем туннель (localtunnel) в watch-режиме:
+#    каждые 15 минут проверяет живость, при падении — перезапускает
+./tunnel.sh --watch
 
 echo ""
 echo "📍 Публичный URL:  $(cat .tunnel.url)"

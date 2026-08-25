@@ -122,6 +122,7 @@ let lastNearestDate = null;
 let isInitialLoad = true;
 let editingIndex = null;        // индекс строки, открытой на редактирование (UX1)
 let apiOnline = true;           // статус соединения с API (UX2)
+let dbOnline = true;            // статус соединения сервера с БД
 
 // ==================== 4. API ====================
 
@@ -143,6 +144,53 @@ function setApiStatus(online) {
     banner.style.display = 'block';
   } else if (banner) {
     banner.style.display = 'none';
+  }
+}
+
+// Проверка соединения сервера с БД через GET /api/status.
+// Если БД недоступна — показываем предупреждение о невозможности записи
+// и блокируем кнопку «Записаться» (запись всё равно не пройдёт на сервере).
+async function checkDbStatus() {
+  try {
+    const response = await fetch(`${API_BASE_URL}/api/status`);
+    const data = await response.json();
+    const online = !!data.db && response.ok;
+    if (online !== dbOnline) {
+      dbOnline = online;
+      updateDbWarning();
+    }
+  } catch (err) {
+    // Сервер не ответил вообще — считаем БД недоступной
+    if (dbOnline) {
+      dbOnline = false;
+      updateDbWarning();
+    }
+  }
+}
+
+function updateDbWarning() {
+  let warning = document.getElementById('dbWarning');
+  const btn = document.querySelector('button[onclick="addPlayer()"]');
+  if (!dbOnline) {
+    if (!warning) {
+      warning = document.createElement('div');
+      warning.id = 'dbWarning';
+      warning.style.cssText = 'margin-bottom: 12px; padding: 10px; border-radius: 5px; background: #4a3a00; border: 1px solid #8a6d00; color: #fff3c0; font-size: 13px;';
+      const main = document.querySelector('main');
+      main.prepend(warning);
+    }
+    warning.textContent = '⚠️ Запись на баскетбол пока невозможна: нет соединения с базой данных. Попробуйте позже.';
+    warning.style.display = 'block';
+    if (btn) {
+      btn.disabled = true;
+      btn.title = 'Нет соединения с базой данных';
+    }
+  } else {
+    if (warning) warning.style.display = 'none';
+    // Кнопку вернёт validatePlayerName() при следующем вводе/проверке
+    if (btn) {
+      validatePlayerName();
+    }
   }
 }
 
@@ -225,6 +273,12 @@ async function addPlayer() {
   const hall = document.getElementById('hallSelect').value;
   if (!hall) {
     showToast('Сначала выберите зал', 'error');
+    return;
+  }
+
+  // Если нет соединения с БД — запись невозможна
+  if (!dbOnline) {
+    showToast('Запись на баскетбол пока невозможна: нет соединения с базой данных', 'error');
     return;
   }
 
@@ -795,10 +849,13 @@ function validatePlayerName() {
     resetInputStyles(input, error);
   }
 
-  // Кнопка активна, только когда ФИО введено полностью
+  // Кнопка активна, только когда ФИО введено полностью и БД доступна
   if (btn) {
-    btn.disabled = btn.dataset.loading === '1' || !name || words.length < 3;
-    btn.title = (!name || words.length < 3) ? 'Введите Фамилию Имя Отчество' : '';
+    const dbBlocked = !dbOnline;
+    btn.disabled = dbBlocked || btn.dataset.loading === '1' || !name || words.length < 3;
+    btn.title = dbBlocked
+      ? 'Нет соединения с базой данных'
+      : (!name || words.length < 3) ? 'Введите Фамилию Имя Отчество' : '';
   }
 }
 
@@ -906,6 +963,9 @@ window.addEventListener('DOMContentLoaded', async function () {
   // 0. Загружаем конфиг с сервера (цены, телефоны, расписание)
   await loadConfig();
 
+  // 0.5. Проверяем соединение сервера с БД (показываем предупреждение при недоступности)
+  await checkDbStatus();
+
   // 1. Выбираем ближайший зал (showNearestGame сработает, но isInitialLoad=true → только текст)
   selectNearestHall();
 
@@ -939,6 +999,7 @@ window.addEventListener('DOMContentLoaded', async function () {
   setInterval(async () => {
     if (document.hidden) return;           // не грузим на скрытой вкладке
     try {
+      await checkDbStatus();               // обновляем статус соединения с БД
       await loadFromAPI({ silent: true });
     } catch (e) {
       console.error('Ошибка автообновления:', e);

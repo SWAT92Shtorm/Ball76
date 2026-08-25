@@ -68,6 +68,19 @@ app.get('/api/config', (req, res) => {
   res.json(APP_CONFIG);
 });
 
+// GET /api/status — проверка соединения с БД.
+// Клиент использует этот эндпоинт, чтобы показать предупреждение
+// «запись пока невозможна», когда сервер не может подключиться к PostgreSQL.
+app.get('/api/status', async (req, res) => {
+  try {
+    await pool.query('SELECT 1');
+    res.json({ db: true });
+  } catch (err) {
+    console.error('❌ Проверка соединения с БД:', err.message);
+    res.status(503).json({ db: false });
+  }
+});
+
 // ==== Единый конфиг приложения ====
 // Единственный источник правды: клиент получает его через GET /api/config,
 // дублировать эти значения в index.html/app.js больше не нужно.

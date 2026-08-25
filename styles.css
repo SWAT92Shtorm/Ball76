@@ -998,6 +998,11 @@ th {
   max-height: 80vh;
   overflow-y: auto;
   width: 380px;
+  scrollbar-width: none; /* Firefox */
+  -ms-overflow-style: none; /* IE/Edge */
+}
+.changelog-modal-content::-webkit-scrollbar {
+  display: none; /* Chrome/Safari */
 }
 .changelog-list {
   padding: 4px 0;

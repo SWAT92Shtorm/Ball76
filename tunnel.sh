@@ -45,38 +45,31 @@ is_alive() {
   kill -0 "$1" 2>/dev/null
 }
 
-# ==== Запуск localtunnel с фиксированным поддоменом ====
-# Localtunnel не гарантирует имя: если поддомен занят — выдаёт случайный.
-# Поэтому пробуем до 3 раз, пока не получим именно $SUBDOMAIN.loca.lt.
-LT_URL=""
-for attempt in 1 2 3; do
-  echo "🚀 Запускаю localtunnel ($SUBDOMAIN.loca.lt), попытка $attempt/3..."
-  nohup npx --yes localtunnel --port "$PORT" -s "$SUBDOMAIN" > .lt.log 2>&1 &
-  LT_PID=$!
+# ==== Запуск localtunnel ====
+# Пробуем зафиксировать поддомен $SUBDOMAIN. Если loca.lt выдал
+# альтернативный адрес — используем его (один запуск, без ретраев).
+echo "🚀 Запускаю localtunnel ($SUBDOMAIN.loca.lt)..."
+nohup npx --yes localtunnel --port "$PORT" -s "$SUBDOMAIN" > .lt.log 2>&1 &
+LT_PID=$!
 
-  for i in $(seq 1 10); do
-    sleep 4
-    GOT_URL=$(grep -a -o 'https://[a-z0-9-]*\.loca\.lt' .lt.log 2>/dev/null | head -1)
-    if [ -n "$GOT_URL" ]; then
-      sleep 3
-      if ! is_alive $LT_PID; then
-        echo "   ⚠️ Процесс упал, перезапускаю..."
-        rm -f .lt.log
-        break
-      fi
-      if [ "$GOT_URL" = "https://$SUBDOMAIN.loca.lt" ]; then
-        LT_URL="$GOT_URL"
-      else
-        echo "   ⚠️ Выдано другое имя: $GOT_URL (занято), пробую ещё раз..."
-        kill $LT_PID 2>/dev/null
-        wait $LT_PID 2>/dev/null
-        rm -f .lt.log
-      fi
+LT_URL=""
+for i in $(seq 1 10); do
+  sleep 4
+  GOT_URL=$(grep -a -o 'https://[a-z0-9-]*\.loca\.lt' .lt.log 2>/dev/null | head -1)
+  if [ -n "$GOT_URL" ]; then
+    sleep 3
+    if ! is_alive $LT_PID; then
+      echo "   ⚠️ Процесс упал."
       break
     fi
-  done
-  [ -n "$LT_URL" ] && break
-  sleep 2
+    if [ "$GOT_URL" = "https://$SUBDOMAIN.loca.lt" ]; then
+      LT_URL="$GOT_URL"
+    else
+      echo "   ℹ️ Поддомен занят, выдан: $GOT_URL"
+      LT_URL="$GOT_URL"
+    fi
+    break
+  fi
 done
 
 if [ -n "$LT_URL" ] && is_alive $LT_PID; then

@@ -38,16 +38,14 @@ pool.query('SELECT 1')
     console.error('❌ Ошибка подключения к PostgreSQL:', err.message);
   });
 
-// CORS: разрешаем GitHub Pages (продакшен), туннели (localtunnel/zrok/cloudflared)
-// и локальные origins (localhost/127.0.0.1). Туннельные домены меняются при
-// каждом запуске — поэтому разрешаем целые зоны, а не конкретные поддомены.
+// CORS: разрешаем GitHub Pages (продакшен), localtunnel-туннель и локальные
+// origins (localhost/127.0.0.1). Адрес loca.lt меняется при каждом запуске —
+// поэтому разрешаем всю зону, а не конкретный поддомен.
 app.use((req, res, next) => {
   const origin = req.headers.origin;
   const isAllowed =
     origin === 'https://swat92shtorm.github.io' ||
-    /\.loca\.lt$/.test(origin || '') ||          // localtunnel (основной туннель)
-    /\.shares\.zrok\.io$/.test(origin || '') || // zrok (запасной)
-    /\.trycloudflare\.com$/.test(origin || '') || // cloudflared quick tunnel
+    /\.loca\.lt$/.test(origin || '') ||         // localtunnel (локальный туннель)
     /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(origin || '');
 
   if (isAllowed) {
@@ -1004,7 +1002,7 @@ app.use('/api/docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec, {
 // Порт. Слушаем на 0.0.0.0 (все интерфейсы), чтобы:
 // - работал локальный доступ (localhost)
 // - работал Docker-порт-маппинг (контейнер → хост)
-// - работал zrok-туннель (проксирует на localhost:8080)
+// - работал localtunnel-туннель (проксирует на localhost:8080)
 const PORT = process.env.PORT || 8080;
 const server = app.listen(PORT, '0.0.0.0', () => {
   console.log('✅ Server listening on http://localhost:' + PORT);

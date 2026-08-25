@@ -14,7 +14,7 @@ NODE="Ball76-node-server"
 
 echo "🛑 Остановка Ball76..."
 
-# 1. Останавливаем туннель (localtunnel / cloudflared / zrok)
+# 1. Останавливаем туннель (localtunnel)
 ./tunnel.sh stop > /dev/null 2>&1 || true
 
 # 2. Останавливаем Docker-контейнеры (если не просили сохранить БД)

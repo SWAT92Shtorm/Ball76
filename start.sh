@@ -3,7 +3,6 @@
 # Ball76 — быстрый запуск: Docker (Postgres + Node) + туннель
 #
 # Туннель: localtunnel (loca.lt) — работает из РФ без регистрации.
-# Запасной вариант (cloudflared) выбирает ./tunnel.sh автоматически.
 #
 # Использование:
 #   ./start.sh            # запустить всё, туннель в foreground
@@ -45,7 +44,7 @@ for i in {1..30}; do
   fi
 done
 
-# 2. Запускаем туннель (localtunnel → запасной cloudflared)
+# 2. Запускаем туннель (localtunnel)
 #    Скрипт сам проверит, что запросы проходят, и сохранит URL в .tunnel.url
 ./tunnel.sh
 

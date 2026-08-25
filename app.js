@@ -15,8 +15,8 @@
 // Приоритет:
 //  1. localStorage['ball76_api']  — адрес, сохранённый при входе через туннель
 //     (или заданный вручную); переживает перезагрузку страницы.
-//  2. Туннельный домен в address bar (.loca.lt / .shares.zrok.io /
-//     .trycloudflare.com) — API живёт на том же хосте, что и страница.
+//  2. Туннельный домен в address bar (.loca.lt) — API живёт на том же хосте,
+//     что и страница.
 //  3. GitHub Pages — продакшен на Railway.
 //  4. Остальное (localhost, IP, file://) — локальный Docker.
 function detectApiBase() {
@@ -24,7 +24,7 @@ function detectApiBase() {
   if (saved) return saved.replace(/\/+$/, '');
 
   const host = location.hostname;
-  if (/\.loca\.lt$|\.shares\.zrok\.io$|\.trycloudflare\.com$/.test(host)) {
+  if (/\.loca\.lt$/.test(host)) {
     // Страница открыта через туннель → API на том же адресе.
     // Сохраняем, чтобы при переходе на GitHub Pages-копию не потерять.
     const base = location.origin;

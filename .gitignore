@@ -1,8 +1,7 @@
 .DS_Store
-.zrok.pid
-.zrok.log
+node_modules/
+# Локальные PID/лог-файлы (start.sh / stop.sh / tunnel.sh)
+.server.pid
 .tunnel.pid
 .tunnel.url
 .lt.log
-.cf.log
-node_modules/

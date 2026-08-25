@@ -19,20 +19,10 @@ PORT=8080
 
 echo "🚀 Запуск Ball76..."
 
-# 1. Поднимаем Docker-контейнеры (если не работают)
-if ! docker ps --format '{{.Names}}' | grep -q "^${POSTGRES}$"; then
-  echo "⬆️  Поднимаю ${POSTGRES}..."
-  docker start "${POSTGRES}" > /dev/null
-fi
-
-# Node-сервер: bridge-сеть + проброс порта + DATABASE_URL через host.docker.internal
-# (Docker Desktop на macOS не поддерживает --network host для доступа к хосту)
-NODE_RUNNING=$(docker ps --format '{{.Names}}' | grep -c "^${NODE}$" || true)
-if [ "$NODE_RUNNING" -eq 0 ]; then
-  echo "⬆️  Запускаю ${NODE}..."
-  # Если контейнер существует, но не работает — пересоздаём (IP мог измениться)
+# ==== Функция: создать/пересоздать node-контейнер ====
+start_node() {
   if docker ps -a --format '{{.Names}}' | grep -q "^${NODE}$"; then
-    docker rm "${NODE}" > /dev/null 2>&1
+    docker rm -f "${NODE}" > /dev/null 2>&1
   fi
   docker run -d --name "${NODE}" \
     -p "${PORT}:8080" \
@@ -43,24 +33,83 @@ if [ "$NODE_RUNNING" -eq 0 ]; then
     -v "$(pwd)/package.json:/app/package.json" \
     -v "$(pwd)/node_modules:/app/node_modules" \
     -w /app node:20-alpine node server.js > /dev/null
+}
+
+# ==== 1. Postgres ====
+PG_UP=false
+if docker ps --format '{{.Names}}' | grep -q "^${POSTGRES}$"; then
+  PG_UP=true
 else
-  echo "⬆️  Поднимаю ${NODE}..."
-  docker start "${NODE}" > /dev/null
+  echo "⬆️  Поднимаю ${POSTGRES}..."
+  docker start "${POSTGRES}" > /dev/null 2>&1 && PG_UP=true
 fi
 
-# Ждём, пока сервер начнёт отвечать
+# Ждём, пока Postgres реально принимает соединения (после сна может быть не готов)
+if [ "$PG_UP" = true ]; then
+  for i in {1..15}; do
+    if docker exec "${POSTGRES}" pg_isready -U Ball76 > /dev/null 2>&1; then
+      break
+    fi
+    sleep 1
+  done
+fi
+
+# Если Postgres не поднялся или не здоров — пересоздаём
+if [ "$PG_UP" != true ] || ! docker exec "${POSTGRES}" pg_isready -U Ball76 > /dev/null 2>&1; then
+  echo "⚠️  Postgres не здоров, пересоздаю..."
+  docker rm -f "${POSTGRES}" > /dev/null 2>&1
+  docker run -d --name "${POSTGRES}" \
+    -e POSTGRES_DB=Ball76 \
+    -e POSTGRES_USER=Ball76 \
+    -e POSTGRES_PASSWORD=Ball76 \
+    -p 5432:5432 \
+    postgres:16 > /dev/null
+  for i in {1..30}; do
+    if docker exec "${POSTGRES}" pg_isready -U Ball76 > /dev/null 2>&1; then
+      break
+    fi
+    sleep 1
+  done
+fi
+echo "✅ Postgres готов"
+
+# ==== 2. Node-сервер ====
+# Всегда пересоздаём: после сна IP host.docker.internal может измениться,
+# а старый контейнер с --network host не работает на macOS.
+echo "⬆️  Запускаю ${NODE}..."
+start_node
+
+# Ждём, пока сервер начнёт отвечать И БД доступна
 echo "⏳ Жду готовности API на http://localhost:${PORT} ..."
+API_OK=false
 for i in {1..30}; do
-  if curl -sS --max-time 2 "http://localhost:${PORT}/" > /dev/null 2>&1; then
-    echo "✅ API готов"
+  STATUS=$(curl -sS --max-time 2 "http://localhost:${PORT}/api/status" 2>/dev/null || true)
+  if echo "$STATUS" | grep -q '"db":true'; then
+    API_OK=true
     break
   fi
   sleep 1
-  if [ "$i" -eq 30 ]; then
-    echo "❌ API не ответил за 30 сек. Проверь: docker logs ${NODE}"
-    exit 1
-  fi
 done
+
+# Если API отвечает, но БД не подключена — пересоздаём node ещё раз
+if [ "$API_OK" != true ]; then
+  echo "⚠️  API не готов, пересоздаю node-контейнер..."
+  start_node
+  for i in {1..30}; do
+    STATUS=$(curl -sS --max-time 2 "http://localhost:${PORT}/api/status" 2>/dev/null || true)
+    if echo "$STATUS" | grep -q '"db":true'; then
+      API_OK=true
+      break
+    fi
+    sleep 1
+  done
+fi
+
+if [ "$API_OK" != true ]; then
+  echo "❌ API не ответил за 30 сек. Проверь: docker logs ${NODE}"
+  exit 1
+fi
+echo "✅ API готов (БД подключена)"
 
 # 2. Запускаем туннель (localtunnel) в watch-режиме:
 #    каждые 15 минут проверяет живость, при падении — перезапускает

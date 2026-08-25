@@ -49,7 +49,7 @@ let CONFIG = null;
 
 async function loadConfig() {
   if (!API_BASE_URL) {
-    showApiError('API-адрес не задан. Откройте туннельную ссылку один раз, чтобы сохранить адрес.');
+    showTunnelInput('Адрес API не задан. Введите адрес туннеля:');
     return false;
   }
   try {

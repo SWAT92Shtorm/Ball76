@@ -1,4 +1,5 @@
 const express = require('express');
+const rateLimit = require('express-rate-limit');
 
 const app = express();
 
@@ -57,6 +58,29 @@ app.use((req, res, next) => {
 
 // Парсинг JSON
 app.use(express.json());
+
+// ==== Rate limiting (защита от спама/ботов) ====
+// Мутающие эндпоинты (POST/PATCH/DELETE): жёсткий лимит — 10 запросов
+// с одного IP в 15 минут. Хватает для реального пользователя (запись,
+// пара правок имени), но останавливает бота, который пытается заспамить
+// базу или исчерпать лимит игры.
+const mutationLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 минут
+  max: 10,                   // 10 мутаций на окно
+  standardHeaders: true,     // заголовки RateLimit-*
+  legacyHeaders: false,      // не шлём X-RateLimit-*
+  message: { error: 'Слишком много запросов. Попробуйте через 15 минут.' }
+});
+
+// GET-эндпоинты: мягче — 120 запросов в минуту (автообновление каждые
+// 30 сек + ручные действия нескольких пользователей с одного IP).
+const readLimiter = rateLimit({
+  windowMs: 60 * 1000, // 1 минута
+  max: 120,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Слишком много запросов. Попробуйте позже.' }
+});
 
 // PING-домашняя страница
 /**
@@ -215,6 +239,26 @@ const APP_CONFIG = {
 // Лимит игроков на одну игру
 const MAX_PLAYERS = APP_CONFIG.maxPlayers;
 
+// ==== Валидация ФИО (серверная) ====
+// Правило совпадает с клиентским: 3–5 слов, каждое — буквы (кириллица/латиница),
+// дефис или апостроф внутри слова. Защита от записи «А», «test», SQL-подобных
+// строк и т.п. через прямой вызов API.
+const NAME_REGEX = /^[A-Za-zА-Яа-яЁё][A-Za-zА-Яа-яЁё'\-]*(?:\s+[A-Za-zА-Яа-яЁё][A-Za-zА-Яа-яЁё'\-]*){2,4}$/;
+
+/**
+ * Проверяет строку как ФИО. Возвращает null при успехе или текст ошибки.
+ */
+function validateFullName(name) {
+  if (typeof name !== 'string') return 'ФИО должно быть строкой';
+  const trimmed = name.trim();
+  if (!trimmed) return 'ФИО не может быть пустым';
+  if (trimmed.length > 80) return 'ФИО слишком длинное (максимум 80 символов)';
+  if (!NAME_REGEX.test(trimmed)) {
+    return 'ФИО должно состоять из 3–5 слов: Фамилия Имя Отчество (только буквы, дефис и апостроф)';
+  }
+  return null;
+}
+
 // Форматирование даты в московском времени: YYYY-MM-DD
 // (pg отдаёт date/timestamp как JS Date; toISOString() даёт UTC и может сдвинуть день)
 function formatDateMSK(date) {
@@ -264,7 +308,7 @@ function formatDateMSK(date) {
  *                 error:
  *                   type: string
  */
-app.get('/api/players', async (req, res) => {
+app.get('/api/players', readLimiter, async (req, res) => {
   try {
     const result = await pool.query(
  `SELECT
@@ -375,9 +419,9 @@ app.get('/api/players', async (req, res) => {
  *                 error:
  *                   type: string
  */
-app.post('/api/players/:hallId', async (req, res) => {
+app.post('/api/players/:hallId', mutationLimiter, async (req, res) => {
   const { hallId } = req.params;
-  const { name, date } = req.body;
+  let { name, date } = req.body;
 
   console.log('1️⃣ addPlayer: name=' + name + ', date=' + date + ', hallId=' + hallId);
 
@@ -387,6 +431,13 @@ app.post('/api/players/:hallId', async (req, res) => {
       error: 'Bad request: name, date, and hallId required'
     });
   }
+
+  // Серверная валидация ФИО (защита от прямых вызовов API без клиента)
+  const nameError = validateFullName(name);
+  if (nameError) {
+    return res.status(400).json({ error: nameError });
+  }
+  name = name.trim();
 
   // Вся запись — в одной транзакции: исключает гонку «два запроса
   // одновременно прошли проверку лимита и оба вставились» (лимит 18).
@@ -554,7 +605,7 @@ app.post('/api/players/:hallId', async (req, res) => {
  *                 error:
  *                   type: string
  */
-app.get('/api/players/:hallId/:date', async (req, res) => {
+app.get('/api/players/:hallId/:date', readLimiter, async (req, res) => {
   const { hallId, date } = req.params;
   
   try {
@@ -644,8 +695,9 @@ app.get('/api/players/:hallId/:date', async (req, res) => {
  *       500:
  *         description: Внутренняя ошибка сервера
  */
-app.patch('/api/player/name', async (req, res) => {
-  const { currentName, newName } = req.body;
+app.patch('/api/player/name', mutationLimiter, async (req, res) => {
+  const { currentName } = req.body;
+  let { newName } = req.body;
 
   // Валидация
   if (!currentName || !newName) {
@@ -653,6 +705,13 @@ app.patch('/api/player/name', async (req, res) => {
       error: 'currentName и newName обязательны'
     });
   }
+
+  // Серверная валидация нового ФИО
+  const nameError = validateFullName(newName);
+  if (nameError) {
+    return res.status(400).json({ error: nameError });
+  }
+  newName = newName.trim();
 
   if (currentName === newName) {
     return res.json({
@@ -787,7 +846,7 @@ app.patch('/api/player/name', async (req, res) => {
  *       500:
  *         description: Внутренняя ошибка сервера
  */
-app.delete('/api/players/:hallId/:date/:name', async (req, res) => {
+app.delete('/api/players/:hallId/:date/:name', mutationLimiter, async (req, res) => {
   const { hallId, date, name } = req.params;
 
   try {
@@ -878,7 +937,7 @@ app.delete('/api/players/:hallId/:date/:name', async (req, res) => {
  *                 error:
  *                   type: string
  */
-app.get('/api/history', async (req, res) => {
+app.get('/api/history', readLimiter, async (req, res) => {
   try {
     // запрос: получить все игры и привязанных к ним игроков
     const result = await pool.query(

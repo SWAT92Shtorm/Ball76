@@ -32,22 +32,7 @@ function detectApiBase() {
 
   const saved = localStorage.getItem('ball76_api');
   if (saved) {
-    const s = saved.replace(/\/+$/, '');
-    // Если сохранённый адрес — локальный/туннельный, проверяем доступность.
-    // Мёртвый туннель не должен блокировать работу на GitHub Pages.
-    if (/\.loca\.lt$|localhost|127\.0\.0\.1/.test(s)) {
-      try {
-        const ctrl = new AbortController();
-        const t = setTimeout(() => ctrl.abort(), 3000);
-        fetch(`${s}/api/status`, { signal: ctrl.signal, mode: 'no-cors' })
-          .then(r => { clearTimeout(t); })
-          .catch(() => {
-            clearTimeout(t);
-            try { localStorage.removeItem('ball76_api'); } catch (_) {}
-          });
-      } catch (_) {}
-    }
-    return s;
+    return saved.replace(/\/+$/, '');
   }
 
   // GitHub Pages без сохранённого туннеля — заглушка (API недоступен).
@@ -76,7 +61,13 @@ async function loadConfig() {
     CONFIG = await response.json();
     return true;
   } catch (err) {
-    showApiError(`API (${API_BASE_URL}) недоступен: ${err.message}. Проверьте туннель.`);
+    // Мёртвый туннель в localStorage — очищаем, чтобы не плодить ошибки.
+    if (/\.loca\.lt$/.test(API_BASE_URL)) {
+      try { localStorage.removeItem('ball76_api'); } catch (_) {}
+      showApiError(`Туннель (${API_BASE_URL}) мёртв. Запустите ./tunnel.sh и откройте новую ссылку один раз.`);
+    } else {
+      showApiError(`API (${API_BASE_URL}) недоступен: ${err.message}`);
+    }
     return false;
   }
 }

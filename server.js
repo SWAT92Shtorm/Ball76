@@ -2,7 +2,7 @@ const express = require('express');
 
 const app = express();
 
-const { Client } = require('pg');
+const { Pool } = require('pg');
 
 // Подключение к PostgreSQL:
 // - если задан DATABASE_URL (Railway/продакшен) — используем его
@@ -17,10 +17,18 @@ const DB_CONFIG = process.env.DATABASE_URL
       password: 'Ball76'
     };
 
-const client = new Client(DB_CONFIG);
+// Пул соединений: параллельные запросы + авто-реконнект при обрывах
+const pool = new Pool({ ...DB_CONFIG, max: 10 });
 
-// попытаться подключиться при старте
-client.connect()
+pool.on('error', err => {
+  console.error('❌ Ошибка idle-соединения пула:', err.message);
+});
+
+// Проверка соединения при старте.
+// Схема БД уже существует (таблицы players/games/game_players с PK
+// game_players(game_id, player_id), который и является уникальным
+// ограничением от дублей записи).
+pool.query('SELECT 1')
   .then(() => {
     console.log('✅ Подключено к PostgreSQL');
   })
@@ -55,8 +63,41 @@ app.get('/', (req, res) => {
   res.send('Server works!');
 });
 
-// Лимит игроков на одну игру (должен совпадать с MAX_PLAYERS на клиенте)
-const MAX_PLAYERS = 18;
+// GET /api/config — единый конфиг для клиента (цены, телефоны, расписание, лимиты)
+app.get('/api/config', (req, res) => {
+  res.json(APP_CONFIG);
+});
+
+// ==== Единый конфиг приложения ====
+// Единственный источник правды: клиент получает его через GET /api/config,
+// дублировать эти значения в index.html/app.js больше не нужно.
+const APP_CONFIG = {
+  maxPlayers: 18,
+  halls: {
+    hall1: {
+      name: 'ЛОКОМОТИВ',
+      phone: '+7 (961) 154-44-11',
+      responsible: 'Андрей Дубровин',
+      prices: { full: 6000, short: 4500 },
+      schedule: [
+        { day: 'Tuesday', from: 21, to: 23 },
+        { day: 'Thursday', from: 21, to: 23 }
+      ]
+    },
+    hall2: {
+      name: 'АТЛАНТ',
+      phone: '+7 (910) 979-22-99',
+      responsible: 'Ярослав Волков',
+      prices: { full: 0, short: 0 },
+      schedule: [
+        { day: 'Friday', from: 21, to: 23 }
+      ]
+    }
+  }
+};
+
+// Лимит игроков на одну игру
+const MAX_PLAYERS = APP_CONFIG.maxPlayers;
 
 // Форматирование даты в московском времени: YYYY-MM-DD
 // (pg отдаёт date/timestamp как JS Date; toISOString() даёт UTC и может сдвинуть день)
@@ -72,9 +113,9 @@ function formatDateMSK(date) {
 // GET /api/players — отдать данные из БД
 app.get('/api/players', async (req, res) => {
   try {
-    const result = await client.query(
+    const result = await pool.query(
  `SELECT
-         p.id,
+          p.id,
          p.name,
          g.hall_id,
          MIN(gp.created_at) AS first_signup_time
@@ -102,8 +143,7 @@ app.get('/api/players', async (req, res) => {
   } catch (err) {
     console.error('Ошибка чтения участников:', err);
     res.status(500).json({
-      error: 'Failed to read players from database',
-      db_error: err.message
+      error: 'Failed to read players from database'
     });
   }
 });
@@ -124,112 +164,123 @@ app.post('/api/players/:hallId', async (req, res) => {
     });
   }
 
-  let game;
-  let player;
+  // Вся запись — в одной транзакции: исключает гонку «два запроса
+  // одновременно прошли проверку лимита и оба вставились» (лимит 18).
+  const client = await pool.connect();
 
   try {
-    console.log('2️⃣ Добавляем/ищем игрока в players');
+    await client.query('BEGIN');
+
+    // 1. Найти или создать игрока
     const playerRes = await client.query(
       `INSERT INTO players (name)
-       VALUES ($1)
-       ON CONFLICT (name) DO NOTHING
-       RETURNING *;`,
+        VALUES ($1)
+        ON CONFLICT (name) DO NOTHING
+        RETURNING *;`,
       [name]
     );
 
-    if (playerRes.rows.length > 0) {
-      player = playerRes.rows[0];
-    } else {
+    let player = playerRes.rows[0];
+    if (!player) {
       const selectPlayer = await client.query(
         'SELECT * FROM players WHERE name = $1;',
         [name]
       );
       player = selectPlayer.rows[0];
     }
+    if (!player) {
+      await client.query('ROLLBACK');
+      return res.status(500).json({ error: 'Не удалось найти или создать игрока' });
+    }
 
-    console.log('3️⃣ Игрок:', player);
-
-    // 3. Найти или создать игру
-    console.log('4️⃣ Ищем игру games WHERE hall_id = ' + hallId + ', date = ' + date);
+    // 2. Найти или создать игру
     const findGame = await client.query(
-      'SELECT * FROM games WHERE hall_id = $1 AND date = $2;',
+      'SELECT * FROM games WHERE hall_id = $1 AND date = $2 FOR UPDATE;',
       [hallId, date]
     );
 
+    let game;
     if (findGame.rows.length > 0) {
       game = findGame.rows[0];
-      console.log('5️⃣ Игра найдена:', game.id);
     } else {
-      console.log('6️⃣ Создаём новую игру');
       const createGame = await client.query(
         `INSERT INTO games (hall_id, date)
-         VALUES ($1, $2)
-         RETURNING *;`,
+          VALUES ($1, $2)
+          RETURNING *;`,
         [hallId, date]
       );
       game = createGame.rows[0];
-      console.log('7️⃣ Новая игра создана:', game.id);
     }
 
-    // 4. Проверка лимита игроков на игру
+    // 3. Проверка лимита игроков на игру
     const countRes = await client.query(
       'SELECT COUNT(*)::int AS count FROM game_players WHERE game_id = $1;',
       [game.id]
     );
     if (countRes.rows[0].count >= MAX_PLAYERS) {
-      console.log('⚠️ Лимит игроков на игру достигнут:', countRes.rows[0].count);
+      await client.query('ROLLBACK');
       return res.status(400).json({
         error: `Игра заполнена: максимум ${MAX_PLAYERS} человек`
       });
     }
 
-    // 5. Связываем игрока с игрой
-    console.log('8️⃣ Проверяем, записан ли игрок уже на эту игру');
+    // 4. Проверка дубликата записи
     const existing = await client.query(
       'SELECT * FROM game_players WHERE game_id = $1 AND player_id = $2;',
       [game.id, player.id]
     );
 
     if (existing.rows.length > 0) {
-      console.log('9️⃣ Игрок уже записан');
+      await client.query('ROLLBACK');
       return res.status(400).json({
         error: 'Игрок уже записан на эту игру'
       });
     }
 
-    console.log('10️⃣ Добавляем в game_players');
-    await client.query(
-      `INSERT INTO game_players (game_id, player_id)
-       VALUES ($1, $2);`,
-      [game.id, player.id]
+    // 5. Связываем игрока с игрой.
+    // Уникальный индекс (game_id, player_id) — страховка от дублей:
+    // если параллельный запрос успел записать того же игрока, получим 23505.
+    try {
+      await client.query(
+        `INSERT INTO game_players (game_id, player_id)
+          VALUES ($1, $2);`,
+        [game.id, player.id]
+      );
+    } catch (insertErr) {
+      if (insertErr.code === '23505') {
+        await client.query('ROLLBACK');
+        return res.status(400).json({
+          error: 'Игрок уже записан на эту игру'
+        });
+      }
+      throw insertErr;
+    }
+
+    // 6. Читаем список игроков игры (ещё до COMMIT — свои данные видим)
+    const gamePlayers = await client.query(
+      `SELECT p.name
+       FROM game_players gp
+       JOIN players p ON gp.player_id = p.id
+       WHERE gp.game_id = $1
+       ORDER BY gp.created_at ASC, p.name;`,
+      [game.id]
     );
 
-    // 5. Возвращаем список игроков игры
-    console.log('11️⃣ Читаем всех игроков игры');
-    const gamePlayers = await client.query(
-        `SELECT
-            p.name
-        FROM game_players gp
-        JOIN players p ON gp.player_id = p.id
-        JOIN games g ON gp.game_id = g.id
-        WHERE gp.game_id = $1
-        ORDER BY gp.created_at ASC, p.name;`,
-        [game.id]
-    );
+    await client.query('COMMIT');
 
     const players = gamePlayers.rows.map(r => r.name);
-
-    console.log('12️⃣ Отправляем ответ:', players);
 
     res.json({
       playersByHall: { [hallId]: players }
     });
   } catch (err) {
+    try { await client.query('ROLLBACK'); } catch (_) {}
     console.error('❌ Ошибка записи игрока:', err);
     res.status(500).json({
-      error: 'Failed to register player',
-      db_error: err.message
+      error: 'Failed to register player'
     });
+  } finally {
+    client.release();
   }
 });
 
@@ -238,7 +289,7 @@ app.get('/api/players/:hallId/:date', async (req, res) => {
   const { hallId, date } = req.params;
   
   try {
-    const result = await client.query(`
+    const result = await pool.query(`
       SELECT DISTINCT p.name, gp.created_at  
       FROM game_players gp
       JOIN players p ON gp.player_id = p.id
@@ -253,8 +304,8 @@ app.get('/api/players/:hallId/:date', async (req, res) => {
       playersByHall: { [hallId]: players } 
     });
   } catch (err) {
-    console.error('API players/:hall/:date:', err.message);
-    res.status(500).json({ error: err.message });
+    console.error('API players/:hall/:date:', err);
+    res.status(500).json({ error: 'Failed to read players' });
   }
 });
 
@@ -279,7 +330,7 @@ app.patch('/api/player/name', async (req, res) => {
 
   try {
     // проверить, что старое имя существует
-    const selectOld = await client.query(
+    const selectOld = await pool.query(
       'SELECT id FROM players WHERE name = $1',
       [currentName]
     );
@@ -291,7 +342,7 @@ app.patch('/api/player/name', async (req, res) => {
     const playerId = selectOld.rows[0].id;
 
     // проверить, что такого нового имени еще нет
-    const selectNew = await client.query(
+    const selectNew = await pool.query(
       'SELECT * FROM players WHERE name = $1',
       [newName]
     );
@@ -303,17 +354,17 @@ app.patch('/api/player/name', async (req, res) => {
     }
 
     // обновить имя игрока
-    await client.query(
+    await pool.query(
       'UPDATE players SET name = $1 WHERE id = $2',
       [newName, playerId]
     );
 
     // собрать обновлённый playersByHall (для текущего состояния)
-    const result = await client.query(
+    const result = await pool.query(
       `SELECT
-         p.name,
-         g.hall_id
-       FROM players p
+          p.name,
+          g.hall_id
+        FROM players p
        JOIN game_players gp ON p.id = gp.player_id
        JOIN games g ON gp.game_id = g.id;`
     );
@@ -352,7 +403,7 @@ app.delete('/api/players/:hallId/:date/:name', async (req, res) => {
 
   try {
     // найти game_id по hall_id и date
-    const gameResult = await client.query(
+    const gameResult = await pool.query(
       `SELECT id FROM games WHERE hall_id = $1 AND date = $2`,
       [hallId, date]
     );
@@ -362,7 +413,7 @@ app.delete('/api/players/:hallId/:date/:name', async (req, res) => {
     const gameId = gameResult.rows[0].id;
 
     // найти playerId по имени
-    const playerResult = await client.query(
+    const playerResult = await pool.query(
       `SELECT id FROM players WHERE name = $1`,
       [name]
     );
@@ -372,14 +423,14 @@ app.delete('/api/players/:hallId/:date/:name', async (req, res) => {
     const playerId = playerResult.rows[0].id;
 
     // удаляем связь из game_players
-    const deleteResult = await client.query(
+    const deleteResult = await pool.query(
       `DELETE FROM game_players
-       WHERE player_id = $1 AND game_id = $2`,
+        WHERE player_id = $1 AND game_id = $2`,
       [playerId, gameId]
     );
 
     // вернуть обновлённый список игроков этой игры
-    const updatedResult = await client.query(
+    const updatedResult = await pool.query(
         `SELECT
         p.name
         FROM game_players gp
@@ -407,7 +458,7 @@ app.delete('/api/players/:hallId/:date/:name', async (req, res) => {
 app.get('/api/history', async (req, res) => {
   try {
     // запрос: получить все игры и привязанных к ним игроков
-    const result = await client.query(
+    const result = await pool.query(
         `SELECT
         g.hall_id,
         g.date,
@@ -443,8 +494,7 @@ app.get('/api/history', async (req, res) => {
   } catch (err) {
     console.error('❌ Ошибка чтения истории:', err);
     res.status(500).json({
-      error: 'Failed to read history',
-      db_error: err.message
+      error: 'Failed to read history'
     });
   }
 });
@@ -458,10 +508,24 @@ const server = app.listen(PORT, '0.0.0.0', () => {
   console.log('✅ Server listening on http://localhost:' + PORT);
 });
 
-// Если PostgreSQL не подключился — завершаем процесс с ошибкой,
-// чтобы было понятно, что сервер не готов принимать запросы к БД
+// Неубиваемые ошибки: логируем и продолжаем работать.
+// Пул pg сам переподключается при обрывах; сетевые сбои не должны
+// ронять весь сервер.
 process.on('uncaughtException', (err) => {
-  console.error('❌ Непредвиденная ошибка:', err);
-  server.close();
-  process.exit(1);
+  console.error('❌ Непредвиденная ошибка (сервер продолжает работу):', err);
+});
+
+process.on('unhandledRejection', (reason) => {
+  console.error('❌ Unhandled rejection (сервер продолжает работу):', reason);
+});
+
+// Корректное завершение по SIGTERM/SIGINT (Railway, docker stop)
+['SIGTERM', 'SIGINT'].forEach(signal => {
+  process.on(signal, () => {
+    console.log(`🛑 Получен ${signal}, закрываю сервер...`);
+    server.close(async () => {
+      await pool.end();
+      process.exit(0);
+    });
+  });
 });

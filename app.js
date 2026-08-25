@@ -120,10 +120,41 @@ let playerNames = [];
 let historyByDate = {};
 let lastNearestDate = null;
 let isInitialLoad = true;
+let editingIndex = null;        // индекс строки, открытой на редактирование (UX1)
+let apiOnline = true;           // статус соединения с API (UX2)
 
 // ==================== 4. API ====================
 
-async function loadFromAPI() {
+// Баннер «сервер недоступен»: показываем, когда API не отвечает,
+// и НЕ очищаем последний успешный список — иначе пользователь
+// подумает, что никто не записался, и задвоит запись.
+function setApiStatus(online) {
+  if (online === apiOnline) return;
+  apiOnline = online;
+  let banner = document.getElementById('apiErrorBanner');
+  if (!online) {
+    if (!banner) {
+      banner = document.createElement('div');
+      banner.id = 'apiErrorBanner';
+      banner.style.cssText = 'margin-bottom: 12px; padding: 10px; border-radius: 5px; background: #501010; border: 1px solid #a03030; color: #ffe0e0; font-size: 13px;';
+      document.querySelector('main').prepend(banner);
+    }
+    banner.textContent = '⚠️ Не удалось подключиться к серверу. Показаны последние известные данные.';
+    banner.style.display = 'block';
+  } else if (banner) {
+    banner.style.display = 'none';
+  }
+}
+
+async function loadFromAPI({ silent = false } = {}) {
+  // UX1: если открыт инпут редактирования — не перерисовываем список,
+  // чтобы не сжечь введённое имя
+  if (editingIndex !== null && !silent) {
+    return;
+  }
+
+  const prevPlayers = (playersByHall[document.getElementById('hallSelect').value] || []).slice();
+
   try {
     // 1. Игроки текущей игры выбранного зала
     const hall = document.getElementById('hallSelect').value;
@@ -156,11 +187,23 @@ async function loadFromAPI() {
       }
     });
     playerNames = Array.from(allNames);
+
+    setApiStatus(true);
+
+    // UX5: тост о новых записях (только при фоновом обновлении,
+    // не при явном действии пользователя)
+    if (silent) {
+      const current = playersByHall[document.getElementById('hallSelect').value] || [];
+      const added = current.filter(n => !prevPlayers.includes(n));
+      if (added.length > 0) {
+        showToast(`Новые записи: ${added.join(', ')}`, 'info', 5000);
+      }
+    }
   } catch (err) {
     console.error('Ошибка при запросе API:', err);
-    playersByHall = { hall1: [], hall2: [] };
-    historyByDate = {};
-    playerNames = [];
+    // UX2: НЕ сбрасываем данные — держим последний успешный снимок
+    setApiStatus(false);
+    return;
   }
 
   updatePlayersList();
@@ -194,6 +237,7 @@ async function addPlayer() {
   // Блокируем кнопку на время запроса
   const btn = document.querySelector('button[onclick="addPlayer()"]');
   const originalBtnText = btn.textContent;
+  btn.dataset.loading = '1';
   btn.disabled = true;
   btn.textContent = 'Запись...';
 
@@ -243,17 +287,39 @@ async function addPlayer() {
     console.error('Ошибка при добавлении через API:', err);
     showToast(err.message || 'Не удалось добавить игрока', 'error');
   } finally {
-    btn.disabled = false;
+    btn.dataset.loading = '0';
     btn.textContent = originalBtnText;
+    validatePlayerName(); // пересчитает disabled по текущему содержимому поля
   }
 }
 
-// Удалить участника
-async function removePlayer(index) {
+// ==== Модалка подтверждения удаления (UX3) ====
+let deleteModalIndex = null;
+
+function openDeleteModal(index) {
   const hall = document.getElementById('hallSelect').value;
   const name = playersByHall[hall][index];
+  deleteModalIndex = index;
+  document.getElementById('deleteModalName').textContent = name;
+  document.getElementById('deleteModal').style.display = 'flex';
+}
 
-  if (!confirm(`Удалить «${name}» из списка?`)) return;
+function closeDeleteModal() {
+  deleteModalIndex = null;
+  document.getElementById('deleteModal').style.display = 'none';
+}
+
+// Удалить участника (вызывается кнопкой «Удалить» в модалке)
+async function confirmRemovePlayer() {
+  const index = deleteModalIndex;
+  closeDeleteModal();
+  if (index === null) return;
+  await doRemovePlayer(index);
+}
+
+async function doRemovePlayer(index) {
+  const hall = document.getElementById('hallSelect').value;
+  const name = playersByHall[hall][index];
 
   const dateStr = getNearestGameDate(hall);
   if (!dateStr) {
@@ -311,6 +377,8 @@ async function submitEdit(index) {
     cancelEdit(index);
     return;
   }
+
+  editingIndex = null; // снимаем блокировку до перерисовки
 
   try {
     const response = await fetch(`${API_BASE_URL}/api/player/name`, {
@@ -572,7 +640,7 @@ function showList() {
             <span onclick="startEdit(${i})" style="cursor: pointer; margin-right: 6px;">✎</span>
             <span onclick="submitEdit(${i})" style="display: none; cursor: pointer; margin-right: 6px; color: green;">✔</span>
             <span onclick="cancelEdit(${i})" style="display: none; cursor: pointer; margin-right: 6px; color: gray;">✖</span>
-            <span onclick="removePlayer(${i})" style="cursor: pointer; color: red;">🗑️</span>
+            <span onclick="openDeleteModal(${i})" style="cursor: pointer; color: red;" title="Удалить">🗑️</span>
           </div>
         </div>
       `;
@@ -625,7 +693,7 @@ function renderPricingRow(hall, playersCount) {
       <div style="margin-top: 10px; padding: 8px 10px; background: ${phoneBg}; border-radius: 4px; border: 1px solid #336633; font-size: 13px; color: #e0ffe0;">
         Для оплаты переведите деньги на телефон:
         <br />
-        <span style="color: #ffffff; font-weight: bold; margin: 0 4px;" id="displayPhone">${escapeHtml(phone)}</span>
+        <span style="color: #ffffff; font-weight: bold; margin: 0 4px; cursor: pointer; text-decoration: underline dotted;" id="displayPhone" title="Нажмите, чтобы скопировать">${escapeHtml(phone)}</span>
         <button
           onclick="copyPhoneToClipboard('${escapeHtml(phone)}')"
           style="margin-left: 6px; padding: 0; width: 20px; height: 20px; border: none; background: transparent; color: #a0e0ff; font-size: 15px; cursor: pointer;"
@@ -707,20 +775,30 @@ function updatePlayersList() {
   });
 }
 
-// Валидация ФИО при вводе
+// Валидация ФИО. UX4: вызывается на каждом input (live), а не только на blur.
+// Пустое поле — нейтральное состояние; непустое с <3 слов — ошибка.
 function validatePlayerName() {
   const input = document.getElementById('playerName');
   const error = document.getElementById('playerNameError');
+  const btn = document.querySelector('button[onclick="addPlayer()"]');
   const name = input.value.trim();
   const words = name.split(/\s+/).filter(w => w.length > 0);
 
-  if (name && words.length < 3) {
+  const invalid = name.length > 0 && words.length < 3;
+
+  if (invalid) {
     input.style.borderColor = '#ffb347';
     input.style.backgroundColor = '#3a2f1a';
     input.style.color = '#ffe8c0';
     error.style.display = 'block';
   } else {
     resetInputStyles(input, error);
+  }
+
+  // Кнопка активна, только когда ФИО введено полностью
+  if (btn) {
+    btn.disabled = btn.dataset.loading === '1' || !name || words.length < 3;
+    btn.title = (!name || words.length < 3) ? 'Введите Фамилию Имя Отчество' : '';
   }
 }
 
@@ -750,6 +828,8 @@ function startEdit(index) {
   submitIcon.style.display = 'inline-block';
   cancelIcon.style.display = 'inline-block';
 
+  editingIndex = index; // UX1: блокируем фоновую перерисовку
+
   // Enter — сохранить, ESC — отменить
   input.onkeydown = function (e) {
     if (e.key === 'Enter') { e.preventDefault(); submitEdit(index); }
@@ -758,6 +838,7 @@ function startEdit(index) {
 }
 
 function cancelEdit(index) {
+  editingIndex = null;
   showList();
 }
 
@@ -853,17 +934,20 @@ window.addEventListener('DOMContentLoaded', async function () {
   showCurrentDateTime();
   setInterval(showCurrentDateTime, 1000);
 
-  // Автообновление списка раз в 30 секунд (чужие записи становятся видны)
+  // Автообновление списка раз в 30 секунд (чужие записи становятся видны).
+  // silent: true → показывать тост о новых записях (UX5)
   setInterval(async () => {
     if (document.hidden) return;           // не грузим на скрытой вкладке
     try {
-      await loadFromAPI();
+      await loadFromAPI({ silent: true });
     } catch (e) {
       console.error('Ошибка автообновления:', e);
     }
   }, 30000);
 
   // Обработчики событий
+  // UX4: live-валидация на каждом вводе + сохранение на blur
+  document.getElementById('playerName').addEventListener('input', validatePlayerName);
   document.getElementById('playerName').addEventListener('blur', validatePlayerName);
   document.getElementById('playerName').addEventListener('keydown', function (e) {
     if (e.key === 'Enter') addPlayer();
@@ -876,4 +960,34 @@ window.addEventListener('DOMContentLoaded', async function () {
     showList();
   });
   document.getElementById('hallSelect').addEventListener('change', showNearestGame);
+
+  // UX6: ESC закрывает открытую модалку, клик по подложке — тоже
+  document.addEventListener('keydown', function (e) {
+    if (e.key !== 'Escape') return;
+    const teams = document.getElementById('teamsModal');
+    if (teams.style.display === 'flex') closeTeamsModal();
+    const del = document.getElementById('deleteModal');
+    if (del.style.display === 'flex') closeDeleteModal();
+  });
+
+  ['teamsModal', 'deleteModal'].forEach(id => {
+    const modal = document.getElementById(id);
+    modal.addEventListener('click', function (e) {
+      if (e.target === modal) { // клик именно по подложке, не по содержимому
+        if (id === 'teamsModal') closeTeamsModal();
+        else closeDeleteModal();
+      }
+    });
+  });
+
+  // UX7: тап/клик по номеру телефона копирует его
+  document.addEventListener('click', function (e) {
+    const phone = e.target.closest('#displayPhone');
+    if (phone && phone.textContent.trim()) {
+      copyPhoneToClipboard(phone.textContent.trim());
+    }
+  });
+
+  // Начальное состояние кнопки «Записаться»
+  validatePlayerName();
 });

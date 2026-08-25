@@ -91,8 +91,25 @@
   <!-- Блок таблицы истории записей по датам (прямо после списка участников) -->
   <div id="historyTableContainer" style="margin-top: 12px; display: none;"></div>
 
+  <!-- Модалка подтверждения удаления (UX3) -->
+  <div id="deleteModal" class="modal-overlay" style="display: none;">
+    <div class="modal-content" style="width: 360px;">
+      <div class="modal-header">
+        <strong>Удалить участника?</strong>
+        <span class="modal-close-btn" onclick="closeDeleteModal()">×</span>
+      </div>
+      <div style="margin: 14px 0; font-size: 14px; line-height: 1.5;">
+        Игрок <strong id="deleteModalName" style="color: #ff8a80;"></strong> будет удалён из списка записей.
+      </div>
+      <div class="modal-footer">
+        <button class="modal-btn modal-btn-cancel" onclick="closeDeleteModal()">Отмена</button>
+        <button class="modal-btn modal-btn-danger" onclick="confirmRemovePlayer()">Удалить</button>
+      </div>
+    </div>
+  </div>
+
   <!-- Модальное окно -->
-  <div id="teamsModal">
+  <div id="teamsModal" class="modal-overlay">
     <div class="modal-content">
       <div class="modal-header">
         <strong>Сформированные команды</strong>
@@ -102,8 +119,8 @@
       <div id="teamsContent" class="teams-list"></div>
 
       <div class="modal-footer">
-        <button class="reroll-btn" onclick="rerollTeams()">🎲 Перемешать</button>
-        <button class="modal-btn-close" onclick="closeTeamsModal()">Закрыть</button>
+        <button class="modal-btn modal-btn-primary" onclick="rerollTeams()">🎲 Перемешать</button>
+        <button class="modal-btn modal-btn-cancel" onclick="closeTeamsModal()">Закрыть</button>
       </div>
     </div>
   </div>

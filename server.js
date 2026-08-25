@@ -1029,10 +1029,11 @@ app.get('/api/signup-stats/:hallId', readLimiter, async (req, res) => {
 
     const gameId = nearestGame.rows[0].id;
 
-    // Посчитать записи по конкретной дате (created_at в МСК)
-    // Возвращаем map: 'YYYY-MM-DD' → count
+    // Посчитать записи по конкретной дате.
+    // created_at — timestamp without tz, хранится в UTC (сервер в контейнере UTC).
+    // МСК = UTC+3, поэтому добавляем интервал для корректной даты.
     const stats = await pool.query(
-      `SELECT (created_at AT TIME ZONE 'Europe/Moscow')::date AS signup_date, COUNT(*)::int AS cnt
+      `SELECT (created_at + INTERVAL '3 hours')::date AS signup_date, COUNT(*)::int AS cnt
        FROM game_players
        WHERE game_id = $1
        GROUP BY 1

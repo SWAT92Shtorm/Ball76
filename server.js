@@ -1,3 +1,4 @@
+const path = require('path');
 const express = require('express');
 const rateLimit = require('express-rate-limit');
 
@@ -86,25 +87,32 @@ const readLimiter = rateLimit({
   message: { error: 'Слишком много запросов. Попробуйте позже.' }
 });
 
-// PING-домашняя страница
+// PING-домашняя страница.
+// Отдаёт API-пинг для curl/health-check и HTML-страницу для браузера
+// (User-Agent содержит "Mozilla") — так туннельный адрес сразу
+// показывает фронтенд, а не текст "Server works!".
 /**
  * @swagger
  * /:
  *   get:
- *     summary: Пинг-проверка сервера
+ *     summary: Пинг-проверка сервера / главная страница
  *     tags: [Status]
  *     responses:
  *       200:
- *         description: Сервер работает
- *         content:
- *           text/plain:
- *             schema:
- *               type: string
- *             example: Server works!
+ *         description: Сервер работает (text/plain для API-клиентов, html для браузеров)
  */
 app.get('/', (req, res) => {
+  const ua = req.headers['user-agent'] || '';
+  if (/mozilla/i.test(ua)) {
+    res.sendFile(path.join(__dirname, 'index.html'));
+    return;
+  }
   res.send('Server works!');
 });
+
+// Статика фронтенда (app.js, styles.css, ball.png, robots.txt, sitemap.xml):
+// позволяет открыть сайт целиком через туннельный адрес, без GitHub Pages.
+app.use(express.static(__dirname, { index: false }));
 
 /**
  * @swagger

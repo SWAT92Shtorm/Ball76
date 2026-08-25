@@ -47,6 +47,13 @@ function detectApiBase() {
 
 let API_BASE_URL = detectApiBase();
 
+// Заголовки для bypass'а tunnel-reminder от loca.lt:
+// без них loca.lt показывает страницу-подтверждение (ввести IP хоста),
+// и все fetch-запросы получают HTML вместо JSON.
+const TUNNEL_HEADERS = /\.loca\.lt$/.test(API_BASE_URL)
+  ? { 'bypass-tunnel-reminder': '1' }
+  : {};
+
 // Конфиг приходит ТОЛЬКО с сервера. Без заглушки: если API недоступен —
 // страница честно показывает ошибку, а не имитирует работу.
 let CONFIG = null;
@@ -59,7 +66,7 @@ async function loadConfig() {
   try {
     const ctrl = new AbortController();
     const t = setTimeout(() => ctrl.abort(), 5000);
-    const response = await fetch(`${API_BASE_URL}/api/config`, { signal: ctrl.signal });
+    const response = await fetch(`${API_BASE_URL}/api/config`, { headers: TUNNEL_HEADERS, signal: ctrl.signal });
     clearTimeout(t);
     if (!response.ok) throw new Error('HTTP ' + response.status);
     CONFIG = await response.json();
@@ -131,7 +138,8 @@ async function connectTunnel() {
   try {
     const ctrl = new AbortController();
     const t = setTimeout(() => ctrl.abort(), 5000);
-    const resp = await fetch(`${url}/api/status`, { signal: ctrl.signal });
+    const isLocaLt = /\.loca\.lt$/.test(url);
+    const resp = await fetch(`${url}/api/status`, { headers: isLocaLt ? { 'bypass-tunnel-reminder': '1' } : {}, signal: ctrl.signal });
     clearTimeout(t);
     if (!resp.ok) throw new Error('HTTP ' + resp.status);
     // Успех — сохраняем и перезагружаем
@@ -282,7 +290,7 @@ function setApiStatus(online) {
 // и блокируем кнопку «Записаться» (запись всё равно не пройдёт на сервере).
 async function checkDbStatus() {
   try {
-    const response = await fetch(`${API_BASE_URL}/api/status`);
+    const response = await fetch(`${API_BASE_URL}/api/status`, { headers: TUNNEL_HEADERS });
     const data = await response.json();
     const online = !!data.db && response.ok;
     if (online !== dbOnline) {
@@ -344,7 +352,8 @@ async function loadFromAPI({ silent = false, refreshHall = true } = {}) {
     if (refreshHall) {
       const dateStr = getNearestGameDate(currentHall);
       const response = await fetch(
-        `${API_BASE_URL}/api/players/${currentHall}/${dateStr}`
+        `${API_BASE_URL}/api/players/${currentHall}/${dateStr}`,
+        { headers: TUNNEL_HEADERS }
       );
       if (!response.ok) throw new Error('Не удалось загрузить участников');
       playersData = await response.json();
@@ -354,7 +363,7 @@ async function loadFromAPI({ silent = false, refreshHall = true } = {}) {
     playersByHall = playersData.playersByHall || { hall1: [], hall2: [] };
 
     // 2. История записей из базы (все игры)
-    const historyResponse = await fetch(`${API_BASE_URL}/api/history`);
+    const historyResponse = await fetch(`${API_BASE_URL}/api/history`, { headers: TUNNEL_HEADERS });
     if (!historyResponse.ok) throw new Error('Не удалось загрузить историю');
     const historyData = await historyResponse.json();
     historyByDate = historyData.historyByDate || {};
@@ -431,7 +440,7 @@ async function addPlayer() {
   try {
     const response = await fetch(`${API_BASE_URL}/api/players/${hall}`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', ...TUNNEL_HEADERS },
       body: JSON.stringify({ name, date: dateStr })
     });
 
@@ -517,7 +526,7 @@ async function doRemovePlayer(index) {
   try {
     const response = await fetch(
       `${API_BASE_URL}/api/players/${hall}/${dateStr}/${encodeURIComponent(name)}`,
-      { method: 'DELETE', headers: { 'Content-Type': 'application/json' } }
+      { method: 'DELETE', headers: { 'Content-Type': 'application/json', ...TUNNEL_HEADERS } }
     );
 
     if (!response.ok) {
@@ -571,7 +580,7 @@ async function submitEdit(index) {
   try {
     const response = await fetch(`${API_BASE_URL}/api/player/name`, {
       method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', ...TUNNEL_HEADERS },
       body: JSON.stringify({ currentName: oldName, newName })
     });
 

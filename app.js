@@ -61,15 +61,39 @@ async function loadConfig() {
     CONFIG = await response.json();
     return true;
   } catch (err) {
-    // Мёртвый туннель в localStorage — очищаем, чтобы не плодить ошибки.
+    // Мёртвый туннель в localStorage — очищаем и даём ввести новый адрес.
     if (/\.loca\.lt$/.test(API_BASE_URL)) {
       try { localStorage.removeItem('ball76_api'); } catch (_) {}
-      showApiError(`Туннель (${API_BASE_URL}) мёртв. Запустите ./tunnel.sh и откройте новую ссылку один раз.`);
+      showTunnelInput(`Туннель (${API_BASE_URL}) мёртв. Введите новый адрес:`);
     } else {
       showApiError(`API (${API_BASE_URL}) недоступен: ${err.message}`);
     }
     return false;
   }
+}
+
+function showTunnelInput(message) {
+  const main = document.querySelector('main');
+  if (!main) return;
+  const div = document.createElement('div');
+  div.className = 'db-warning-banner';
+  div.style.display = 'block';
+  div.innerHTML = `⚠️ ${message}<br><br>
+    <input type="url" id="tunnelUrlInput" placeholder="https://xxx.loca.lt" 
+           style="width:100%;max-width:350px;padding:8px;margin:4px 0;border-radius:4px;border:1px solid #ccc;">
+    <button onclick="saveTunnelUrl()" style="padding:8px 16px;background:#4a90d9;color:#fff;border:none;border-radius:4px;cursor:pointer;">Сохранить</button>`;
+  main.prepend(div);
+  document.querySelectorAll('button').forEach(btn => {
+    if (btn.onclick && btn.onclick.toString().includes('addPlayer')) btn.disabled = true;
+  });
+}
+
+function saveTunnelUrl() {
+  const input = document.getElementById('tunnelUrlInput');
+  const url = (input?.value || '').trim().replace(/\/+$/, '');
+  if (!url) return;
+  try { localStorage.setItem('ball76_api', url); } catch (_) {}
+  location.reload();
 }
 
 function showApiError(message) {

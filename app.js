@@ -542,6 +542,8 @@ async function addPlayer() {
     showList();
 
     await loadFromAPI();
+    const _hall = document.getElementById('hallSelect').value;
+    if (_hall) { await loadSignupStats(_hall); showSchedule(); }
     showToast(`${name} записан на игру`, 'success');
   } catch (err) {
     console.error('Ошибка при добавлении через API:', err);
@@ -608,6 +610,8 @@ async function doRemovePlayer(index) {
 
     await loadFromAPI();
     showList();
+    const _hall2 = document.getElementById('hallSelect').value;
+    if (_hall2) { await loadSignupStats(_hall2); showSchedule(); }
     showToast(`«${name}» удалён из списка`, 'success');
   } catch (err) {
     console.error('Ошибка при удалении через API:', err);
@@ -663,6 +667,8 @@ async function submitEdit(index) {
 
     await loadFromAPI();
     showList();
+    const _hall3 = document.getElementById('hallSelect').value;
+    if (_hall3) { await loadSignupStats(_hall3); showSchedule(); }
     showToast(`Игрок переименован в «${newName}»`, 'success');
   } catch (err) {
     console.error('Ошибка при редактировании через API:', err);

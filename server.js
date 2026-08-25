@@ -980,6 +980,84 @@ app.get('/api/history', readLimiter, async (req, res) => {
   }
 });
 
+/**
+ * @swagger
+ * /api/signup-stats/{hallId}:
+ *   get:
+ *     summary: Статистика записей по дням недели
+ *     description: Возвращает количество людей, записавшихся на ближайшую игру в каждый день недели (по created_at).
+ *     tags: [Stats]
+ *     parameters:
+ *       - in: path
+ *         name: hallId
+ *         required: true
+ *         schema:
+ *           type: string
+ *           enum: [hall1, hall2]
+ *     responses:
+ *       200:
+ *         description: Статистика загружена
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 total:
+ *                   type: integer
+ *                   description: Всего записано на ближайшую игру
+ *                 byDay:
+ *                   type: object
+ *                   description: Ключ — день недели (1-7), значение — кол-во записей сделанных в этот день
+ */
+app.get('/api/signup-stats/:hallId', readLimiter, async (req, res) => {
+  const { hallId } = req.params;
+  if (!['hall1', 'hall2'].includes(hallId)) {
+    return res.status(400).json({ error: 'Invalid hallId' });
+  }
+
+  try {
+    // Найти ближайшую игру для зала
+    const nowMSK = new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Moscow' }).format(new Date());
+    const nearestGame = await pool.query(
+      `SELECT id, date FROM games WHERE hall_id = $1 AND date >= $2::date ORDER BY date ASC LIMIT 1`,
+      [hallId, nowMSK]
+    );
+
+    if (nearestGame.rows.length === 0) {
+      return res.json({ total: 0, byDay: {} });
+    }
+
+    const gameId = nearestGame.rows[0].id;
+
+    // Посчитать записи по дню недели (created_at в МСК)
+    const stats = await pool.query(
+      `SELECT EXTRACT(DOW FROM (created_at AT TIME ZONE 'Europe/Moscow'))::int AS dow, COUNT(*)::int AS cnt
+       FROM game_players
+       WHERE game_id = $1
+       GROUP BY 1`,
+      [gameId]
+    );
+
+    // PostgreSQL DOW: 0=Sunday, 1=Monday...6=Saturday → конвертируем в 1=Mon...7=Sun
+    const byDay = {};
+    stats.rows.forEach(row => {
+      const pgDow = row.dow; // 0=Sun, 1=Mon, ..., 6=Sat
+      const ourDow = pgDow === 0 ? 7 : pgDow; // 1=Mon, ..., 7=Sun
+      byDay[ourDow] = row.cnt;
+    });
+
+    const totalRes = await pool.query(
+      'SELECT COUNT(*)::int AS cnt FROM game_players WHERE game_id = $1',
+      [gameId]
+    );
+
+    res.json({ total: totalRes.rows[0].cnt, byDay });
+  } catch (err) {
+    console.error('Ошибка signup-stats:', err);
+    res.status(500).json({ error: 'Failed to get signup stats' });
+  }
+});
+
 // Swagger UI — документация API
 const swaggerUi = require('swagger-ui-express');
 const { swaggerSpec } = require('./swagger');

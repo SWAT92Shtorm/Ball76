@@ -802,6 +802,17 @@ async function showNearestGame() {
 
 // График игр выбранного зала: сетка недели (Пн–Вс) с подсветкой
 // ближайшей игры + карточки информации о зале.
+// В днях без игры показывается статистика записей (+N / -N).
+let signupStats = null; // кэш: { total, byDay: {1: N, 3: M, ...} }
+
+async function loadSignupStats(hall) {
+  try {
+    const resp = await fetch(`${API_BASE_URL}/api/signup-stats/${hall}`, { headers: getTunnelHeaders() });
+    if (!resp.ok) return;
+    signupStats = await resp.json();
+  } catch (_) { /* не критично */ }
+}
+
 function showSchedule() {
   const hall = document.getElementById('hallSelect').value;
   const container = document.getElementById('scheduleContainer');
@@ -833,11 +844,19 @@ function showSchedule() {
       ? slots.map(s => `<div class="sched-slot">${s.from}:00–${s.to}:00</div>`).join('')
       : '<div class="sched-off">—</div>';
 
+    // Статистика записей в дни без игры
+    let statsHtml = '';
+    if (!slots.length && signupStats && signupStats.byDay[code]) {
+      const cnt = signupStats.byDay[code];
+      statsHtml = `<div class="sched-stats">+${cnt} 📝</div>`;
+    }
+
     return `
       <div class="${classes.join(' ')}">
         <div class="sched-day-letter">${dayLetters[i]}</div>
         <div class="sched-day-name">${dayNamesRU[slots[0]?.day] || ''}</div>
         ${slotHtml}
+        ${statsHtml}
         ${isNearest ? '<div class="sched-badge">ближайшая</div>' : ''}
       </div>
     `;
@@ -1342,6 +1361,12 @@ function closeTeamsModal() {
 
 const CHANGELOG = [
   {
+    version: 'p',
+    items: [
+      '📊 В днях без игры — статистика записей на ближайшую игру'
+    ]
+  },
+  {
     version: 'o',
     items: [
       '💰 Стоимость и телефон показаны только после 10 записавшихся'
@@ -1441,7 +1466,8 @@ window.addEventListener('DOMContentLoaded', async function () {
     document.getElementById('nearestGameInfo').textContent = getNearestGameText(hall);
   }
 
-  // 4. Показываем расписание
+  // 4. Загружаем статистику записей и показываем расписание
+  await loadSignupStats(hall);
   showSchedule();
 
   // 5. Длительность по количеству игроков (только при первом открытии)
@@ -1519,7 +1545,7 @@ window.addEventListener('DOMContentLoaded', async function () {
   });
   document.getElementById('hallSelect').addEventListener('change', function () {
     showList();
-    showSchedule();
+    loadSignupStats(this.value).then(() => showSchedule());
   });
   document.getElementById('durationSelect').addEventListener('change', function () {
     showList();

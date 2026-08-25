@@ -217,26 +217,35 @@ function updateDbWarning() {
   }
 }
 
-async function loadFromAPI({ silent = false } = {}) {
+async function loadFromAPI({ silent = false, refreshHall = true } = {}) {
   // UX1: если открыт инпут редактирования — не перерисовываем список,
   // чтобы не сжечь введённое имя
   if (editingIndex !== null && !silent) {
     return;
   }
 
-  const prevPlayers = (playersByHall[document.getElementById('hallSelect').value] || []).slice();
+  const currentHall = document.getElementById('hallSelect').value;
+  const prevPlayers = (playersByHall[currentHall] || []).slice();
 
   try {
-    // 1. Игроки текущей игры выбранного зала
-    const hall = document.getElementById('hallSelect').value;
-    const dateStr = getNearestGameDate(hall);
-    const response = await fetch(
-      `${API_BASE_URL}/api/players/${hall}/${dateStr}`
-    );
-
-    if (!response.ok) throw new Error('Не удалось загрузить участников');
-    const data = await response.json();
-    playersByHall = data.playersByHall || { hall1: [], hall2: [] };
+    // 1. Игроки текущей игры выбранного зала.
+    // refreshHall=false — при переключении залов: данные этого зала уже
+    // есть в кэше playersByHall (загружали при первом открытии), а повторный
+    // запрос на время загрузки показывал бы пустой список → «зелёное»
+    // мигание блока стоимости. Перерисуемся из кэша, фоновое обновление
+    // подтянет свежие данные через 30 секунд.
+    let playersData;
+    if (refreshHall) {
+      const dateStr = getNearestGameDate(currentHall);
+      const response = await fetch(
+        `${API_BASE_URL}/api/players/${currentHall}/${dateStr}`
+      );
+      if (!response.ok) throw new Error('Не удалось загрузить участников');
+      playersData = await response.json();
+    } else {
+      playersData = { playersByHall };
+    }
+    playersByHall = playersData.playersByHall || { hall1: [], hall2: [] };
 
     // 2. История записей из базы (все игры)
     const historyResponse = await fetch(`${API_BASE_URL}/api/history`);
@@ -603,6 +612,11 @@ async function showNearestGame() {
   const key = hall + '|' + (g ? g.date : '');
   if (key !== lastHallDateKey) {
     lastHallDateKey = key;
+    // Перезагружаем данные с сервера (полный режим), чтобы список
+    // участников выбранного зала был актуальным. Блок стоимости на время
+    // запроса не мигает: renderPricingRow() всегда пересчитывает цвета
+    // по текущему playersByHall, а после ответа showList() перерисовывает
+    // его со свежими данными.
     try {
       await loadFromAPI();
     } catch (e) {

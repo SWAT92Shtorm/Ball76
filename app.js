@@ -58,39 +58,14 @@ function detectApiBase() {
 
 let API_BASE_URL = detectApiBase();
 
-// Заглушка до загрузки /api/config (значения совпадают с серверным APP_CONFIG).
-// Если API недоступен — страница остаётся работоспособной с этими данными.
-let CONFIG = {
-  maxPlayers: 18,
-  halls: {
-    hall1: {
-      name: 'ЛОКОМОТИВ',
-      phone: '+7 (961) 154-44-11',
-      responsible: 'Андрей Дубровин',
-      prices: { full: 6000, short: 4500 },
-      schedule: [
-        { day: 'Tuesday', from: 21, to: 23 },
-        { day: 'Thursday', from: 21, to: 23 }
-      ]
-    },
-    hall2: {
-      name: 'АТЛАНТ',
-      phone: '+7 (910) 979-22-99',
-      responsible: 'Ярослав Волков',
-      // Аренда фиксированная 6000 ₽; каждый платит 300 ₽ (не делится на участников)
-      prices: { full: 6000, short: 6000 },
-      perPerson: 300,
-      schedule: [
-        { day: 'Friday', from: 21, to: 23 }
-      ]
-    }
-  }
-};
+// Конфиг приходит ТОЛЬКО с сервера. Без заглушки: если API недоступен —
+// страница честно показывает ошибку, а не имитирует работу.
+let CONFIG = null;
 
 async function loadConfig() {
   if (!API_BASE_URL) {
-    console.warn('API-адрес не задан (откройте туннельную ссылку один раз), используем заглушку');
-    return;
+    showApiError('API-адрес не задан. Откройте туннельную ссылку один раз, чтобы сохранить адрес.');
+    return false;
   }
   try {
     const ctrl = new AbortController();
@@ -99,20 +74,38 @@ async function loadConfig() {
     clearTimeout(t);
     if (!response.ok) throw new Error('HTTP ' + response.status);
     CONFIG = await response.json();
+    return true;
   } catch (err) {
-    console.error(`API ${API_BASE_URL} недоступен (${err.message}), используем заглушку`);
+    showApiError(`API (${API_BASE_URL}) недоступен: ${err.message}. Проверьте туннель.`);
+    return false;
   }
 }
 
-// Удобные доступы к конфигу зала
-function hallName(hallId)      { return CONFIG.halls[hallId]?.name || hallId; }
-function hallPhone(hallId)     { return CONFIG.halls[hallId]?.phone || ''; }
-function hallResp(hallId)      { return CONFIG.halls[hallId]?.responsible || ''; }
-function hallPrice(hallId, durationKey) {
-  return CONFIG.halls[hallId]?.prices?.[durationKey] ?? 0;
+function showApiError(message) {
+  const main = document.querySelector('main');
+  if (!main) return;
+  const div = document.createElement('div');
+  div.className = 'db-warning-banner';
+  div.style.display = 'block';
+  div.textContent = '⚠️ ' + message;
+  main.prepend(div);
+  // Блокируем все кнопки записи
+  document.querySelectorAll('button').forEach(btn => {
+    if (btn.onclick && btn.onclick.toString().includes('addPlayer')) {
+      btn.disabled = true;
+    }
+  });
 }
-function hallSchedule(hallId)  { return CONFIG.halls[hallId]?.schedule || []; }
-function maxPlayers()          { return CONFIG.maxPlayers || 18; }
+
+// Удобные доступы к конфигу зала (безопасны при CONFIG = null)
+function hallName(hallId)      { return CONFIG?.halls?.[hallId]?.name || hallId; }
+function hallPhone(hallId)     { return CONFIG?.halls?.[hallId]?.phone || ''; }
+function hallResp(hallId)      { return CONFIG?.halls?.[hallId]?.responsible || ''; }
+function hallPrice(hallId, durationKey) {
+  return CONFIG?.halls?.[hallId]?.prices?.[durationKey] ?? 0;
+}
+function hallSchedule(hallId)  { return CONFIG?.halls?.[hallId]?.schedule || []; }
+function maxPlayers()          { return CONFIG?.maxPlayers || 18; }
 
 // ==================== 2. UTILS ====================
 
@@ -1210,7 +1203,8 @@ function closeTeamsModal() {
 
 window.addEventListener('DOMContentLoaded', async function () {
   // 0. Загружаем конфиг с сервера (цены, телефоны, расписание)
-  await loadConfig();
+  const configOk = await loadConfig();
+  if (!configOk) return; // API недоступен — ошибка уже показана, дальше не идём
 
   // 0.5. Проверяем соединение сервера с БД (показываем предупреждение при недоступности)
   await checkDbStatus();

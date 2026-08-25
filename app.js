@@ -141,7 +141,7 @@ function shuffleArray(arr) {
 let playersByHall = { hall1: [], hall2: [] };
 let playerNames = [];
 let historyByDate = {};
-let lastNearestDate = null;
+let lastHallDateKey = null;   // «зал|дата» — ключ для перезагрузки при смене зала/даты
 let isInitialLoad = true;
 let editingIndex = null;        // индекс строки, открытой на редактирование (UX1)
 let apiOnline = true;           // статус соединения с API (UX2)
@@ -596,9 +596,13 @@ async function showNearestGame() {
   // При первой загрузке — только текст, данные загрузит DOMContentLoaded
   if (isInitialLoad) return;
 
-  // При смене даты — перезагрузить список
-  if (g && g.date !== lastNearestDate) {
-    lastNearestDate = g.date;
+  // При смене даты/зала — перезагрузить список.
+  // Сравниваем полную пару «зал+дата», а не только дату: раньше при
+  // переключении залов с одинаковой датой игры данные не обновлялись,
+  // и блок стоимости показывал цвета/числа предыдущего зала.
+  const key = hall + '|' + (g ? g.date : '');
+  if (key !== lastHallDateKey) {
+    lastHallDateKey = key;
     try {
       await loadFromAPI();
     } catch (e) {
@@ -822,15 +826,32 @@ function renderPricingRow(hall, playersCount) {
   `;
 
   if (perPersonFixed) {
-    // Фиксированная цена с человека — от количества игроков не зависит
-    priceElem.style.background = '#1a4b1a';
-    priceElem.style.borderColor = '#006633';
+    // Фиксированная цена с человека — от количества игроков не зависит,
+    // но предупреждение о минимуме участников работает так же:
+    // меньше 10 записались → блок красный (игра может не состояться).
+    const isUnder10 = playersCount > 0 && playersCount < 10;
+    const mainBg = isUnder10 ? '#501010' : '#1a4b1a';
+    const borderCol = isUnder10 ? '#a03030' : '#006633';
+    const phoneBg = isUnder10 ? '#501010' : '#224422';
+
+    priceElem.style.background = mainBg;
+    priceElem.style.borderColor = borderCol;
     priceElem.innerHTML = `
       <div style="font-size: 13px; margin-bottom: 4px;">Стоимость аренды зала: ${price} ₽ (фиксированно)</div>
       <div style="font-size: 13px; margin-bottom: 4px;">Время аренды: ${durationText}</div>
-      <div style="font-size: 13px;">Записалось: ${playersCount} чел. Сумма не делится на участников.</div>
+      <div style="font-size: 13px;${isUnder10 ? ' color: #ffb0b0; font-weight: 600;' : ''}">
+        Записалось: ${playersCount} чел.${isUnder10 ? ' ⚠️ Меньше минимума (10) — игра может не состояться!' : '. Сумма не делится на участников.'}
+      </div>
       <div style="font-size: 13px; margin-top: 4px;"><strong>Каждый платит: ${perPersonFixed} ₽</strong></div>
-      ${phoneBlock}
+      <div style="margin-top: 10px; padding: 8px 10px; background: ${phoneBg}; border-radius: 4px; border: 1px solid #336633; font-size: 13px; color: #e0ffe0;">
+        Для оплаты переведите деньги на телефон:
+        <br />
+        <span style="color: #ffffff; font-weight: bold; margin: 0 4px; cursor: pointer; text-decoration: underline dotted;" id="displayPhone" title="Нажмите, чтобы скопировать">${escapeHtml(phone)}</span>
+        <button
+          onclick="copyPhoneToClipboard('${escapeHtml(phone)}')"
+          style="margin-left: 6px; padding: 0; width: 20px; height: 20px; border: none; background: transparent; color: #a0e0ff; font-size: 15px; cursor: pointer;"
+          title="Копировать телефон">📋</button>
+      </div>
     `;
     return;
   }
@@ -1172,7 +1193,7 @@ window.addEventListener('DOMContentLoaded', async function () {
   // 3. Фиксируем дату и обновляем текст
   const hall = document.getElementById('hallSelect').value;
   if (hall) {
-    lastNearestDate = getNearestGameDate(hall);
+    lastHallDateKey = hall + '|' + getNearestGameDate(hall);
     document.getElementById('nearestGameInfo').textContent = getNearestGameText(hall);
   }
 

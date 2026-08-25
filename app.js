@@ -804,7 +804,20 @@ function showHistoryTable() {
   historyTableContainer.innerHTML = html;
 }
 
-// Datalist с подсказками ФИО
+// ==== Автодополнение ФИО (кастомный dropdown вместо нативного datalist) ====
+let autocompleteIndex = -1; // индекс выделенной подсказки (-1 — ничего не выбрано)
+
+// Нормализация для сравнения: без регистра, ё→е, без пунктуации/лишних пробелов
+function normalizeName(str) {
+  return String(str ?? '')
+    .toLowerCase()
+    .replace(/ё/g, 'е')
+    .replace(/[.,\-–—]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+// Все уникальные ФИО из базы (текущие игроки + история)
 function collectAllNamesFromHistory() {
   const allNames = new Set();
   playerNames.forEach(name => { if (name) allNames.add(name.trim()); });
@@ -819,14 +832,82 @@ function collectAllNamesFromHistory() {
   return Array.from(allNames);
 }
 
-function updatePlayersList() {
-  const list = document.getElementById('playersList');
-  list.innerHTML = '';
-  collectAllNamesFromHistory().forEach(name => {
-    const option = document.createElement('option');
-    option.value = name;
-    list.appendChild(option);
+// Фильтрация подсказок по введённому тексту.
+// Совпадение, если нормализованное ФИО содержит нормализованный ввод
+// (в любом месте строки — удобно искать по фамилии или имени).
+function filterAutocomplete(query) {
+  const q = normalizeName(query);
+  if (!q) return [];
+  return collectAllNamesFromHistory()
+    .filter(name => normalizeName(name).includes(q))
+    .sort((a, b) => {
+      // Сначала точные совпадения и совпадения с начала слова
+      const aStarts = normalizeName(a).startsWith(q) ? 0 : 1;
+      const bStarts = normalizeName(b).startsWith(q) ? 0 : 1;
+      if (aStarts !== bStarts) return aStarts - bStarts;
+      return a.localeCompare(b, 'ru');
+    })
+    .slice(0, 8); // не более 8 подсказок
+}
+
+function renderAutocomplete(matches) {
+  const box = document.getElementById('autocompleteBox');
+  if (!box) return;
+
+  if (!matches.length) {
+    box.style.display = 'none';
+    autocompleteIndex = -1;
+    return;
+  }
+
+  box.innerHTML = matches.map((name, i) => `
+    <div class="ac-item${i === autocompleteIndex ? ' active' : ''}" data-name="${escapeHtml(name)}">
+      ${escapeHtml(name)}
+    </div>
+  `).join('');
+  box.style.display = 'block';
+
+  box.querySelectorAll('.ac-item').forEach(item => {
+    item.addEventListener('mousedown', e => {
+      // mousedown раньше blur — успеваем выбрать до потери фокуса
+      e.preventDefault();
+      selectAutocomplete(item.dataset.name);
+    });
   });
+}
+
+function showAutocomplete() {
+  const input = document.getElementById('playerName');
+  const matches = filterAutocomplete(input.value);
+  autocompleteIndex = matches.length > 0 ? 0 : -1;
+  renderAutocomplete(matches);
+}
+
+function hideAutocomplete() {
+  const box = document.getElementById('autocompleteBox');
+  if (box) box.style.display = 'none';
+  autocompleteIndex = -1;
+}
+
+function selectAutocomplete(name) {
+  const input = document.getElementById('playerName');
+  input.value = name;
+  hideAutocomplete();
+  validatePlayerName();
+  input.focus();
+}
+
+// Навигация стрелками по подсказкам
+function moveAutocomplete(delta) {
+  const box = document.getElementById('autocompleteBox');
+  if (!box || box.style.display !== 'block') return;
+  const items = box.querySelectorAll('.ac-item');
+  if (!items.length) return;
+
+  autocompleteIndex = (autocompleteIndex + delta + items.length) % items.length;
+  items.forEach((item, i) => item.classList.toggle('active', i === autocompleteIndex));
+  // Прокрутка к активному элементу
+  items[autocompleteIndex].scrollIntoView({ block: 'nearest' });
 }
 
 // Валидация ФИО. UX4: вызывается на каждом input (live), а не только на blur.
@@ -1008,9 +1089,43 @@ window.addEventListener('DOMContentLoaded', async function () {
 
   // Обработчики событий
   // UX4: live-валидация на каждом вводе + сохранение на blur
-  document.getElementById('playerName').addEventListener('input', validatePlayerName);
-  document.getElementById('playerName').addEventListener('blur', validatePlayerName);
-  document.getElementById('playerName').addEventListener('keydown', function (e) {
+  const nameInput = document.getElementById('playerName');
+  nameInput.addEventListener('input', function () {
+    validatePlayerName();
+    showAutocomplete();
+  });
+  nameInput.addEventListener('blur', function () {
+    validatePlayerName();
+    hideAutocomplete();
+  });
+  nameInput.addEventListener('focus', function () {
+    if (this.value.trim()) showAutocomplete();
+  });
+  nameInput.addEventListener('keydown', function (e) {
+    const box = document.getElementById('autocompleteBox');
+    const dropdownOpen = box && box.style.display === 'block';
+
+    if (dropdownOpen && e.key === 'ArrowDown') {
+      e.preventDefault();
+      moveAutocomplete(1);
+      return;
+    }
+    if (dropdownOpen && e.key === 'ArrowUp') {
+      e.preventDefault();
+      moveAutocomplete(-1);
+      return;
+    }
+    if (dropdownOpen && e.key === 'Enter' && autocompleteIndex >= 0) {
+      // Enter выбирает подсказку, а не отправляет форму
+      e.preventDefault();
+      const active = box.querySelectorAll('.ac-item')[autocompleteIndex];
+      if (active) selectAutocomplete(active.dataset.name);
+      return;
+    }
+    if (e.key === 'Escape') {
+      hideAutocomplete();
+      return;
+    }
     if (e.key === 'Enter') addPlayer();
   });
   document.getElementById('hallSelect').addEventListener('change', function () {

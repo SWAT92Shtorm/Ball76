@@ -819,10 +819,10 @@ async function loadSignupStats(hall) {
   } catch (_) { /* не критично */ }
 }
 
-// Возвращает дату 'YYYY-MM-DD' для дня недели (1=Пн...7=Вс) в текущей неделе
+// Возвращает дату 'YYYY-MM-DD' для дня недели (1=Пн...7=Вс) в текущей МСК-неделе
 function dateForDayCode(dayCode) {
-  const now = getMSKNow();
-  const todayCode = now.getDay() || 7;
+  const now = getMSKNow(); // уже в МСК
+  const todayCode = now.getDay() || 7; // 1=Пн...7=Вс
   const diff = dayCode - todayCode;
   const d = new Date(now);
   d.setDate(now.getDate() + diff);
@@ -863,13 +863,17 @@ function showSchedule() {
       ? slots.map(s => `<div class="sched-slot">${s.from}:00–${s.to}:00</div>`).join('')
       : '<div class="sched-off">—</div>';
 
-    // Статистика записей в дни без игры (по конкретной дате текущей недели)
+    // Статистика: в днях без игры показываем кол-во записей сделанных именно в этот день.
+    // Если сегодня нет игры — показываем общий total (все записи на ближайшую игру).
     let statsHtml = '';
-    if (!slots.length && signupStats && signupStats.byDate) {
+    if (!slots.length && signupStats) {
       const dateStr = dateForDayCode(code);
-      const cnt = signupStats.byDate[dateStr];
-      if (cnt > 0) {
-        statsHtml = `<div class="sched-stats">+${cnt}</div>`;
+      const dayCnt = (signupStats.byDate && signupStats.byDate[dateStr]) || 0;
+      if (dayCnt > 0) {
+        statsHtml = `<div class="sched-stats">+${dayCnt}</div>`;
+      } else if (isToday && signupStats.total > 0) {
+        // Сегодня нет игры, но есть записи (сделанные в другие дни) — показываем total
+        statsHtml = `<div class="sched-stats">${signupStats.total} 📝</div>`;
       }
     }
 

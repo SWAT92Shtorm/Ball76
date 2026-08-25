@@ -533,6 +533,9 @@ async function addPlayer() {
       playerNames.push(name);
     }
 
+    // Сохраняем ФИО в localStorage для автоподстановки при следующем визите
+    try { localStorage.setItem('ball76_lastName', name); } catch (_) {}
+
     input.value = '';
     hideAutocomplete();
     resetInputStyles(input, error);
@@ -1338,6 +1341,12 @@ function closeTeamsModal() {
 
 const CHANGELOG = [
   {
+    version: 'm',
+    items: [
+      '👤 ФИО подставляется автоматически при следующем визите'
+    ]
+  },
+  {
     version: 'l',
     items: [
       '🎨 Единый стиль всех модальных окон'
@@ -1427,7 +1436,15 @@ window.addEventListener('DOMContentLoaded', async function () {
   const currentPlayers = playersByHall[hall]?.length || 0;
   durationSelect.value = currentPlayers >= 15 ? 'full' : 'short';
 
-  // 6. Снимаем флаг первой загрузки
+  // 6. Автоподстановка последнего ФИО из localStorage
+  const lastName = (() => { try { return localStorage.getItem('ball76_lastName'); } catch (_) { return null; } })();
+  if (lastName) {
+    const nameInput = document.getElementById('playerName');
+    nameInput.value = lastName;
+    validatePlayerName();
+  }
+
+  // 7. Снимаем флаг первой загрузки
   isInitialLoad = false;
 
   // Часы

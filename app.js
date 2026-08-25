@@ -16,10 +16,33 @@ const API_BASE_URL =
     ? 'https://ball76.up.railway.app'   // продакшен (Railway)
     : 'http://localhost:8080';         // локальный Docker
 
-// Заглушка до загрузки /api/config (значения совпадают с серверным APP_CONFIG)
+// Заглушка до загрузки /api/config (значения совпадают с серверным APP_CONFIG).
+// Если API недоступен — страница остаётся работоспособной с этими данными.
 let CONFIG = {
   maxPlayers: 18,
-  halls: {}
+  halls: {
+    hall1: {
+      name: 'ЛОКОМОТИВ',
+      phone: '+7 (961) 154-44-11',
+      responsible: 'Андрей Дубровин',
+      prices: { full: 6000, short: 4500 },
+      schedule: [
+        { day: 'Tuesday', from: 21, to: 23 },
+        { day: 'Thursday', from: 21, to: 23 }
+      ]
+    },
+    hall2: {
+      name: 'АТЛАНТ',
+      phone: '+7 (910) 979-22-99',
+      responsible: 'Ярослав Волков',
+      // Аренда фиксированная 6000 ₽; каждый платит 300 ₽ (не делится на участников)
+      prices: { full: 6000, short: 6000 },
+      perPerson: 300,
+      schedule: [
+        { day: 'Friday', from: 21, to: 23 }
+      ]
+    }
+  }
 };
 
 async function loadConfig() {
@@ -847,7 +870,14 @@ function renderPricingRow(hall, playersCount) {
   }
 }
 
-// История записей в виде карточек под списком участников
+// Человекочитательная дата из 'YYYY-MM-DD' (московская): «вт, 19 авг»
+function formatShortDate(dateStr) {
+  const d = new Date(dateStr + 'T12:00:00');
+  const text = d.toLocaleDateString('ru-RU', { weekday: 'short', day: 'numeric', month: 'short' });
+  return text.replace('.', '');
+}
+
+// История записей в виде карточек-таймлайна под списком участников
 function showHistoryTable() {
   const hall = document.getElementById('hallSelect').value;
   const historyTableContainer = document.getElementById('historyTableContainer');
@@ -867,24 +897,27 @@ function showHistoryTable() {
 
   historyTableContainer.style.display = 'block';
 
-  let html = `
-    <h3 style="color: #a0e0ff; margin-top: 14px; margin-bottom: 8px; font-size: 16px;">
-      История записей в зале ${escapeHtml(hallName(hall))} по датам
-    </h3>
-    <div style="display: flex; flex-direction: column; gap: 10px;">
-  `;
-
-  entries.forEach(entry => {
-    html += `
-      <div style="padding: 10px; border-radius: 4px; background: #222; border: 1px solid #404040; font-size: 13px; color: #e0e0e0;">
-        <div style="font-weight: 600; color: #a0e0ff; margin-bottom: 4px;">${entry.date}</div>
-        <div style="line-height: 1.5;">${entry.players.map(escapeHtml).join(', ')}</div>
+  const cards = entries.map((entry, i) => {
+    const label = i === 0 ? 'предыдущая игра' : 'игра до неё';
+    const chips = entry.players.map(p => `<span class="hist-chip">${escapeHtml(p)}</span>`).join('');
+    return `
+      <div class="hist-card">
+        <div class="hist-head">
+          <div class="hist-date">
+            <span class="hist-date-main">${formatShortDate(entry.date)}</span>
+            <span class="hist-date-sub">${label}</span>
+          </div>
+          <div class="hist-count">${entry.players.length} чел.</div>
+        </div>
+        <div class="hist-chips">${chips}</div>
       </div>
     `;
-  });
+  }).join('');
 
-  html += '</div>';
-  historyTableContainer.innerHTML = html;
+  historyTableContainer.innerHTML = `
+    <h3 class="hist-title">📜 История записей — ${escapeHtml(hallName(hall))}</h3>
+    <div class="hist-timeline">${cards}</div>
+  `;
 }
 
 // ==== Автодополнение ФИО (кастомный dropdown вместо нативного datalist) ====

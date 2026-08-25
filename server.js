@@ -59,18 +59,118 @@ app.use((req, res, next) => {
 app.use(express.json());
 
 // PING-домашняя страница
+/**
+ * @swagger
+ * /:
+ *   get:
+ *     summary: Пинг-проверка сервера
+ *     tags: [Status]
+ *     responses:
+ *       200:
+ *         description: Сервер работает
+ *         content:
+ *           text/plain:
+ *             schema:
+ *               type: string
+ *             example: Server works!
+ */
 app.get('/', (req, res) => {
   res.send('Server works!');
 });
 
-// GET /api/config — единый конфиг для клиента (цены, телефоны, расписание, лимиты)
+/**
+ * @swagger
+ * /api/config:
+ *   get:
+ *     summary: Получить конфигурацию приложения
+ *     description: Возвращает единый конфиг для клиента: цены, телефоны, расписание, лимиты.
+ *     tags: [Config]
+ *     responses:
+ *       200:
+ *         description: Конфигурация загружена
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 maxPlayers:
+ *                   type: integer
+ *                   description: Максимум игроков на одну игру
+ *                   example: 18
+ *                 halls:
+ *                   type: object
+ *                   description: Конфигурация залов
+ *                   additionalProperties:
+ *                     type: object
+ *                     properties:
+ *                       name:
+ *                         type: string
+ *                         example: ЛОКОМОТИВ
+ *                       phone:
+ *                         type: string
+ *                         example: '+7 (961) 154-44-11'
+ *                       responsible:
+ *                         type: string
+ *                         example: Андрей Дубровин
+ *                       prices:
+ *                         type: object
+ *                         properties:
+ *                           full:
+ *                             type: integer
+ *                             description: Цена за 2 часа
+ *                             example: 6000
+ *                           short:
+ *                             type: integer
+ *                             description: Цена за 1.5 часа
+ *                             example: 4500
+ *                       schedule:
+ *                         type: array
+ *                         items:
+ *                           type: object
+ *                           properties:
+ *                             day:
+ *                               type: string
+ *                               enum: [Monday, Tuesday, Wednesday, Thursday, Friday, Saturday, Sunday]
+ *                             from:
+ *                               type: integer
+ *                               description: Час начала
+ *                             to:
+ *                               type: integer
+ *                               description: Час окончания
+ */
 app.get('/api/config', (req, res) => {
   res.json(APP_CONFIG);
 });
 
-// GET /api/status — проверка соединения с БД.
-// Клиент использует этот эндпоинт, чтобы показать предупреждение
-// «запись пока невозможна», когда сервер не может подключиться к PostgreSQL.
+/**
+ * @swagger
+ * /api/status:
+ *   get:
+ *     summary: Проверить соединение с базой данных
+ *     description: Клиент использует этот эндпоинт, чтобы показать предупреждение «запись пока невозможна», когда сервер не может подключиться к PostgreSQL.
+ *     tags: [Status]
+ *     responses:
+ *       200:
+ *         description: Соединение с БД установлено
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 db:
+ *                   type: boolean
+ *                   example: true
+ *       503:
+ *         description: Нет соединения с БД
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 db:
+ *                   type: boolean
+ *                   example: false
+ */
 app.get('/api/status', async (req, res) => {
   try {
     await pool.query('SELECT 1');
@@ -123,7 +223,44 @@ function formatDateMSK(date) {
   }).format(date); // en-CA → именно YYYY-MM-DD
 }
 
-// GET /api/players — отдать данные из БД
+/**
+ * @swagger
+ * /api/players:
+ *   get:
+ *     summary: Получить всех игроков по залам
+ *     description: Возвращает список всех игроков, сгруппированных по залам.
+ *     tags: [Players]
+ *     responses:
+ *       200:
+ *         description: Список игроков загружен
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 playersByHall:
+ *                   type: object
+ *                   properties:
+ *                     hall1:
+ *                       type: array
+ *                       items:
+ *                         type: string
+ *                       example: ["Иванов Иван Иванович", "Петров Пётр Петрович"]
+ *                     hall2:
+ *                       type: array
+ *                       items:
+ *                         type: string
+ *                       example: ["Сидоров Сидор Сидорович"]
+ *       500:
+ *         description: Ошибка чтения из БД
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 error:
+ *                   type: string
+ */
 app.get('/api/players', async (req, res) => {
   try {
     const result = await pool.query(
@@ -163,7 +300,78 @@ app.get('/api/players', async (req, res) => {
 
 
 
-// POST /api/players/:hallId — добавить участника в существующую/новую игру
+/**
+ * @swagger
+ * /api/players/{hallId}:
+ *   post:
+ *     summary: Записать игрока на игру
+ *     description: Добавляет участника в существующую или новую игру. Вся запись выполняется в одной транзакции для исключения гонок при проверке лимита.
+ *     tags: [Players]
+ *     parameters:
+ *       - in: path
+ *         name: hallId
+ *         required: true
+ *         schema:
+ *           type: string
+ *           enum: [hall1, hall2]
+ *         description: Идентификатор зала
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [name, date]
+ *             properties:
+ *               name:
+ *                 type: string
+ *                 description: ФИО игрока (Фамилия Имя Отчество)
+ *                 example: Иванов Иван Иванович
+ *               date:
+ *                 type: string
+ *                 format: date
+ *                 description: Дата игры в формате YYYY-MM-DD
+ *                 example: '2026-08-25'
+ *     responses:
+ *       200:
+ *         description: Игрок записан
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 playersByHall:
+ *                   type: object
+ *                   additionalProperties:
+ *                     type: array
+ *                     items:
+ *                       type: string
+ *       400:
+ *         description: Ошибка валидации / игра заполнена / игрок уже записан
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 error:
+ *                   type: string
+ *                   examples:
+ *                     bad_request:
+ *                       value: Bad request: name, date, and hallId required
+ *                     full:
+ *                       value: Игра заполнена: максимум 18 человек
+ *                     duplicate:
+ *                       value: Игрок уже записан на эту игру
+ *       500:
+ *         description: Внутренняя ошибка сервера
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 error:
+ *                   type: string
+ */
 app.post('/api/players/:hallId', async (req, res) => {
   const { hallId } = req.params;
   const { name, date } = req.body;
@@ -297,7 +505,52 @@ app.post('/api/players/:hallId', async (req, res) => {
   }
 });
 
-// НОВЫЙ endpoint с датой
+/**
+ * @swagger
+ * /api/players/{hallId}/{date}:
+ *   get:
+ *     summary: Получить игроков на конкретную игру
+ *     description: Возвращает список игроков, записанных на игру в указанном зале и дате.
+ *     tags: [Players]
+ *     parameters:
+ *       - in: path
+ *         name: hallId
+ *         required: true
+ *         schema:
+ *           type: string
+ *           enum: [hall1, hall2]
+ *         description: Идентификатор зала
+ *       - in: path
+ *         name: date
+ *         required: true
+ *         schema:
+ *           type: string
+ *           format: date
+ *         description: Дата игры в формате YYYY-MM-DD
+ *     responses:
+ *       200:
+ *         description: Список игроков загружен
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 playersByHall:
+ *                   type: object
+ *                   additionalProperties:
+ *                     type: array
+ *                     items:
+ *                       type: string
+ *       500:
+ *         description: Ошибка чтения из БД
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 error:
+ *                   type: string
+ */
 app.get('/api/players/:hallId/:date', async (req, res) => {
   const { hallId, date } = req.params;
   
@@ -322,7 +575,72 @@ app.get('/api/players/:hallId/:date', async (req, res) => {
   }
 });
 
-// PATCH /api/player/name — изменить ФИО игрока по имени
+/**
+ * @swagger
+ * /api/player/name:
+ *   patch:
+ *     summary: Переименовать игрока
+ *     description: Изменяет ФИО игрока по текущему имени. Возвращает обновлённый список игроков по залам.
+ *     tags: [Players]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [currentName, newName]
+ *             properties:
+ *               currentName:
+ *                 type: string
+ *                 description: Текущее ФИО игрока
+ *                 example: Иванов Иван Иванович
+ *               newName:
+ *                 type: string
+ *                 description: Новое ФИО игрока
+ *                 example: Иванов Иван Сергеевич
+ *     responses:
+ *       200:
+ *         description: Имя изменено
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                 message:
+ *                   type: string
+ *                 currentName:
+ *                   type: string
+ *                 newName:
+ *                   type: string
+ *                 playersByHall:
+ *                   type: object
+ *                   additionalProperties:
+ *                     type: array
+ *                     items:
+ *                       type: string
+ *       400:
+ *         description: Ошибка валидации / игрок с таким именем уже есть
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 error:
+ *                   type: string
+ *       404:
+ *         description: Игрок не найден
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 error:
+ *                   type: string
+ *       500:
+ *         description: Внутренняя ошибка сервера
+ */
 app.patch('/api/player/name', async (req, res) => {
   const { currentName, newName } = req.body;
 
@@ -410,7 +728,62 @@ app.patch('/api/player/name', async (req, res) => {
 });
 
 
-// Удалить игрока из конкретной игры (зал + дата)
+/**
+ * @swagger
+ * /api/players/{hallId}/{date}/{name}:
+ *   delete:
+ *     summary: Удалить игрока из игры
+ *     description: Удаляет запись игрока из конкретной игры (зал + дата). Возвращает обновлённый список игроков этой игры.
+ *     tags: [Players]
+ *     parameters:
+ *       - in: path
+ *         name: hallId
+ *         required: true
+ *         schema:
+ *           type: string
+ *           enum: [hall1, hall2]
+ *         description: Идентификатор зала
+ *       - in: path
+ *         name: date
+ *         required: true
+ *         schema:
+ *           type: string
+ *           format: date
+ *         description: Дата игры в формате YYYY-MM-DD
+ *       - in: path
+ *         name: name
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: ФИО игрока (URL-закодированное)
+ *     responses:
+ *       200:
+ *         description: Игрок удалён
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 message:
+ *                   type: string
+ *                   example: Игрок удалён
+ *                 playerNames:
+ *                   type: array
+ *                   items:
+ *                     type: string
+ *                   description: Обновлённый список игроков этой игры
+ *       404:
+ *         description: Игра или игрок не найдены
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 error:
+ *                   type: string
+ *       500:
+ *         description: Внутренняя ошибка сервера
+ */
 app.delete('/api/players/:hallId/:date/:name', async (req, res) => {
   const { hallId, date, name } = req.params;
 
@@ -467,7 +840,41 @@ app.delete('/api/players/:hallId/:date/:name', async (req, res) => {
 });
 
 
-// GET /api/history
+/**
+ * @swagger
+ * /api/history:
+ *   get:
+ *     summary: Получить историю записей
+ *     description: Возвращает все игры с привязанными игроками, сгруппированные по дате и залу.
+ *     tags: [History]
+ *     responses:
+ *       200:
+ *         description: История загружена
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 historyByDate:
+ *                   type: object
+ *                   additionalProperties:
+ *                     type: object
+ *                     description: Ключ — дата YYYY-MM-DD, значение — объект с залами
+ *                     additionalProperties:
+ *                       type: array
+ *                       items:
+ *                         type: string
+ *                       description: Список ФИО игроков
+ *       500:
+ *         description: Ошибка чтения из БД
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 error:
+ *                   type: string
+ */
 app.get('/api/history', async (req, res) => {
   try {
     // запрос: получить все игры и привязанных к ним игроков
@@ -511,6 +918,14 @@ app.get('/api/history', async (req, res) => {
     });
   }
 });
+
+// Swagger UI — документация API
+const swaggerUi = require('swagger-ui-express');
+const { swaggerSpec } = require('./swagger');
+app.use('/api/docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec, {
+  customSiteTitle: 'Ball76 API',
+  customCssUrl: 'https://unpkg.com/swagger-ui-dist@5/swagger-ui.css'
+}));
 
 // Порт. Слушаем на 0.0.0.0 (все интерфейсы), чтобы:
 // - работал локальный доступ (localhost)

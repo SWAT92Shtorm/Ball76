@@ -20,22 +20,48 @@
 //  3. GitHub Pages — продакшен на Railway.
 //  4. Остальное (localhost, IP, file://) — локальный Docker.
 function detectApiBase() {
-  const saved = localStorage.getItem('ball76_api');
-  if (saved) return saved.replace(/\/+$/, '');
-
   const host = location.hostname;
+
+  // Страница открыта через туннель → API на том же адресе.
+  // Сохраняем, чтобы при переходе на GitHub Pages-копию не потерять.
   if (/\.loca\.lt$/.test(host)) {
-    // Страница открыта через туннель → API на том же адресе.
-    // Сохраняем, чтобы при переходе на GitHub Pages-копию не потерять.
     const base = location.origin;
     try { localStorage.setItem('ball76_api', base); } catch (_) {}
     return base;
   }
+
+  const saved = localStorage.getItem('ball76_api');
+  if (saved) {
+    const s = saved.replace(/\/+$/, '');
+    // Если сохранённый адрес — локальный/туннельный, проверяем доступность.
+    // Мёртвый туннель не должен блокировать работу на GitHub Pages.
+    if (/\.loca\.lt$|localhost|127\.0\.0\.1/.test(s)) {
+      try {
+        const ctrl = new AbortController();
+        const t = setTimeout(() => ctrl.abort(), 3000);
+        fetch(`${s}/api/status`, { signal: ctrl.signal, mode: 'no-cors' })
+          .then(r => { clearTimeout(t); })
+          .catch(() => {
+            clearTimeout(t);
+            try { localStorage.removeItem('ball76_api'); } catch (_) {}
+          });
+      } catch (_) {}
+    }
+    return s;
+  }
+
   if (host === 'swat92shtorm.github.io') return 'https://ball76.up.railway.app';
   return 'http://localhost:8080';
 }
 
-const API_BASE_URL = detectApiBase();
+let API_BASE_URL = detectApiBase();
+
+// Фолбэк-адрес: если основной (туннель/локальный) не отвечает — переключаемся.
+function fallbackApiBase() {
+  return location.hostname === 'swat92shtorm.github.io'
+    ? 'https://ball76.up.railway.app'
+    : 'http://localhost:8080';
+}
 
 // Заглушка до загрузки /api/config (значения совпадают с серверным APP_CONFIG).
 // Если API недоступен — страница остаётся работоспособной с этими данными.
@@ -67,13 +93,22 @@ let CONFIG = {
 };
 
 async function loadConfig() {
-  try {
-    const response = await fetch(`${API_BASE_URL}/api/config`);
-    if (!response.ok) throw new Error('Не удалось загрузить конфиг');
-    CONFIG = await response.json();
-  } catch (err) {
-    console.error('Ошибка загрузки конфига, используем заглушку:', err);
+  // Пробуем основной адрес; если не отвечает — переключаемся на фолбэк.
+  for (const base of [API_BASE_URL, fallbackApiBase()]) {
+    try {
+      const ctrl = new AbortController();
+      const t = setTimeout(() => ctrl.abort(), 5000);
+      const response = await fetch(`${base}/api/config`, { signal: ctrl.signal });
+      clearTimeout(t);
+      if (!response.ok) throw new Error('HTTP ' + response.status);
+      CONFIG = await response.json();
+      API_BASE_URL = base;
+      return;
+    } catch (err) {
+      console.warn(`API ${base} недоступен (${err.message}), пробую следующий…`);
+    }
   }
+  console.error('Все API-адреса недоступны, используем заглушку');
 }
 
 // Удобные доступы к конфигу зала

@@ -225,7 +225,6 @@ async function loadFromAPI({ silent = false, refreshHall = true } = {}) {
   }
 
   const currentHall = document.getElementById('hallSelect').value;
-  const prevPlayers = (playersByHall[currentHall] || []).slice();
 
   try {
     // 1. Игроки текущей игры выбранного зала.
@@ -269,16 +268,6 @@ async function loadFromAPI({ silent = false, refreshHall = true } = {}) {
     playerNames = Array.from(allNames);
 
     setApiStatus(true);
-
-    // UX5: тост о новых записях (только при фоновом обновлении,
-    // не при явном действии пользователя)
-    if (silent) {
-      const current = playersByHall[document.getElementById('hallSelect').value] || [];
-      const added = current.filter(n => !prevPlayers.includes(n));
-      if (added.length > 0) {
-        showToast(`Новые записи: ${added.join(', ')}`, 'info', 5000);
-      }
-    }
   } catch (err) {
     console.error('Ошибка при запросе API:', err);
     // UX2: НЕ сбрасываем данные — держим последний успешный снимок

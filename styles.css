@@ -845,6 +845,13 @@ th {
 
 #teamsModal .modal-content {
   width: 400px;
+  max-height: 80vh;
+  overflow-y: auto;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+#teamsModal .modal-content::-webkit-scrollbar {
+  display: none;
 }
 
 #teamsModal .teams-list {
@@ -852,16 +859,25 @@ th {
 }
 
 #teamsModal .team-card {
-  margin-bottom: 16px;
-  padding: 10px;
-  border: 1px dashed #404040;
-  border-radius: 4px;
+  margin-bottom: 14px;
+  padding: 14px 16px;
+  border: 1px solid rgba(79, 195, 247, 0.2);
+  border-radius: 10px;
+  background: rgba(79, 195, 247, 0.04);
+  transition: border-color 0.2s, background 0.2s;
+}
+
+#teamsModal .team-card:hover {
+  border-color: rgba(79, 195, 247, 0.4);
+  background: rgba(79, 195, 247, 0.07);
 }
 
 #teamsModal .team-title {
-  font-weight: 600;
-  margin-bottom: 6px;
-  color: #a0e0ff;
+  font-weight: 700;
+  margin-bottom: 10px;
+  color: #4fc3f7;
+  font-size: 14px;
+  letter-spacing: 0.3px;
 }
 
 #teamsModal .team-main {
@@ -893,18 +909,27 @@ th {
 
 /* Сводка над командами */
 .teams-summary {
-  margin-bottom: 8px;
+  margin-bottom: 6px;
   font-weight: 500;
+  font-size: 13px;
+  color: #aaa;
+}
+.teams-summary strong {
+  color: #fff;
 }
 
 /* Пункт списка команды */
 .team-player-item {
-  margin: 2px 0;
+  margin: 3px 0;
+  font-size: 14px;
+  color: #d0d0d0;
 }
 
 /* Отступ перед шестым игроком (либеро) */
 .team-player-gap {
-  margin-top: 8px;
+  margin-top: 10px;
+  padding-top: 8px;
+  border-top: 1px dashed rgba(255, 255, 255, 0.1);
 }
 
 /* Нумерованный список игроков команды */
@@ -912,6 +937,10 @@ th {
   margin: 0;
   padding-left: 20px;
   list-style-type: decimal;
+}
+.team-main-ol li::marker {
+  color: #4fc3f7;
+  font-weight: 600;
 }
 
 /* Общий footer модалок: кнопки в ряд, по правому краю */

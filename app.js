@@ -160,7 +160,7 @@ function setApiStatus(online) {
     if (!banner) {
       banner = document.createElement('div');
       banner.id = 'apiErrorBanner';
-      banner.style.cssText = 'margin-bottom: 12px; padding: 10px; border-radius: 5px; background: #501010; border: 1px solid #a03030; color: #ffe0e0; font-size: 13px;';
+      banner.className = 'api-error-banner';
       document.querySelector('main').prepend(banner);
     }
     banner.textContent = '⚠️ Не удалось подключиться к серверу. Показаны последние известные данные.';
@@ -198,7 +198,7 @@ function updateDbWarning() {
     if (!warning) {
       warning = document.createElement('div');
       warning.id = 'dbWarning';
-      warning.style.cssText = 'margin-bottom: 12px; padding: 10px; border-radius: 5px; background: #4a3a00; border: 1px solid #8a6d00; color: #fff3c0; font-size: 13px;';
+      warning.className = 'db-warning-banner';
       const main = document.querySelector('main');
       main.prepend(warning);
     }
@@ -252,6 +252,9 @@ async function loadFromAPI({ silent = false, refreshHall = true } = {}) {
     const historyData = await historyResponse.json();
     historyByDate = historyData.historyByDate || {};
 
+    // Пересчёт счётчика визитов для текущего зала (O(M) вместо O(N×M) на рендер)
+    rebuildVisitCounts(currentHall);
+
     // 3. Собрать playerNames из базы (текущие игроки + история)
     const allNames = new Set();
     Object.values(playersByHall).forEach(hallPlayers => {
@@ -287,7 +290,8 @@ async function addPlayer() {
   const name = input.value.trim();
   const words = name.split(/\s+/).filter(w => w.length > 0);
 
-  if (!name || words.length < 3) {
+  // Правило совпадает с серверным (validateFullName): 3–5 слов
+  if (!name || words.length < 3 || words.length > 5) {
     validatePlayerName();
     return;
   }
@@ -337,7 +341,7 @@ async function addPlayer() {
     const anim = document.getElementById('successAnimation');
     anim.style.display = 'block';
     anim.innerHTML = `
-      <div style="display: flex; align-items: center; justify-content: center; gap: 10px;">
+      <div class="success-anim-row">
         <div class="smile">🏀</div>
         <div class="smile">⛹🏻‍♂️</div>
         <div class="smile">👍</div>
@@ -443,8 +447,9 @@ async function submitEdit(index) {
   }
 
   const parts = newName.split(/\s+/).filter(w => w.length > 0);
-  if (parts.length < 3) {
-    showToast('ФИО должно состоять из трёх слов: Фамилия Имя Отчество', 'error');
+  // Правило совпадает с серверным (validateFullName): 3–5 слов
+  if (parts.length < 3 || parts.length > 5) {
+    showToast('ФИО должно состоять из 3–5 слов: Фамилия Имя Отчество', 'error');
     return;
   }
 
@@ -714,20 +719,31 @@ function showCurrentDateTime() {
   document.getElementById('currentDateTime').textContent = 'Сегодня: ' + dtText;
 }
 
-// Подсчёт записей игрока в зале (ТОЛЬКО ПРОШЕДШИЕ)
-function countPlayerVisits(historyByDate, playerName, hall) {
+// Предвычисленная мапа name → количество прошедших игр в текущем зале.
+// Пересчитывается один раз при каждой загрузке данных (loadFromAPI),
+// а не O(N×M) для каждого игрока при рендере списка.
+let visitCounts = {};
+
+// Строит visitCounts из истории: учитывает ТОЛЬКО ПРОШЕДШИЕ игры
+// (дата+21:00 МСК < сейчас). Вызывается после обновления historyByDate.
+function rebuildVisitCounts(hall) {
+  const counts = {};
   const now = getMSKNow();
-  let count = 0;
   for (const dateStr in historyByDate) {
     const players = historyByDate[dateStr][hall];
     if (!players) continue;
-    // Дата игры — московская, игра считается прошедшей, если её дата+21:00 < сейчас
     const sessionDate = new Date(dateStr + 'T21:00:00');
-    if (sessionDate < now && players.some(p => p === playerName)) {
-      count++;
-    }
+    if (sessionDate >= now) continue; // только прошедшие
+    players.forEach(name => {
+      counts[name] = (counts[name] || 0) + 1;
+    });
   }
-  return count;
+  visitCounts = counts;
+}
+
+// Быстрый доступ к счётчику визитов игрока (O(1))
+function getPlayerVisits(playerName) {
+  return visitCounts[playerName] || 0;
 }
 
 // Показать список участников с inline-редактированием и подсчётом суммы
@@ -747,12 +763,12 @@ function showList() {
   const resp = hallResp(hall);
 
   result.innerHTML = `
-    <div style="display: flex; align-items: center; justify-content: space-between; font-size: 20px; font-weight: 600; color: #ffffff; margin-bottom: 14px; padding-bottom: 6px; border-bottom: 1px solid #404040;">
-      <span>Все записавшиеся в <span style="color: #a0e0ff;">${escapeHtml(hallText)}</span></span>
-      <span style="cursor: pointer; color: red;" title="Сформировать команды" onclick="openTeamsModal()">🎲</span>
+    <div class="list-header">
+      <span>Все записавшиеся в <span class="list-header-hall">${escapeHtml(hallText)}</span></span>
+      <span class="teams-icon" title="Сформировать команды" onclick="openTeamsModal()">🎲</span>
     </div>
     ${resp ? `
-      <div style="font-size: 13px; margin-bottom: 14px; color: #b0ffa0;">
+      <div class="responsible-line">
         Ответственный: ${escapeHtml(resp)}
       </div>
     ` : ''}
@@ -763,21 +779,21 @@ function showList() {
   } else {
     const list = players.map((name, i) => {
       const idx = i + 1;
-      const isLimited = idx <= maxPlayers();
-      const nameStyle = isLimited ? '' : 'color: red;';
+      // Игрок сверх лимита — красным (класс, а не inline-стиль)
+      const overLimitCls = idx <= maxPlayers() ? '' : ' player-over-limit';
       return `
-        <div class="playerLine" id="playerLine${i}" style="${nameStyle}">
+        <div class="playerLine" id="playerLine${i}">
           <div class="playerName">
-            <span style="${nameStyle}">${idx}. ${escapeHtml(name)}
-              <span style="color: #a0e0ff; font-size: 12px; float: right; margin-left: auto;">${countPlayerVisits(historyByDate, name, hall)} <span style="color: #90ff90;"> +1</span></span>
+            <span class="${overLimitCls.trim()}">${idx}. ${escapeHtml(name)}
+              <span class="visit-count">${getPlayerVisits(name)} <span class="visit-plus">+1</span></span>
             </span>
-            <input type="text" id="nameEdit${i}" value="${escapeHtml(name)}" style="display: none; width: 250px; padding: 2px;" />
+            <input type="text" id="nameEdit${i}" class="player-name-edit" value="${escapeHtml(name)}" />
           </div>
           <div class="icons">
-            <span onclick="startEdit(${i})" style="cursor: pointer; margin-right: 6px;">✎</span>
-            <span onclick="submitEdit(${i})" style="display: none; cursor: pointer; margin-right: 6px; color: green;">✔</span>
-            <span onclick="cancelEdit(${i})" style="display: none; cursor: pointer; margin-right: 6px; color: gray;">✖</span>
-            <span onclick="openDeleteModal(${i})" style="cursor: pointer; color: red;" title="Удалить">🗑️</span>
+            <span class="icon-btn icon-edit" onclick="startEdit(${i})">✎</span>
+            <span class="icon-btn icon-save" onclick="submitEdit(${i})">✔</span>
+            <span class="icon-btn icon-cancel" onclick="cancelEdit(${i})">✖</span>
+            <span class="icon-btn icon-delete" onclick="openDeleteModal(${i})" title="Удалить">🗑️</span>
           </div>
         </div>
       `;
@@ -785,16 +801,16 @@ function showList() {
     result.innerHTML += list;
   }
 
-  // Индикатор заполненности
+  // Индикатор заполненности: ширина — динамическая (inline), цвет — классом
   const perc = Math.min(100, (players.length / maxPlayers()) * 100);
-  const barColor = players.length < 10 ? '#c62828' : '#2e7d32';
+  const barCls = players.length < 10 ? 'fill-bar-low' : 'fill-bar-ok';
 
   result.innerHTML += `
-    <div style="margin-top: 12px; font-size: 13px; color: #b0b0b0;">
+    <div class="fill-info">
       Заполненность:
-      <span style="color: #ffffff;">${players.length} / ${maxPlayers()} человек</span>
-      <div style="margin-top: 4px; height: 8px; background: #444; border-radius: 4px; overflow: hidden;">
-        <div style="height: 100%; width: ${perc}%; background: ${barColor}; border-radius: 4px; transition: width 0.3s ease;"></div>
+      <span class="fill-count">${players.length} / ${maxPlayers()} человек</span>
+      <div class="fill-bar-track">
+        <div class="fill-bar-fill ${barCls}" style="width: ${perc}%;"></div>
       </div>
     </div>
   `;
@@ -817,27 +833,11 @@ function renderPricingRow(hall, playersCount) {
   const durationText = durationKey === 'full' ? '2 часа' : durationKey === 'short' ? '1 час 30 мин' : '';
   const perPersonFixed = CONFIG.halls[hall]?.perPerson; // undefined → режим деления
   const phone = hallPhone(hall);
-  const phoneBlock = `
-      <div style="margin-top: 10px; padding: 8px 10px; background: #224422; border-radius: 4px; border: 1px solid #336633; font-size: 13px; color: #e0ffe0;">
-        Для оплаты переведите деньги на телефон:
-        <br />
-        <span style="color: #ffffff; font-weight: bold; margin: 0 4px; cursor: pointer; text-decoration: underline dotted;" id="displayPhone" title="Нажмите, чтобы скопировать">${escapeHtml(phone)}</span>
-        <button
-          onclick="copyPhoneToClipboard('${escapeHtml(phone)}')"
-          style="margin-left: 6px; padding: 0; width: 20px; height: 20px; border: none; background: transparent; color: #a0e0ff; font-size: 15px; cursor: pointer;"
-          title="Копировать телефон">📋</button>
-      </div>
-  `;
 
   // Единый стиль для всех залов: предупреждение «меньше минимума»
   // показывается всегда, когда есть хотя бы один участник и их < 10.
   const isUnder10 = playersCount > 0 && playersCount < 10;
-  const mainBg = isUnder10 ? '#501010' : '#1a4b1a';
-  const borderCol = isUnder10 ? '#a03030' : '#006633';
-  const phoneBg = isUnder10 ? '#501010' : '#224422';
-
-  priceElem.style.background = mainBg;
-  priceElem.style.borderColor = borderCol;
+  priceElem.classList.toggle('pricing-warn', isUnder10);
 
   // Единая формулировка для обоих залов: «Каждому нужно заплатить: N ₽».
   // Разница только в том, как считается N:
@@ -858,27 +858,24 @@ function renderPricingRow(hall, playersCount) {
   }
 
   const pricingLines = `
-    <div style="font-size: 13px; margin-bottom: 4px;">Стоимость аренды зала: ${price} ₽${perPersonFixed ? ' (фиксированно)' : ''}</div>
-    <div style="font-size: 13px; margin-bottom: 4px;">Время аренды: ${durationText}</div>
-    <div style="font-size: 13px;">${payNote}</div>
+    <div class="pricing-line">Стоимость аренды зала: ${price} ₽${perPersonFixed ? ' (фиксированно)' : ''}</div>
+    <div class="pricing-line">Время аренды: ${durationText}</div>
+    <div class="pricing-line">${payNote}</div>
     ${perPersonAmount !== null
-      ? `<div style="font-size: 13px; margin-top: 4px;"><strong>Каждому нужно заплатить: ${perPersonAmount} ₽</strong></div>`
+      ? `<div class="pricing-amount"><strong>Каждому нужно заплатить: ${perPersonAmount} ₽</strong></div>`
       : ''}
   `;
 
   priceElem.innerHTML = `
     ${pricingLines}
-    <div style="font-size: 13px; margin-top: 6px;${isUnder10 ? ' color: #ffb0b0; font-weight: 600;' : ' color: #90d090;'}">
+    <div class="pricing-registered${isUnder10 ? ' under-min' : ''}">
       Записалось: ${playersCount} чел.${isUnder10 ? ' ⚠️ Меньше минимума (10) — игра может не состояться!' : ''}
     </div>
-    <div style="margin-top: 10px; padding: 8px 10px; background: ${phoneBg}; border-radius: 4px; border: 1px solid #336633; font-size: 13px; color: #e0ffe0;">
+    <div class="phone-block${isUnder10 ? ' phone-block-warn' : ''}">
       Для оплаты переведите деньги на телефон:
       <br />
-      <span style="color: #ffffff; font-weight: bold; margin: 0 4px; cursor: pointer; text-decoration: underline dotted;" id="displayPhone" title="Нажмите, чтобы скопировать">${escapeHtml(phone)}</span>
-      <button
-        onclick="copyPhoneToClipboard('${escapeHtml(phone)}')"
-        style="margin-left: 6px; padding: 0; width: 20px; height: 20px; border: none; background: transparent; color: #a0e0ff; font-size: 15px; cursor: pointer;"
-        title="Копировать телефон">📋</button>
+      <span class="phone-number" id="displayPhone" title="Нажмите, чтобы скопировать">${escapeHtml(phone)}</span>
+      <button class="phone-copy-btn" onclick="copyPhoneToClipboard('${escapeHtml(phone)}')" title="Копировать телефон">📋</button>
     </div>
   `;
 }
@@ -1048,12 +1045,11 @@ function validatePlayerName() {
   const name = input.value.trim();
   const words = name.split(/\s+/).filter(w => w.length > 0);
 
-  const invalid = name.length > 0 && words.length < 3;
+  // Правило совпадает с серверным (validateFullName): 3–5 слов
+  const invalid = name.length > 0 && (words.length < 3 || words.length > 5);
 
   if (invalid) {
-    input.style.borderColor = '#ffb347';
-    input.style.backgroundColor = '#3a2f1a';
-    input.style.color = '#ffe8c0';
+    input.classList.add('input-invalid');
     error.style.display = 'block';
   } else {
     resetInputStyles(input, error);
@@ -1062,17 +1058,16 @@ function validatePlayerName() {
   // Кнопка активна, только когда ФИО введено полностью и БД доступна
   if (btn) {
     const dbBlocked = !dbOnline;
-    btn.disabled = dbBlocked || btn.dataset.loading === '1' || !name || words.length < 3;
+    const nameInvalid = !name || words.length < 3 || words.length > 5;
+    btn.disabled = dbBlocked || btn.dataset.loading === '1' || nameInvalid;
     btn.title = dbBlocked
       ? 'Нет соединения с базой данных'
-      : (!name || words.length < 3) ? 'Введите Фамилию Имя Отчество' : '';
+      : nameInvalid ? 'Введите ФИО: 3–5 слов (Фамилия Имя Отчество)' : '';
   }
 }
 
 function resetInputStyles(input, error) {
-  input.style.borderColor = '#404040';
-  input.style.backgroundColor = '#2d2d2d';
-  input.style.color = '#f0f0f0';
+  input.classList.remove('input-invalid');
   error.style.display = 'none';
 }
 
@@ -1082,18 +1077,13 @@ function startEdit(index) {
   const span = line.querySelector('.playerName span');
   const input = document.getElementById(`nameEdit${index}`);
 
-  const startIcon = line.querySelector(`span[onclick="startEdit(${index})"]`);
-  const submitIcon = line.querySelector(`span[onclick="submitEdit(${index})"]`);
-  const cancelIcon = line.querySelector(`span[onclick="cancelEdit(${index})"]`);
-
   span.style.display = 'none';
   input.style.display = 'inline-block';
   input.focus();
   input.select();
 
-  startIcon.style.display = 'none';
-  submitIcon.style.display = 'inline-block';
-  cancelIcon.style.display = 'inline-block';
+  // Иконки ✎/✔/✖ переключаются CSS-классом .editing на строке
+  line.classList.add('editing');
 
   editingIndex = index; // UX1: блокируем фоновую перерисовку
 
@@ -1133,21 +1123,21 @@ function openTeamsModal() {
   }
 
   let inner = `
-    <p style="margin-bottom: 8px; font-weight: 500;">Всего игроков: <strong>${players.length}</strong></p>
-    <p style="margin-bottom: 12px; font-weight: 500;">Сформировано команд: <strong>${numTeams}</strong></p>
+    <p class="teams-summary">Всего игроков: <strong>${players.length}</strong></p>
+    <p class="teams-summary">Сформировано команд: <strong>${numTeams}</strong></p>
   `;
 
   teams.forEach((team, idx) => {
     const items = team.map((name, i) => {
-      const extraStyle = i === 5 ? 'margin-top: 8px;' : '';
-      return `<li class="team-player-item" style="margin: 2px 0; ${extraStyle}">${escapeHtml(name)}</li>`;
+      const cls = i === 5 ? 'team-player-item team-player-gap' : 'team-player-item';
+      return `<li class="${cls}">${escapeHtml(name)}</li>`;
     }).join('');
 
     inner += `
       <div class="team-card">
         <div class="team-title">Команда ${idx + 1} (${team.length} человек)</div>
         <div class="team-main">
-          <ol class="team-main-ol" style="margin: 0; padding-left: 20px; list-style-type: decimal;">
+          <ol class="team-main-ol">
             ${items}
           </ol>
         </div>

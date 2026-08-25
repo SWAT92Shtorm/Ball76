@@ -48,20 +48,18 @@
   <div class="form-row autocomplete-wrap">
     <label for="playerName">Введи ФИО:</label>
     <input type="text" id="playerName" placeholder="Иванов Иван Иванович" maxlength="50" pattern="[A-Za-zА-Яа-яЁё\s\-]{3,}" oninput="this.value = this.value.replace(/[^A-Za-zА-Яа-яЁё\s\-]/g, '');"/>
-    <div id="autocompleteBox" class="autocomplete-box" style="display: none;"></div>
+    <div id="autocompleteBox" class="autocomplete-box"></div>
   </div>
-  <span id="playerNameError" style="color: red; font-size: 12px; display: none; margin-left: 82px; margin-top: 4px;">
-    ФИО должно состоять из трёх слов: Фамилия Имя Отчество
+  <span id="playerNameError" class="name-error">
+    ФИО должно состоять из 3–5 слов: Фамилия Имя Отчество
   </span>
 
-  <button
-    onclick="addPlayer()"
-    style="margin-bottom: 15px;">
+  <button class="signup-btn" onclick="addPlayer()">
     Записаться
   </button>
 
   <!-- мини-анимация после записи -->
-  <div id="successAnimation" style="display: none; text-align: center; margin-top: 15px;"></div>
+  <div id="successAnimation"></div>
 
   <!-- Контейнер для тостов -->
   <div id="toastContainer"></div>
@@ -82,23 +80,23 @@
   </div>
 
   <!-- График игр (скрытый по умолчанию) -->
-  <div id="scheduleContainer" class="schedule-block" style="display: none;">
+  <div id="scheduleContainer" class="schedule-block">
     <h2 class="schedule-title">📅 График игр — <span id="scheduleHallName"></span></h2>
     <div id="scheduleContent"></div>
   </div>
 
   <!-- Блок таблицы истории записей по датам (прямо после списка участников) -->
-  <div id="historyTableContainer" style="margin-top: 12px; display: none;"></div>
+  <div id="historyTableContainer"></div>
 
   <!-- Модалка подтверждения удаления (UX3) -->
-  <div id="deleteModal" class="modal-overlay" style="display: none;">
-    <div class="modal-content" style="width: 360px;">
+  <div id="deleteModal" class="modal-overlay">
+    <div class="modal-content delete-modal-content">
       <div class="modal-header">
         <strong>Удалить участника?</strong>
         <span class="modal-close-btn" onclick="closeDeleteModal()">×</span>
       </div>
-      <div style="margin: 14px 0; font-size: 14px; line-height: 1.5;">
-        Игрок <strong id="deleteModalName" style="color: #ff8a80;"></strong> будет удалён из списка записей.
+      <div class="delete-modal-text">
+        Игрок <strong id="deleteModalName" class="delete-modal-name"></strong> будет удалён из списка записей.
       </div>
       <div class="modal-footer">
         <button class="modal-btn modal-btn-cancel" onclick="closeDeleteModal()">Отмена</button>

@@ -141,6 +141,7 @@ th {
 
 /* Дропдаун подсказок: позиционируется под полем ФИО (label ~163px + gap 12px) */
 .autocomplete-box {
+  display: none; /* показывается JS, когда есть совпадения */
   position: absolute;
   top: calc(100% + 4px);
   left: 175px;
@@ -176,6 +177,7 @@ th {
 /* ==== График игр: сетка недели + карточки зала ==== */
 
 .schedule-block {
+  display: none; /* скрыт, пока JS не построит содержимое */
   margin-top: 20px;
 }
 
@@ -423,12 +425,258 @@ th {
   margin-top: 15px;
   padding: 8px;
   background: #1a4b1a;
+  border: 1px solid #006633;
   border-radius: 4px;
   font-size: 14px;
   color: #e0ffe0;
 }
 
+.pricing-line {
+  font-size: 13px;
+  margin-bottom: 4px;
+}
+
+/* Режим «меньше минимума»: красная подсветка блока стоимости */
+#pricingRow.pricing-warn {
+  background: #501010;
+  border-color: #a03030;
+}
+
+.pricing-amount {
+  font-size: 13px;
+  margin-top: 4px;
+}
+
+/* Баннер «сервер недоступен» */
+.api-error-banner {
+  margin-bottom: 12px;
+  padding: 10px;
+  border-radius: 5px;
+  background: #501010;
+  border: 1px solid #a03030;
+  color: #ffe0e0;
+  font-size: 13px;
+}
+
+/* Баннер «нет соединения с БД» */
+.db-warning-banner {
+  margin-bottom: 12px;
+  padding: 10px;
+  border-radius: 5px;
+  background: #4a3a00;
+  border: 1px solid #8a6d00;
+  color: #fff3c0;
+  font-size: 13px;
+}
+
+/* Ряд эмодзи в анимации успеха */
+.success-anim-row {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+}
+
+.pricing-registered {
+  font-size: 13px;
+  margin-top: 6px;
+  color: #90d090;
+}
+
+.pricing-registered.under-min {
+  color: #ffb0b0;
+  font-weight: 600;
+}
+
+/* Блок телефона для оплаты */
+.phone-block {
+  margin-top: 10px;
+  padding: 8px 10px;
+  background: #224422;
+  border-radius: 4px;
+  border: 1px solid #336633;
+  font-size: 13px;
+  color: #e0ffe0;
+}
+
+.phone-block-warn {
+  background: #501010;
+  border-color: #a03030;
+}
+
+.phone-number {
+  color: #ffffff;
+  font-weight: bold;
+  margin: 0 4px;
+  cursor: pointer;
+  text-decoration: underline dotted;
+}
+
+.phone-copy-btn {
+  margin-left: 6px;
+  padding: 0;
+  width: 20px;
+  height: 20px;
+  border: none;
+  background: transparent;
+  color: #a0e0ff;
+  font-size: 15px;
+  cursor: pointer;
+}
+
+/* Счётчик визитов игрока (справа в строке списка) */
+.visit-count {
+  color: #a0e0ff;
+  font-size: 12px;
+  float: right;
+  margin-left: auto;
+}
+
+.visit-plus {
+  color: #90ff90;
+}
+
 /* ==== Список участников ==== */
+
+.list-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 20px;
+  font-weight: 600;
+  color: #ffffff;
+  margin-bottom: 14px;
+  padding-bottom: 6px;
+  border-bottom: 1px solid #404040;
+}
+
+.list-header-hall {
+  color: #a0e0ff;
+}
+
+.teams-icon {
+  cursor: pointer;
+  color: red;
+}
+
+.responsible-line {
+  font-size: 13px;
+  margin-bottom: 14px;
+  color: #b0ffa0;
+}
+
+.player-name-edit {
+  display: none;
+  width: 250px;
+  padding: 2px;
+}
+
+.icon-btn {
+  cursor: pointer;
+  margin-right: 6px;
+}
+
+.icon-save {
+  display: none;
+  color: green;
+}
+
+.icon-cancel {
+  display: none;
+  color: gray;
+}
+
+.icon-delete {
+  color: red;
+}
+
+.fill-info {
+  margin-top: 12px;
+  font-size: 13px;
+  color: #b0b0b0;
+}
+
+.fill-count {
+  color: #ffffff;
+}
+
+.fill-bar-track {
+  margin-top: 4px;
+  height: 8px;
+  background: #444;
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.fill-bar-fill {
+  height: 100%;
+  border-radius: 4px;
+  transition: width 0.3s ease;
+}
+
+/* Меньше минимума (10) — красная полоса */
+.fill-bar-low {
+  background: #c62828;
+}
+
+/* Нормальная заполненность — зелёная полоса */
+.fill-bar-ok {
+  background: #2e7d32;
+}
+
+/* Игрок сверх лимита — красным */
+.player-over-limit {
+  color: red;
+}
+
+/* Поле ФИО в невалидном состоянии (меньше 3 или больше 5 слов) */
+.input-invalid {
+  border-color: #ffb347 !important;
+  background-color: #3a2f1a !important;
+  color: #ffe8c0 !important;
+}
+
+/* Ошибка валидации ФИО (под полем ввода) */
+.name-error {
+  color: red;
+  font-size: 12px;
+  display: none;
+  margin-left: 82px;
+  margin-top: 4px;
+}
+
+/* Кнопка «Записаться» */
+.signup-btn {
+  margin-bottom: 15px;
+}
+
+/* Мини-анимация после записи (скрыта, пока нет контента) */
+#successAnimation {
+  display: none;
+  text-align: center;
+  margin-top: 15px;
+}
+
+/* История: скрыта, пока нет данных */
+#historyTableContainer {
+  margin-top: 12px;
+  display: none;
+}
+
+/* Модалка удаления */
+.delete-modal-content {
+  width: 360px;
+}
+
+.delete-modal-text {
+  margin: 14px 0;
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+.delete-modal-name {
+  color: #ff8a80;
+}
 
 .playerLine {
   display: flex;
@@ -448,6 +696,11 @@ th {
 .playerName span {
   margin-right: 10px;
 }
+
+/* Режим редактирования строки игрока */
+.playerLine.editing .icon-edit { display: none; }
+.playerLine.editing .icon-save,
+.playerLine.editing .icon-cancel { display: inline-block; }
 
 .icons {
   white-space: nowrap;
@@ -484,6 +737,7 @@ th {
 /* ==== Модальные окна (общие стили) ==== */
 
 .modal-overlay {
+  display: none; /* показывается JS через style.display = 'flex' */
   position: fixed;
   top: 0;
   left: 0;
@@ -621,6 +875,29 @@ th {
   margin-left: 12px;
   margin-top: 2px;
   color: #a0ffa0;
+}
+
+/* Сводка над командами */
+.teams-summary {
+  margin-bottom: 8px;
+  font-weight: 500;
+}
+
+/* Пункт списка команды */
+.team-player-item {
+  margin: 2px 0;
+}
+
+/* Отступ перед шестым игроком (либеро) */
+.team-player-gap {
+  margin-top: 8px;
+}
+
+/* Нумерованный список игроков команды */
+.team-main-ol {
+  margin: 0;
+  padding-left: 20px;
+  list-style-type: decimal;
 }
 
 /* Общий footer модалок: кнопки в ряд, по правому краю */

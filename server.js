@@ -201,7 +201,10 @@ const APP_CONFIG = {
       name: 'АТЛАНТ',
       phone: '+7 (910) 979-22-99',
       responsible: 'Ярослав Волков',
-      prices: { full: 0, short: 0 },
+      // Аренда всегда фиксированная 6000 ₽; в отличие от ЛОКОМОТИВ
+      // сумма не делится на участников — каждый платит 300 ₽.
+      prices: { full: 6000, short: 6000 },
+      perPerson: 300,
       schedule: [
         { day: 'Friday', from: 21, to: 23 }
       ]

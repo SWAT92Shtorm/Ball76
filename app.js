@@ -584,7 +584,8 @@ async function showNearestGame() {
   }
 }
 
-// График игр выбранного зала
+// График игр выбранного зала: сетка недели (Пн–Вс) с подсветкой
+// ближайшей игры + карточки информации о зале.
 function showSchedule() {
   const hall = document.getElementById('hallSelect').value;
   const container = document.getElementById('scheduleContainer');
@@ -596,27 +597,77 @@ function showSchedule() {
   if (!CONFIG.halls[hall]) return;
 
   const h = CONFIG.halls[hall];
-  const commonInfo = `
-    <div style="margin-bottom: 15px; padding: 12px; background: #1a1a1a; border-radius: 6px; border: 1px solid #505050; font-size: 14px; line-height: 1.3;">
-      <div style="font-weight: 600; color: #a0e0ff; margin-bottom: 6px;">📋 Общая информация по залу</div>
-      <div style="color: #e0e0e0; font-weight: 500;">
-        Стоимость: <span style="color: #a0e0ff; font-weight: 600;">${hallPrice(hall, 'full')} ₽</span>
-        | Мин: <span style="color: #a0e0ff; font-weight: 600;">10</span> чел.
-        | Макс: <span style="color: #a0e0ff; font-weight: 600;">${maxPlayers()}</span> чел.
+  document.getElementById('scheduleHallName').textContent = hallName(hall);
+  const now = getMSKNow();
+  const todayCode = now.getDay() || 7; // Пн=1 … Вс=7
+  const nearest = getNearestGame(hall);
+
+  // Сетка недели: для каждого дня собираем слоты расписания
+  const dayCodes = [1, 2, 3, 4, 5, 6, 7];
+  const dayLetters = ['П', 'В', 'С', 'Ч', 'П', 'С', 'В'];
+  const gridCells = dayCodes.map((code, i) => {
+    const slots = h.schedule.filter(s => getDayCode(s.day) === code);
+    const isToday = code === todayCode;
+    const isNearest = nearest && getDayCode(nearest.day) === code;
+    const classes = ['sched-cell'];
+    if (isToday) classes.push('today');
+    if (isNearest) classes.push('nearest');
+
+    const slotHtml = slots.length
+      ? slots.map(s => `<div class="sched-slot">${s.from}:00–${s.to}:00</div>`).join('')
+      : '<div class="sched-off">—</div>';
+
+    return `
+      <div class="${classes.join(' ')}">
+        <div class="sched-day-letter">${dayLetters[i]}</div>
+        <div class="sched-day-name">${dayNamesRU[slots[0]?.day] || ''}</div>
+        ${slotHtml}
+        ${isNearest ? '<div class="sched-badge">ближайшая</div>' : ''}
+      </div>
+    `;
+  }).join('');
+
+  const fullPrice = hallPrice(hall, 'full');
+  const shortPrice = hallPrice(hall, 'short');
+  const perPersonFixed = h.perPerson;
+  let priceText;
+  if (perPersonFixed) {
+    // Фиксированная цена с человека (АТЛАНТ): аренда не делится
+    priceText = `${perPersonFixed} ₽ с человека (аренда ${fullPrice} ₽)`;
+  } else if (fullPrice > 0) {
+    priceText = `${fullPrice} ₽ / 2 ч${shortPrice > 0 && shortPrice !== fullPrice ? `, ${shortPrice} ₽ / 1,5 ч` : ''} — делится на участников`;
+  } else {
+    priceText = 'бесплатно';
+  }
+
+  content.innerHTML = `
+    <div class="sched-grid">${gridCells}</div>
+    <div class="sched-info">
+      <div class="sched-info-card">
+        <div class="sched-info-icon">💰</div>
+        <div>
+          <div class="sched-info-label">Стоимость аренды</div>
+          <div class="sched-info-value">${priceText}</div>
+        </div>
+      </div>
+      <div class="sched-info-card">
+        <div class="sched-info-icon">👥</div>
+        <div>
+          <div class="sched-info-label">Участников в игре</div>
+          <div class="sched-info-value">от 10 до ${maxPlayers()} чел.</div>
+        </div>
+      </div>
+      <div class="sched-info-card">
+        <div class="sched-info-icon">📞</div>
+        <div>
+          <div class="sched-info-label">Ответственный</div>
+          <div class="sched-info-value">${escapeHtml(hallResp(hall) || '—')}</div>
+        </div>
       </div>
     </div>
   `;
 
-  const slots = h.schedule.map(item => `
-    <div style="margin-bottom: 10px; padding: 12px; border-radius: 4px; background: #222; border: 1px solid #404040;">
-      <div style="font-weight: bold; color: #a0e0ff; font-size: 15px;">
-        📅 ${dayNamesRU[item.day]}, ${item.from}:00–${item.to}:00
-      </div>
-    </div>
-  `).join('');
-
   container.style.display = 'block';
-  content.innerHTML = commonInfo + slots;
 }
 
 // ==================== 6. UI (список, история, цены) ====================
@@ -721,13 +772,45 @@ function showList() {
   showHistoryTable();
 }
 
-// Строка «стоимость к оплате»
+// Строка «стоимость к оплате».
+// Два режима (настраивается полем perPerson в конфиге зала):
+//  - perPerson задан (АТЛАНТ): фиксированная сумма с человека, аренда
+//    всегда 6000 ₽ и НЕ делится на количество участников;
+//  - perPerson не задан (ЛОКОМОТИВ): стоимость аренды делится на
+//    всех записавшихся (в пределах лимита maxPlayers).
 function renderPricingRow(hall, playersCount) {
   const priceElem = document.getElementById('pricingRow');
   const durationSelect = document.getElementById('durationSelect');
   const durationKey = durationSelect ? durationSelect.value : 'full';
   const price = hallPrice(hall, durationKey);
   const durationText = durationKey === 'full' ? '2 часа' : durationKey === 'short' ? '1 час 30 мин' : '';
+  const perPersonFixed = CONFIG.halls[hall]?.perPerson; // undefined → режим деления
+  const phone = hallPhone(hall);
+  const phoneBlock = `
+      <div style="margin-top: 10px; padding: 8px 10px; background: #224422; border-radius: 4px; border: 1px solid #336633; font-size: 13px; color: #e0ffe0;">
+        Для оплаты переведите деньги на телефон:
+        <br />
+        <span style="color: #ffffff; font-weight: bold; margin: 0 4px; cursor: pointer; text-decoration: underline dotted;" id="displayPhone" title="Нажмите, чтобы скопировать">${escapeHtml(phone)}</span>
+        <button
+          onclick="copyPhoneToClipboard('${escapeHtml(phone)}')"
+          style="margin-left: 6px; padding: 0; width: 20px; height: 20px; border: none; background: transparent; color: #a0e0ff; font-size: 15px; cursor: pointer;"
+          title="Копировать телефон">📋</button>
+      </div>
+  `;
+
+  if (perPersonFixed) {
+    // Фиксированная цена с человека — от количества игроков не зависит
+    priceElem.style.background = '#1a4b1a';
+    priceElem.style.borderColor = '#006633';
+    priceElem.innerHTML = `
+      <div style="font-size: 13px; margin-bottom: 4px;">Стоимость аренды зала: ${price} ₽ (фиксированно)</div>
+      <div style="font-size: 13px; margin-bottom: 4px;">Время аренды: ${durationText}</div>
+      <div style="font-size: 13px;">Записалось: ${playersCount} чел. Сумма не делится на участников.</div>
+      <div style="font-size: 13px; margin-top: 4px;"><strong>Каждый платит: ${perPersonFixed} ₽</strong></div>
+      ${phoneBlock}
+    `;
+    return;
+  }
 
   if (price > 500 && playersCount > 0) {
     const activeCount = Math.min(maxPlayers(), playersCount);
@@ -736,7 +819,6 @@ function renderPricingRow(hall, playersCount) {
     const mainBg = isUnder10 ? '#501010' : '#1a4b1a';
     const borderCol = isUnder10 ? '#a03030' : '#006633';
     const phoneBg = isUnder10 ? '#501010' : '#224422';
-    const phone = hallPhone(hall);
 
     priceElem.style.background = mainBg;
     priceElem.style.borderColor = borderCol;

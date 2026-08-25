@@ -803,7 +803,7 @@ async function showNearestGame() {
 // График игр выбранного зала: сетка недели (Пн–Вс) с подсветкой
 // ближайшей игры + карточки информации о зале.
 // В днях без игры показывается статистика записей (+N / -N).
-let signupStats = null; // кэш: { total, byDay: {1: N, 3: M, ...} }
+let signupStats = null; // кэш: { total, byDate: { '2025-08-25': 3, ... } }
 
 async function loadSignupStats(hall) {
   try {
@@ -811,6 +811,19 @@ async function loadSignupStats(hall) {
     if (!resp.ok) return;
     signupStats = await resp.json();
   } catch (_) { /* не критично */ }
+}
+
+// Возвращает дату 'YYYY-MM-DD' для дня недели (1=Пн...7=Вс) в текущей неделе
+function dateForDayCode(dayCode) {
+  const now = getMSKNow();
+  const todayCode = now.getDay() || 7;
+  const diff = dayCode - todayCode;
+  const d = new Date(now);
+  d.setDate(now.getDate() + diff);
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
 }
 
 function showSchedule() {
@@ -844,11 +857,14 @@ function showSchedule() {
       ? slots.map(s => `<div class="sched-slot">${s.from}:00–${s.to}:00</div>`).join('')
       : '<div class="sched-off">—</div>';
 
-    // Статистика записей в дни без игры
+    // Статистика записей в дни без игры (по конкретной дате текущей недели)
     let statsHtml = '';
-    if (!slots.length && signupStats && signupStats.byDay[code]) {
-      const cnt = signupStats.byDay[code];
-      statsHtml = `<div class="sched-stats">+${cnt} 📝</div>`;
+    if (!slots.length && signupStats && signupStats.byDate) {
+      const dateStr = dateForDayCode(code);
+      const cnt = signupStats.byDate[dateStr];
+      if (cnt > 0) {
+        statsHtml = `<div class="sched-stats">+${cnt}</div>`;
+      }
     }
 
     return `

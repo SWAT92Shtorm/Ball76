@@ -1029,21 +1029,20 @@ app.get('/api/signup-stats/:hallId', readLimiter, async (req, res) => {
 
     const gameId = nearestGame.rows[0].id;
 
-    // Посчитать записи по дню недели (created_at в МСК)
+    // Посчитать записи по конкретной дате (created_at в МСК)
+    // Возвращаем map: 'YYYY-MM-DD' → count
     const stats = await pool.query(
-      `SELECT EXTRACT(DOW FROM (created_at AT TIME ZONE 'Europe/Moscow'))::int AS dow, COUNT(*)::int AS cnt
+      `SELECT (created_at AT TIME ZONE 'Europe/Moscow')::date AS signup_date, COUNT(*)::int AS cnt
        FROM game_players
        WHERE game_id = $1
-       GROUP BY 1`,
+       GROUP BY 1
+       ORDER BY 1`,
       [gameId]
     );
 
-    // PostgreSQL DOW: 0=Sunday, 1=Monday...6=Saturday → конвертируем в 1=Mon...7=Sun
-    const byDay = {};
+    const byDate = {};
     stats.rows.forEach(row => {
-      const pgDow = row.dow; // 0=Sun, 1=Mon, ..., 6=Sat
-      const ourDow = pgDow === 0 ? 7 : pgDow; // 1=Mon, ..., 7=Sun
-      byDay[ourDow] = row.cnt;
+      byDate[row.signup_date.toISOString().slice(0, 10)] = row.cnt;
     });
 
     const totalRes = await pool.query(
@@ -1051,7 +1050,7 @@ app.get('/api/signup-stats/:hallId', readLimiter, async (req, res) => {
       [gameId]
     );
 
-    res.json({ total: totalRes.rows[0].cnt, byDay });
+    res.json({ total: totalRes.rows[0].cnt, byDate });
   } catch (err) {
     console.error('Ошибка signup-stats:', err);
     res.status(500).json({ error: 'Failed to get signup stats' });

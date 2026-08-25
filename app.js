@@ -76,15 +76,25 @@ function showTunnelInput(message) {
   const main = document.querySelector('main');
   if (!main) return;
   const div = document.createElement('div');
-  div.className = 'db-warning-banner';
-  div.style.display = 'block';
-  div.innerHTML = `⚠️ ${message}<br><br>
-    <input type="url" id="tunnelUrlInput" placeholder="https://xxx.loca.lt" 
-           style="width:100%;max-width:350px;padding:8px;margin:4px 0;border-radius:4px;border:1px solid #ccc;">
-    <button onclick="saveTunnelUrl()" style="padding:8px 16px;background:#4a90d9;color:#fff;border:none;border-radius:4px;cursor:pointer;">Сохранить</button>`;
+  div.className = 'tunnel-modal';
+  div.innerHTML = `
+    <div class="tunnel-modal-box">
+      <div class="tunnel-modal-icon">🔌</div>
+      <h3 class="tunnel-modal-title">Нет соединения с сервером</h3>
+      <p class="tunnel-modal-text">${message}</p>
+      <div class="tunnel-modal-row">
+        <input type="url" id="tunnelUrlInput" class="tunnel-modal-input"
+               placeholder="https://xxx.loca.lt" autocomplete="off" spellcheck="false">
+        <button onclick="saveTunnelUrl()" class="tunnel-modal-btn">Подключить</button>
+      </div>
+      <p class="tunnel-modal-hint">Адрес выдаёт команда <code>./tunnel.sh</code></p>
+    </div>`;
   main.prepend(div);
-  document.querySelectorAll('button').forEach(btn => {
-    if (btn.onclick && btn.onclick.toString().includes('addPlayer')) btn.disabled = true;
+  // Фокус на поле ввода
+  setTimeout(() => document.getElementById('tunnelUrlInput')?.focus(), 100);
+  // Enter в поле → сохранить
+  document.getElementById('tunnelUrlInput')?.addEventListener('keydown', e => {
+    if (e.key === 'Enter') saveTunnelUrl();
   });
 }
 

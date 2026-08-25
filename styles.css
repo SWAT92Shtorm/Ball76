@@ -972,3 +972,115 @@ th {
   padding-bottom: 8px;
   user-select: none;
 }
+
+/* ==== Модальное окно ввода туннеля ==== */
+.tunnel-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.7);
+  backdrop-filter: blur(4px);
+  padding: 16px;
+}
+
+.tunnel-modal-box {
+  background: #1e1e1e;
+  border: 1px solid #333;
+  border-radius: 16px;
+  padding: 32px 28px;
+  max-width: 400px;
+  width: 100%;
+  text-align: center;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+  animation: tunnelModalIn 0.25s ease-out;
+}
+
+@keyframes tunnelModalIn {
+  from { opacity: 0; transform: scale(0.95) translateY(10px); }
+  to   { opacity: 1; transform: scale(1) translateY(0); }
+}
+
+.tunnel-modal-icon {
+  font-size: 40px;
+  margin-bottom: 12px;
+}
+
+.tunnel-modal-title {
+  font-size: 18px;
+  font-weight: 600;
+  color: #f0f0f0;
+  margin: 0 0 8px;
+}
+
+.tunnel-modal-text {
+  font-size: 14px;
+  color: #aaa;
+  margin: 0 0 20px;
+  line-height: 1.4;
+}
+
+.tunnel-modal-row {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.tunnel-modal-input {
+  flex: 1;
+  padding: 10px 14px;
+  font-size: 14px;
+  font-family: monospace;
+  background: #121212;
+  color: #e0e0e0;
+  border: 1px solid #444;
+  border-radius: 8px;
+  outline: none;
+  transition: border-color 0.2s;
+}
+
+.tunnel-modal-input:focus {
+  border-color: #4a90d9;
+  box-shadow: 0 0 0 3px rgba(74, 144, 217, 0.15);
+}
+
+.tunnel-modal-input::placeholder {
+  color: #555;
+}
+
+.tunnel-modal-btn {
+  padding: 10px 18px;
+  font-size: 14px;
+  font-weight: 600;
+  background: #4a90d9;
+  color: #fff;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background 0.2s, transform 0.1s;
+}
+
+.tunnel-modal-btn:hover {
+  background: #357abd;
+}
+
+.tunnel-modal-btn:active {
+  transform: scale(0.97);
+}
+
+.tunnel-modal-hint {
+  font-size: 12px;
+  color: #666;
+  margin: 0;
+}
+
+.tunnel-modal-hint code {
+  background: #2a2a2a;
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-size: 11px;
+  color: #999;
+}

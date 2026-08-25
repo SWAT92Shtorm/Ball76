@@ -50,18 +50,13 @@ function detectApiBase() {
     return s;
   }
 
-  if (host === 'swat92shtorm.github.io') return 'https://ball76.up.railway.app';
+  // GitHub Pages без сохранённого туннеля — заглушка (API недоступен).
+  // Локальная разработка — Docker на localhost.
+  if (host === 'swat92shtorm.github.io') return '';
   return 'http://localhost:8080';
 }
 
 let API_BASE_URL = detectApiBase();
-
-// Фолбэк-адрес: если основной (туннель/локальный) не отвечает — переключаемся.
-function fallbackApiBase() {
-  return location.hostname === 'swat92shtorm.github.io'
-    ? 'https://ball76.up.railway.app'
-    : 'http://localhost:8080';
-}
 
 // Заглушка до загрузки /api/config (значения совпадают с серверным APP_CONFIG).
 // Если API недоступен — страница остаётся работоспособной с этими данными.
@@ -93,22 +88,20 @@ let CONFIG = {
 };
 
 async function loadConfig() {
-  // Пробуем основной адрес; если не отвечает — переключаемся на фолбэк.
-  for (const base of [API_BASE_URL, fallbackApiBase()]) {
-    try {
-      const ctrl = new AbortController();
-      const t = setTimeout(() => ctrl.abort(), 5000);
-      const response = await fetch(`${base}/api/config`, { signal: ctrl.signal });
-      clearTimeout(t);
-      if (!response.ok) throw new Error('HTTP ' + response.status);
-      CONFIG = await response.json();
-      API_BASE_URL = base;
-      return;
-    } catch (err) {
-      console.warn(`API ${base} недоступен (${err.message}), пробую следующий…`);
-    }
+  if (!API_BASE_URL) {
+    console.warn('API-адрес не задан (откройте туннельную ссылку один раз), используем заглушку');
+    return;
   }
-  console.error('Все API-адреса недоступны, используем заглушку');
+  try {
+    const ctrl = new AbortController();
+    const t = setTimeout(() => ctrl.abort(), 5000);
+    const response = await fetch(`${API_BASE_URL}/api/config`, { signal: ctrl.signal });
+    clearTimeout(t);
+    if (!response.ok) throw new Error('HTTP ' + response.status);
+    CONFIG = await response.json();
+  } catch (err) {
+    console.error(`API ${API_BASE_URL} недоступен (${err.message}), используем заглушку`);
+  }
 }
 
 // Удобные доступы к конфигу зала

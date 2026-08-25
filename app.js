@@ -1014,36 +1014,33 @@ function renderPricingRow(hall, playersCount) {
   const perPersonFixed = CONFIG.halls[hall]?.perPerson; // undefined → режим деления
   const phone = hallPhone(hall);
 
-  // Единый стиль для всех залов: предупреждение «меньше минимума»
-  // показывается всегда, когда есть хотя бы один участник и их < 10.
-  const isUnder10 = playersCount > 0 && playersCount < 10;
+  // Если участников нет — блок стоимости и телефона скрываем
+  if (playersCount === 0) {
+    priceElem.innerHTML = '<span class="pricing-empty">Участников пока нет — запишитесь первым!</span>';
+    return;
+  }
+
+  // Предупреждение «меньше минимума»
+  const isUnder10 = playersCount < 10;
   priceElem.classList.toggle('pricing-warn', isUnder10);
 
-  // Единая формулировка для обоих залов: «Каждому нужно заплатить: N ₽».
-  // Разница только в том, как считается N:
-  //  - АТЛАНТ (perPerson задан): фиксированная сумма, не зависит от числа игроков;
-  //  - ЛОКОМОТИВ: стоимость аренды делится на всех записавшихся.
+  // Расчёт суммы
   let perPersonAmount;
   let payNote;
   if (perPersonFixed) {
     perPersonAmount = String(perPersonFixed);
     payNote = 'Сумма фиксированная, не делится на участников.';
-  } else if (playersCount > 0) {
+  } else {
     const activeCount = Math.min(maxPlayers(), playersCount);
     perPersonAmount = (price / activeCount).toFixed(2);
     payNote = `Оплачивать будут ${activeCount} чел. (в пределах лимита ${maxPlayers()}).`;
-  } else {
-    perPersonAmount = null;
-    payNote = 'Участников пока нет — запишитесь первым!';
   }
 
   const pricingLines = `
     <div class="pricing-line">Стоимость аренды зала: ${price} ₽${perPersonFixed ? ' (фиксированно)' : ''}</div>
     <div class="pricing-line">Время аренды: ${durationText}</div>
     <div class="pricing-line">${payNote}</div>
-    ${perPersonAmount !== null
-      ? `<div class="pricing-amount"><strong>Каждому нужно заплатить: ${perPersonAmount} ₽</strong></div>`
-      : ''}
+    <div class="pricing-amount"><strong>Каждому нужно заплатить: ${perPersonAmount} ₽</strong></div>
   `;
 
   priceElem.innerHTML = `
@@ -1340,6 +1337,12 @@ function closeTeamsModal() {
 // ==================== 7.5. CHANGELOG (модалка истории версий) ====================
 
 const CHANGELOG = [
+  {
+    version: 'n',
+    items: [
+      '💰 Блок стоимости и телефона появляется только после первой записи'
+    ]
+  },
   {
     version: 'm',
     items: [

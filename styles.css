@@ -431,6 +431,16 @@ th {
   color: #e0ffe0;
 }
 
+/* Пустое состояние: нет участников — блок приглушённый */
+.pricing-empty {
+  color: #888;
+  font-style: italic;
+}
+#pricingRow:has(.pricing-empty) {
+  background: #1e1e1e;
+  border-color: #333;
+}
+
 .pricing-line {
   font-size: 13px;
   margin-bottom: 4px;

@@ -48,11 +48,11 @@ function maxPlayers()          { return CONFIG.maxPlayers || 18; }
 // и подставляются в innerHTML — без экранирования это XSS.
 function escapeHtml(str) {
   return String(str ?? '')
-    .replace(/&/g, '&')
-    .replace(/</g, '<')
-    .replace(/>/g, '>')
-    .replace(/"/g, '"')
-        .replace(/'/g, '&#39;');
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
 }
 
 // Тосты (уведомления)
@@ -254,7 +254,8 @@ async function loadFromAPI({ silent = false } = {}) {
     return;
   }
 
-  updatePlayersList();
+  // Дропдаун подсказок не нужно перерисовывать: он читает playerNames
+  // и historyByDate на лету (в filterAutocomplete), а их мы только что обновили.
   showList();
 }
 
@@ -331,9 +332,9 @@ async function addPlayer() {
     }
 
     input.value = '';
+    hideAutocomplete();
     resetInputStyles(input, error);
     showList();
-    updatePlayersList();
 
     await loadFromAPI();
     showToast(`${name} записан на игру`, 'success');

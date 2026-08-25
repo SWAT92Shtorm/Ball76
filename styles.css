@@ -139,16 +139,11 @@ th {
   position: relative;
 }
 
-.autocomplete-field {
-  position: relative;
-  flex: 1;
-  min-width: 0;
-}
-
+/* Дропдаун подсказок: позиционируется под полем ФИО (label ~163px + gap 12px) */
 .autocomplete-box {
   position: absolute;
   top: calc(100% + 4px);
-  left: 0;
+  left: 175px;
   right: 0;
   z-index: 500;
   background: #2a2a2a;

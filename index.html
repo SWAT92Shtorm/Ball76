@@ -47,10 +47,8 @@
 
   <div class="form-row autocomplete-wrap">
     <label for="playerName">Введи ФИО:</label>
-    <div class="autocomplete-field">
-      <input type="text" id="playerName" placeholder="Иванов Иван Иванович" maxlength="50" pattern="[A-Za-zА-Яа-яЁё\s\-]{3,}" oninput="this.value = this.value.replace(/[^A-Za-zА-Яа-яЁё\s\-]/g, '');"/>
-      <div id="autocompleteBox" class="autocomplete-box" style="display: none;"></div>
-    </div>
+    <input type="text" id="playerName" placeholder="Иванов Иван Иванович" maxlength="50" pattern="[A-Za-zА-Яа-яЁё\s\-]{3,}" oninput="this.value = this.value.replace(/[^A-Za-zА-Яа-яЁё\s\-]/g, '');"/>
+    <div id="autocompleteBox" class="autocomplete-box" style="display: none;"></div>
   </div>
   <span id="playerNameError" style="color: red; font-size: 12px; display: none; margin-left: 82px; margin-top: 4px;">
     ФИО должно состоять из трёх слов: Фамилия Имя Отчество

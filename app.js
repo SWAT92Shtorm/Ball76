@@ -10,11 +10,32 @@
 // ==================== 1. CONFIG ====================
 
 // Базовый URL API: динамически по hostname, чтобы один файл работал
-// и на GitHub Pages (продакшен), и локально.
-const API_BASE_URL =
-  location.hostname === 'swat92shtorm.github.io'
-    ? 'https://ball76.up.railway.app'   // продакшен (Railway)
-    : 'http://localhost:8080';         // локальный Docker
+// и на GitHub Pages (продакшен), и через туннель, и локально.
+//
+// Приоритет:
+//  1. localStorage['ball76_api']  — адрес, сохранённый при входе через туннель
+//     (или заданный вручную); переживает перезагрузку страницы.
+//  2. Туннельный домен в address bar (.loca.lt / .shares.zrok.io /
+//     .trycloudflare.com) — API живёт на том же хосте, что и страница.
+//  3. GitHub Pages — продакшен на Railway.
+//  4. Остальное (localhost, IP, file://) — локальный Docker.
+function detectApiBase() {
+  const saved = localStorage.getItem('ball76_api');
+  if (saved) return saved.replace(/\/+$/, '');
+
+  const host = location.hostname;
+  if (/\.loca\.lt$|\.shares\.zrok\.io$|\.trycloudflare\.com$/.test(host)) {
+    // Страница открыта через туннель → API на том же адресе.
+    // Сохраняем, чтобы при переходе на GitHub Pages-копию не потерять.
+    const base = location.origin;
+    try { localStorage.setItem('ball76_api', base); } catch (_) {}
+    return base;
+  }
+  if (host === 'swat92shtorm.github.io') return 'https://ball76.up.railway.app';
+  return 'http://localhost:8080';
+}
+
+const API_BASE_URL = detectApiBase();
 
 // Заглушка до загрузки /api/config (значения совпадают с серверным APP_CONFIG).
 // Если API недоступен — страница остаётся работоспособной с этими данными.

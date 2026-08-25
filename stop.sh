@@ -1,10 +1,10 @@
 #!/bin/zsh
 # ============================================================
-# Ball76 — остановка: zrok-туннель + Docker-контейнеры
+# Ball76 — остановка: туннель + Docker-контейнеры
 #
 # Использование:
-#   ./stop.sh             # остановить всё (tуннель + контейнеры)
-#   ./stop.sh --keep-db   # остановить только tуннель, БД оставить
+#   ./stop.sh             # остановить всё (туннель + контейнеры)
+#   ./stop.sh --keep-db   # остановить только туннель, БД оставить
 # ============================================================
 
 cd "$(dirname "$0")"
@@ -14,18 +14,8 @@ NODE="Ball76-node-server"
 
 echo "🛑 Остановка Ball76..."
 
-# 1. Останавливаем zrok-туннель
-if [ -f .zrok.pid ]; then
-  PID=$(cat .zrok.pid)
-  if kill -0 "${PID}" 2>/dev/null; then
-    echo "⬇️  Останавливаю zrok (PID ${PID})..."
-    kill "${PID}" 2>/dev/null || true
-  fi
-  rm -f .zrok.pid
-fi
-
-# Убиваем и foreground-процессы zrok с нашим именем (если остались)
-pkill -f "zrok share public.*public:ball76" 2>/dev/null || true
+# 1. Останавливаем туннель (localtunnel / cloudflared / zrok)
+./tunnel.sh stop > /dev/null 2>&1 || true
 
 # 2. Останавливаем Docker-контейнеры (если не просили сохранить БД)
 if [ "$1" != "--keep-db" ]; then

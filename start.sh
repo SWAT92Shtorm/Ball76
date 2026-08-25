@@ -1,11 +1,14 @@
 #!/bin/zsh
 # ============================================================
-# Ball76 — быстрый запуск: Docker (Postgres + Node) + zrok-туннель
+# Ball76 — быстрый запуск: Docker (Postgres + Node) + туннель
+#
+# Туннель: localtunnel (loca.lt) — работает из РФ без регистрации.
+# Запасной вариант (cloudflared) выбирает ./tunnel.sh автоматически.
 #
 # Использование:
-#   ./start.sh            # запустить всё, tуннель в foreground
-#   ./start.sh --bg       # tуннель в фоне (PID в .zrok.pid)
-#   ./stop.sh             # остановить tуннель и контейнеры
+#   ./start.sh            # запустить всё, туннель в foreground
+#   ./start.sh --bg       # туннель в фоне (PID в .tunnel.pid)
+#   ./stop.sh             # остановить туннель и контейнеры
 # ============================================================
 
 set -e
@@ -13,7 +16,6 @@ cd "$(dirname "$0")"
 
 POSTGRES="Ball76-postgres"
 NODE="Ball76-node-server"
-ZROK_NAME="public:ball76"
 PORT=8080
 
 echo "🚀 Запуск Ball76..."
@@ -43,26 +45,12 @@ for i in {1..30}; do
   fi
 done
 
-# 2. Проверяем, не запущен ли уже zrok-туннель с нашим именем
-if ps aux | grep -E "zrok share public.*${ZROK_NAME}" | grep -v grep > /dev/null; then
-  echo "ℹ️  Zrok-туннель уже работает"
-else
-  echo "🌐 Запускаю zrok-туннель (имя: ball76)..."
-  if [ "$1" = "--bg" ]; then
-    nohup zrok share public "http://localhost:${PORT}" -n "${ZROK_NAME}" --headless \
-      > .zrok.log 2>&1 &
-    echo $! > .zrok.pid
-    sleep 4
-    echo "   Tуннель в фоне, PID=$(cat .zrok.pid), лог: .zrok.log"
-  else
-    # Foreground: Ctrl+C остановит tуннель, но Docker останется работать
-    trap 'echo ""; echo "👋 Tуннель остановлен. Docker-контейнеры продолжают работать."; exit 0' INT TERM
-    exec zrok share public "http://localhost:${PORT}" -n "${ZROK_NAME}"
-  fi
-fi
+# 2. Запускаем туннель (localtunnel → запасной cloudflared)
+#    Скрипт сам проверит, что запросы проходят, и сохранит URL в .tunnel.url
+./tunnel.sh
 
 echo ""
-echo "📍 Публичный URL:  https://ball76.shares.zrok.io"
+echo "📍 Публичный URL:  $(cat .tunnel.url)"
 echo "📍 Локальный API:  http://localhost:${PORT}"
 echo ""
 echo "Остановка: ./stop.sh"

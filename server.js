@@ -37,12 +37,16 @@ pool.query('SELECT 1')
     console.error('❌ Ошибка подключения к PostgreSQL:', err.message);
   });
 
-// CORS: разрешаем GitHub Pages (продакшен), zrok-туннель и локальные origins (localhost/127.0.0.1)
+// CORS: разрешаем GitHub Pages (продакшен), туннели (localtunnel/zrok/cloudflared)
+// и локальные origins (localhost/127.0.0.1). Туннельные домены меняются при
+// каждом запуске — поэтому разрешаем целые зоны, а не конкретные поддомены.
 app.use((req, res, next) => {
   const origin = req.headers.origin;
   const isAllowed =
     origin === 'https://swat92shtorm.github.io' ||
-    origin === 'https://ball76.shares.zrok.io' ||
+    /\.loca\.lt$/.test(origin || '') ||          // localtunnel (основной туннель)
+    /\.shares\.zrok\.io$/.test(origin || '') || // zrok (запасной)
+    /\.trycloudflare\.com$/.test(origin || '') || // cloudflared quick tunnel
     /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(origin || '');
 
   if (isAllowed) {

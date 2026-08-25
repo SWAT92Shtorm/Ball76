@@ -859,22 +859,19 @@ function showSchedule() {
     if (isToday) classes.push('today');
     if (isNearest) classes.push('nearest');
 
-    const slotHtml = slots.length
-      ? slots.map(s => `<div class="sched-slot">${s.from}:00–${s.to}:00</div>`).join('')
-      : '<div class="sched-off">—</div>';
-
-    // Статистика: в днях без игры показываем кол-во записей сделанных именно в этот день.
-    // Если сегодня нет игры — показываем общий total (все записи на ближайшую игру).
-    let statsHtml = '';
-    if (!slots.length && signupStats) {
+    // В днях без игры: если есть статистика — показываем +N вместо прочерка
+    let slotHtml;
+    if (slots.length) {
+      slotHtml = slots.map(s => `<div class="sched-slot">${s.from}:00–${s.to}:00</div>`).join('');
+    } else if (signupStats) {
       const dateStr = dateForDayCode(code);
       const dayCnt = (signupStats.byDate && signupStats.byDate[dateStr]) || 0;
-      if (dayCnt > 0) {
-        statsHtml = `<div class="sched-stats">+${dayCnt}</div>`;
-      } else if (isToday && signupStats.total > 0) {
-        // Сегодня нет игры, но есть записи (сделанные в другие дни) — показываем total
-        statsHtml = `<div class="sched-stats">${signupStats.total} 📝</div>`;
-      }
+      const showCnt = dayCnt > 0 ? dayCnt : (isToday ? signupStats.total : 0);
+      slotHtml = showCnt > 0
+        ? `<div class="sched-stats">+${showCnt}</div>`
+        : '<div class="sched-off">—</div>';
+    } else {
+      slotHtml = '<div class="sched-off">—</div>';
     }
 
     return `
@@ -882,7 +879,6 @@ function showSchedule() {
         <div class="sched-day-letter">${dayLetters[i]}</div>
         <div class="sched-day-name">${dayNamesRU[slots[0]?.day] || ''}</div>
         ${slotHtml}
-        ${statsHtml}
         ${isNearest ? '<div class="sched-badge">ближайшая</div>' : ''}
       </div>
     `;

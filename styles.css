@@ -1024,14 +1024,15 @@ th {
 
 .tunnel-modal-row {
   display: flex;
-  gap: 8px;
+  flex-direction: column;
+  gap: 10px;
   margin-bottom: 12px;
 }
 
 .tunnel-modal-input {
-  flex: 1;
-  padding: 10px 14px;
-  font-size: 14px;
+  width: 100%;
+  padding: 14px 16px;
+  font-size: 16px;
   font-family: monospace;
   background: #121212;
   color: #e0e0e0;
@@ -1039,6 +1040,7 @@ th {
   border-radius: 8px;
   outline: none;
   transition: border-color 0.2s;
+  box-sizing: border-box;
 }
 
 .tunnel-modal-input:focus {
@@ -1051,15 +1053,15 @@ th {
 }
 
 .tunnel-modal-btn {
-  padding: 10px 18px;
-  font-size: 14px;
+  width: 100%;
+  padding: 14px 18px;
+  font-size: 16px;
   font-weight: 600;
   background: #4a90d9;
   color: #fff;
   border: none;
   border-radius: 8px;
   cursor: pointer;
-  white-space: nowrap;
   transition: background 0.2s, transform 0.1s;
 }
 

@@ -1007,24 +1007,34 @@ function showList() {
 //    всех записавшихся (в пределах лимита maxPlayers).
 function renderPricingRow(hall, playersCount) {
   const priceElem = document.getElementById('pricingRow');
-  const durationSelect = document.getElementById('durationSelect');
-  const durationKey = durationSelect ? durationSelect.value : 'full';
-  const price = hallPrice(hall, durationKey);
-  const durationText = durationKey === 'full' ? '2 часа' : durationKey === 'short' ? '1 час 30 мин' : '';
-  const perPersonFixed = CONFIG.halls[hall]?.perPerson; // undefined → режим деления
-  const phone = hallPhone(hall);
+  const MIN_PLAYERS = 10;
 
-  // Если участников нет — блок стоимости и телефона скрываем
+  // 0 участников — пустое состояние
   if (playersCount === 0) {
     priceElem.innerHTML = '<span class="pricing-empty">Участников пока нет — запишитесь первым!</span>';
     return;
   }
 
-  // Предупреждение «меньше минимума»
-  const isUnder10 = playersCount < 10;
-  priceElem.classList.toggle('pricing-warn', isUnder10);
+  // Меньше минимума — только предупреждение со счётчиком
+  if (playersCount < MIN_PLAYERS) {
+    priceElem.classList.add('pricing-warn');
+    priceElem.innerHTML = `
+      <div class="pricing-registered under-min">
+        Записалось: ${playersCount} чел. ⚠️ Меньше минимума (${MIN_PLAYERS}) — игра может не состояться!
+      </div>
+    `;
+    return;
+  }
 
-  // Расчёт суммы
+  // Минимум достигнут — полный блок: стоимость + телефон
+  priceElem.classList.remove('pricing-warn');
+  const durationSelect = document.getElementById('durationSelect');
+  const durationKey = durationSelect ? durationSelect.value : 'full';
+  const price = hallPrice(hall, durationKey);
+  const durationText = durationKey === 'full' ? '2 часа' : durationKey === 'short' ? '1 час 30 мин' : '';
+  const perPersonFixed = CONFIG.halls[hall]?.perPerson;
+  const phone = hallPhone(hall);
+
   let perPersonAmount;
   let payNote;
   if (perPersonFixed) {
@@ -1036,19 +1046,13 @@ function renderPricingRow(hall, playersCount) {
     payNote = `Оплачивать будут ${activeCount} чел. (в пределах лимита ${maxPlayers()}).`;
   }
 
-  const pricingLines = `
+  priceElem.innerHTML = `
     <div class="pricing-line">Стоимость аренды зала: ${price} ₽${perPersonFixed ? ' (фиксированно)' : ''}</div>
     <div class="pricing-line">Время аренды: ${durationText}</div>
     <div class="pricing-line">${payNote}</div>
     <div class="pricing-amount"><strong>Каждому нужно заплатить: ${perPersonAmount} ₽</strong></div>
-  `;
-
-  priceElem.innerHTML = `
-    ${pricingLines}
-    <div class="pricing-registered${isUnder10 ? ' under-min' : ''}">
-      Записалось: ${playersCount} чел.${isUnder10 ? ' ⚠️ Меньше минимума (10) — игра может не состояться!' : ''}
-    </div>
-    <div class="phone-block${isUnder10 ? ' phone-block-warn' : ''}">
+    <div class="pricing-registered">Записалось: ${playersCount} чел.</div>
+    <div class="phone-block">
       Для оплаты переведите деньги на телефон:
       <br />
       <span class="phone-number" id="displayPhone" title="Нажмите: копирует номер и открывает Сбербанк">${escapeHtml(phone)}</span>
@@ -1337,6 +1341,12 @@ function closeTeamsModal() {
 // ==================== 7.5. CHANGELOG (модалка истории версий) ====================
 
 const CHANGELOG = [
+  {
+    version: 'o',
+    items: [
+      '💰 Стоимость и телефон показаны только после 10 записавшихся'
+    ]
+  },
   {
     version: 'n',
     items: [

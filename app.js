@@ -977,6 +977,7 @@ function showList() {
   if (!hall) {
     result.innerHTML = '<p>Выберите зал, чтобы увидеть список участников.</p>';
     priceElem.textContent = 'Стоимость к оплате: не выбран зал.';
+    setDurationVisibility(false);
     return;
   }
 
@@ -1040,6 +1041,13 @@ function showList() {
   showHistoryTable();
 }
 
+// Показывает/скрывает блок «Длительность игры» (select + label).
+// Блок виден только когда записалось >= минимума участников.
+function setDurationVisibility(visible) {
+  const row = document.querySelector('#durationSelect')?.closest('.form-row');
+  if (row) row.style.display = visible ? '' : 'none';
+}
+
 // Строка «стоимость к оплате».
 // Два режима (настраивается полем perPerson в конфиге зала):
 //  - perPerson задан (АТЛАНТ): фиксированная сумма с человека, аренда
@@ -1053,6 +1061,7 @@ function renderPricingRow(hall, playersCount) {
   // 0 участников — пустое состояние
   if (playersCount === 0) {
     priceElem.innerHTML = '<span class="pricing-empty">Участников пока нет — запишитесь первым!</span>';
+    setDurationVisibility(false);
     return;
   }
 
@@ -1064,11 +1073,13 @@ function renderPricingRow(hall, playersCount) {
         Записалось: ${playersCount} чел. ⚠️ Меньше минимума (${MIN_PLAYERS}) — игра может не состояться!
       </div>
     `;
+    setDurationVisibility(false);
     return;
   }
 
   // Минимум достигнут — полный блок: стоимость + телефон
   priceElem.classList.remove('pricing-warn');
+  setDurationVisibility(true);
   const durationSelect = document.getElementById('durationSelect');
   const durationKey = durationSelect ? durationSelect.value : 'full';
   const price = hallPrice(hall, durationKey);

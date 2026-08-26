@@ -5,3 +5,6 @@ node_modules/
 .tunnel.pid
 .tunnel.url
 .lt.log
+.lt-1.log
+.lt-2.log
+.lt-3.log

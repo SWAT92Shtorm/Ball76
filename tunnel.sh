@@ -10,13 +10,14 @@
 #    https://ball76api-2.loca.lt
 #    https://ball76api-3.loca.lt
 #
-#  Логика: сначала поднимаем основной (1). Если он не прошёл проверку
-#  (не отвечает / процесс упал / поддомен занят) — поднимаем резервный (2),
-#  затем (3). Так мы не расходим ресурсы зря, если основной работает.
+#  Логика: поднимаем ОДИН туннель последовательно — пробуем 1, при неудаче
+#  (не отвечает / процесс упал / поддомен занят) — 2, затем 3. Как только
+#  один прошёл проверку — останавливаемся, остальные НЕ поднимаем.
 #
-#  Если один отвалится во время работы — клиент автоматически переключится
-#  на другой (логика в app.js, список адресов — в APP_CONFIG.tunnels).
-#  Watch-режим каждые 15 минут проверяет живость и перезапускает упавшие.
+#  Если запущенный туннель отвалится во время работы — watch-режим каждые
+#  15 минут это заметит и поднимет новый (сначала снова пробует 1, при
+#  неудаче 2/3). Клиент также умеет сам переключаться на резервные адреса
+#  (логика в app.js, список адресов — в APP_CONFIG.tunnels).
 #
 #  Использование:
 #    ./tunnel.sh          — запустить (последовательно, пока не появится рабочий)
@@ -150,20 +151,23 @@ declare -a PIDS=("" "" "")
 declare -a URLs=("" "" "")
 declare -a ALIVE=(false false false)
 
-STARTED_COUNT=0
+# Поднимаем ПОСЛЕДОВАТЕЛЬНО: пробуем 1, при неудаче — 2, затем 3.
+# Как только ОДИН туннель прошёл проверку — останавливаемся и НЕ поднимаем
+# остальные: они будут запущены автоматически в watch-режиме, если этот
+# отвалится (см. блок «Все туннели мертвы» ниже).
 for i in "${!SUBDOMAINS[@]}"; do
   if start_one_tunnel "$i"; then
-    STARTED_COUNT=$((STARTED_COUNT + 1))
-    # Основной (первый) поднялся — останавливаемся, резервные не нужны.
-    # Если это был уже не первый — значит предыдущие не работали,
-    # продолжаем поднимать остальные для резервирования.
-    if [ "$i" -eq 0 ]; then
-      echo "   ℹ️ Основной туннель работает, резервные не поднимаю."
-      break
-    fi
+    echo "   ℹ️ Туннель $((i+1)) работает, остальные не поднимаю."
+    break
   else
     echo "   ℹ️ Туннель $((i+1)) не запустился, пробую следующий..."
   fi
+done
+
+# Сколько туннелей живо сейчас (после последовательного запуска — 0 или 1)
+STARTED_COUNT=0
+for i in "${!ALIVE[@]}"; do
+  [ "${ALIVE[$i]:-false}" = true ] && STARTED_COUNT=$((STARTED_COUNT + 1))
 done
 
 if [ "$STARTED_COUNT" -eq 0 ]; then
@@ -203,89 +207,107 @@ echo ""
 echo "   Остановить: ./tunnel.sh stop"
 echo ""
 
-# Режим watch: скрипт остаётся в терминале и печатает статус
-# каждые 15 минут. Ctrl+C — остановит туннели и завершит скрипт.
+# Режим watch: скрипт остаётся в терминале и следит за туннелем.
+# Локальные туннели loca.lt живут недолго (~5–10 минут), поэтому проверяем
+# часто: раз в 60 секунд. При падении сразу поднимаем новый (сначала снова
+# пробует поддомен 1, при неудаче 2/3). Ctrl+C — остановит и завершит.
 if [ "$WATCH_MODE" = true ]; then
   trap 'echo ""; echo "🛑 Останавливаю туннели..."; ./tunnel.sh stop; exit 0' INT TERM
 
+  # Функция: поднять ОДИН рабочий туннель последовательно (1 → 2 → 3).
+  # Заполняет PIDS/URLS/ALIVE для успешного индекса, сбрасывает остальные.
+  restart_single() {
+    # Сбрасываем состояние всех
+    local j
+    for j in "${!PIDS[@]}"; do
+      [ -n "${PIDS[$j]:-}" ] && kill "${PIDS[$j]}" 2>/dev/null
+      ALIVE[$j]=false
+      URLs[$j]=""
+      PIDS[$j]=""
+    done
+    for j in "${!SUBDOMAINS[@]}"; do
+      if start_one_tunnel "$j"; then
+        return 0
+      fi
+    done
+    return 1
+  }
+
+  # Обновить файлы .tunnel.pid / .tunnel.url по первому живому туннелю
+  update_pid_url_files() {
+    local j
+    for j in "${!URLS[@]}"; do
+      if [ "${ALIVE[$j]:-false}" = true ] && [ -n "${URLS[$j]:-}" ]; then
+        echo "${PIDS[$j]}" > .tunnel.pid
+        echo "${URLS[$j]}" > .tunnel.url
+        return 0
+      fi
+    done
+    return 1
+  }
+
+  CONSECUTIVE_FAILURES=0
+  MAX_CONSECUTIVE_FAILURES=5
+
   while true; do
-    sleep 600
+    sleep 60
     TS=$(date '+%Y-%m-%d %H:%M')
 
-    # Проверяем каждый запущенный туннель: процесс жив + API отвечает.
-    # Если что-то сломалось — перезапускаем ТОЛЬКО этот туннель.
+    # Ищем текущий живой туннель
+    CURRENT_IDX=-1
     for i in "${!PIDS[@]}"; do
-      [ "${ALIVE[$i]:-false}" != true ] && continue
-      [ -z "${PIDS[$i]:-}" ] && continue
+      if [ "${ALIVE[$i]:-false}" = true ] && [ -n "${PIDS[$i]:-}" ]; then
+        CURRENT_IDX=$i
+        break
+      fi
+    done
 
-      local_ok=true
-      # 1. Процесс жив?
-      if ! is_alive "${PIDS[$i]}"; then
-        echo "[$TS] ⚠️  Туннель $((i+1)): процесс умер, перезапускаю..."
-        local_ok=false
-      # 2. API отвечает?
+    if [ "$CURRENT_IDX" -eq -1 ]; then
+      # Живого туннеля нет — поднимаем новый
+      echo "[$TS] ⚠️  Нет живого туннеля, запускаю..."
+      if restart_single; then
+        update_pid_url_files
+        CONSECUTIVE_FAILURES=0
+        echo "[$TS] ✅ Туннель запущен."
       else
-        CHECK=$(curl -s -m 10 -H "bypass-tunnel-reminder: 1" "${URLS[$i]}/api/status" 2>/dev/null)
-        if ! echo "$CHECK" | grep -q '"db"'; then
-          echo "[$TS] ⚠️  Туннель $((i+1)): API не отвечает, перезапускаю..."
-          local_ok=false
+        CONSECUTIVE_FAILURES=$((CONSECUTIVE_FAILURES + 1))
+        echo "[$TS] ❌ Не удалось запустить туннель (попыток подряд: $CONSECUTIVE_FAILURES)."
+        if [ "$CONSECUTIVE_FAILURES" -ge "$MAX_CONSECUTIVE_FAILURES" ]; then
+          echo "[$TS] ❌ Слишком много неудачных попыток ($CONSECUTIVE_FAILURES). Проверьте сеть/сервер."
+          echo "       Скрипт продолжит попытки раз в минуту."
         fi
       fi
-
-      if [ "$local_ok" = false ]; then
-        # Убиваем старый процесс (если ещё жив)
-        [ -n "${PIDS[$i]:-}" ] && kill "${PIDS[$i]}" 2>/dev/null
-        wait "${PIDS[$i]}" 2>/dev/null
-        ALIVE[$i]=false
-        URLs[$i]=""
-        PIDS[$i]=""
-        # Пробуем поднять заново
-        if start_one_tunnel "$i"; then
-          # Обновляем файлы pid/url, если это был первый живой
-          for j in "${!URLS[@]}"; do
-            if [ "${ALIVE[$j]:-false}" = true ] && [ -n "${URLS[$j]:-}" ]; then
-              echo "${PIDS[$j]}" > .tunnel.pid
-              echo "${URLS[$j]}" > .tunnel.url
-              break
-            fi
-          done
-        else
-          echo "[$TS] ❌ Туннель $((i+1)) не удалось перезапустить."
-        fi
-      fi
-    done
-
-    # Итог: сколько туннелей живо сейчас
-    LIVE_NOW=0
-    for i in "${!ALIVE[@]}"; do
-      [ "${ALIVE[$i]:-false}" = true ] && LIVE_NOW=$((LIVE_NOW + 1))
-    done
-
-    if [ "$LIVE_NOW" -eq 0 ]; then
-      echo "[$TS] ❌ Все туннели мертвы. Перезапускаю последовательно..."
-      # Полный перезапуск: пробуем 1, при неудаче 2, затем 3
-      for i in "${!SUBDOMAINS[@]}"; do
-        if start_one_tunnel "$i"; then
-          if [ "$i" -eq 0 ]; then
-            break
-          fi
-        fi
-      done
-      # Обновляем файлы
-      for i in "${!URLS[@]}"; do
-        if [ "${ALIVE[$i]:-false}" = true ] && [ -n "${URLS[$i]:-}" ]; then
-          echo "${PIDS[$i]}" > .tunnel.pid
-          echo "${URLS[$i]}" > .tunnel.url
-          break
-        fi
-      done
       continue
     fi
 
-    echo "[$TS] ✅ Живых туннелей: $LIVE_NOW"
-    for i in "${!URLS[@]}"; do
-      [ "${ALIVE[$i]:-false}" = true ] && [ -n "${URLS[$i]:-}" ] && echo "   $((i+1)). ${URLS[$i]}"
-    done
+    # Есть живой туннель — проверяем его
+    local_ok=true
+    if ! is_alive "${PIDS[$CURRENT_IDX]}"; then
+      echo "[$TS] ⚠️  Туннель $((CURRENT_IDX+1)): процесс умер, перезапускаю..."
+      local_ok=false
+    else
+      CHECK=$(curl -s -m 10 -H "bypass-tunnel-reminder: 1" "${URLS[$CURRENT_IDX]}/api/status" 2>/dev/null)
+      if ! echo "$CHECK" | grep -q '"db"'; then
+        echo "[$TS] ⚠️  Туннель $((CURRENT_IDX+1)): API не отвечает, перезапускаю..."
+        local_ok=false
+      fi
+    fi
+
+    if [ "$local_ok" = false ]; then
+      if restart_single; then
+        update_pid_url_files
+        CONSECUTIVE_FAILURES=0
+        echo "[$TS] ✅ Туннель перезапущен."
+      else
+        CONSECUTIVE_FAILURES=$((CONSECUTIVE_FAILURES + 1))
+        echo "[$TS] ❌ Не удалось перезапустить туннель (попыток подряд: $CONSECUTIVE_FAILURES)."
+      fi
+      continue
+    fi
+
+    # Всё ок — сбрасываем счётчик неудач, тихо логируем
+    CONSECUTIVE_FAILURES=0
+    echo "[$TS] ✅ Туннель жив: ${URLS[$CURRENT_IDX]}"
   done
 fi
 

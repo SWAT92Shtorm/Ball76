@@ -207,7 +207,13 @@ app.get('/api/status', async (req, res) => {
 // Единственный источник правды: клиент получает его через GET /api/config,
 // дублировать эти значения в index.html/app.js больше не нужно.
 const APP_CONFIG = {
-  apiUrl: 'https://ball76api.loca.lt',
+  // Резервные адреса туннелей (loca.lt): три поддомена, чтобы при отвале
+  // одного можно было переключиться на другой. Запускаются ./tunnel.sh.
+  tunnels: [
+    'https://ball76api-1.loca.lt',
+    'https://ball76api-2.loca.lt',
+    'https://ball76api-3.loca.lt'
+  ],
   maxPlayers: 18,
   halls: {
     hall1: {

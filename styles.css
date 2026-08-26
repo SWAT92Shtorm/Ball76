@@ -1172,6 +1172,14 @@ th {
   color: #555;
 }
 
+/* Выпадающий список туннелей — наследует стиль .tunnel-modal-input,
+   добавляем курсор и отступ под стрелку */
+.tunnel-modal-select {
+  cursor: pointer;
+  appearance: auto;
+  padding-right: 36px;
+}
+
 .tunnel-modal-btn {
   width: 100%;
   padding: 14px 18px;

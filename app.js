@@ -19,9 +19,65 @@
 //     что и страница.
 //  3. GitHub Pages — продакшен на Railway.
 //  4. Остальное (localhost, IP, file://) — локальный Docker.
-// Дефолтный адрес туннеля (из серверного APP_CONFIG.apiUrl).
-// Если пользователь не вводил адрес вручную — используем этот.
-const DEFAULT_TUNNEL_URL = 'https://ball76api.loca.lt';
+// Резервные адреса туннелей (loca.lt): три поддомена, чтобы при отвале одного
+// можно было переключиться на другой. Запускаются скриптом ./tunnel.sh.
+// Список обновляется из конфига сервера (APP_CONFIG.tunnels) после loadConfig().
+let KNOWN_TUNNELS = [
+  'https://ball76api-1.loca.lt',
+  'https://ball76api-2.loca.lt',
+  'https://ball76api-3.loca.lt'
+];
+// Дефолтный адрес туннеля (первый из списка).
+const DEFAULT_TUNNEL_URL = KNOWN_TUNNELS[0];
+
+// Сохранить адрес API в localStorage (переживает перезагрузку страницы).
+function saveApiUrl(url) {
+  try { localStorage.setItem('ball76_api', url); } catch (_) {}
+}
+
+// Проверка живости API по адресу: GET /api/status с заголовком bypass для loca.lt.
+async function probeTunnel(url, timeoutMs = 5000) {
+  const ctrl = new AbortController();
+  const t = setTimeout(() => ctrl.abort(), timeoutMs);
+  try {
+    const isLocaLt = /\.loca\.lt$/.test(url);
+    const resp = await fetch(`${url}/api/status`, {
+      headers: isLocaLt ? { 'bypass-tunnel-reminder': '1' } : {},
+      signal: ctrl.signal
+    });
+    if (!resp.ok) throw new Error('HTTP ' + resp.status);
+    return true;
+  } catch (_) {
+    return false;
+  } finally {
+    clearTimeout(t);
+  }
+}
+
+// Переключение на резервный туннель: пробуем остальные известные адреса
+// (в порядке списка, начиная со следующего после текущего). При успехе —
+// сохраняем новый адрес и перезагружаем страницу. Возвращает true, если
+// переключение произошло (страница перезагружается), false — если ни один
+// резервный не ответил.
+let _failoverInProgress = false;
+async function failoverToNextTunnel(currentUrl, reason) {
+  if (_failoverInProgress) return false;
+  if (!/\.loca\.lt$/.test(currentUrl)) return false; // только для loca.lt
+  _failoverInProgress = true;
+  showToast(`⚠️ ${reason}. Пробуем резервный туннель…`, 'info');
+  const idx = KNOWN_TUNNELS.indexOf(currentUrl);
+  for (let i = 1; i < KNOWN_TUNNELS.length; i++) {
+    const candidate = KNOWN_TUNNELS[(idx + i) % KNOWN_TUNNELS.length];
+    if (candidate === currentUrl) continue;
+    if (await probeTunnel(candidate)) {
+      saveApiUrl(candidate);
+      location.reload();
+      return true;
+    }
+  }
+  _failoverInProgress = false;
+  return false;
+}
 
 // Валидация URL: должен начинаться с http(s):// и содержать домен с точкой
 // или быть localhost/IP. Отсекает мусор вроде "123123".
@@ -46,11 +102,12 @@ function detectApiBase() {
   // Сохраняем, чтобы при переходе на GitHub Pages-копию не потерять.
   if (/\.loca\.lt$/.test(host)) {
     const base = location.origin;
-    try { localStorage.setItem('ball76_api', base); } catch (_) {}
+    saveApiUrl(base);
     return base;
   }
 
-  const saved = localStorage.getItem('ball76_api');
+  let saved = null;
+  try { saved = localStorage.getItem('ball76_api'); } catch (_) {}
   if (saved && isValidApiUrl(saved)) {
     return saved.replace(/\/+$/, '');
   }
@@ -88,9 +145,8 @@ async function loadConfig() {
     return false;
   }
   // Был ли адрес взят из localStorage (а не определён автоматически)?
-  const fromStorage = (() => {
-    try { return !!localStorage.getItem('ball76_api'); } catch (_) { return false; }
-  })();
+  let fromStorage = false;
+  try { fromStorage = !!localStorage.getItem('ball76_api'); } catch (_) {}
   try {
     const ctrl = new AbortController();
     const t = setTimeout(() => ctrl.abort(), 5000);
@@ -98,33 +154,47 @@ async function loadConfig() {
     clearTimeout(t);
     if (!response.ok) throw new Error('HTTP ' + response.status);
     CONFIG = await response.json();
+    // Если сервер прислал список туннелей — обновляем локальный список
+    // (единый источник правды в APP_CONFIG).
+    if (Array.isArray(CONFIG.tunnels) && CONFIG.tunnels.length > 0) {
+      KNOWN_TUNNELS = [...CONFIG.tunnels];
+    }
     return true;
   } catch (err) {
-    // Мёртвый/неверный туннель — очищаем и пробуем дефолтный адрес.
-    // Если дефолтный тоже не работает — показываем модалку для ввода.
+    // Мёртвый/неверный туннель — очищаем и пробуем резервные адреса.
+    // Если ни один не работает — показываем модалку для выбора.
     if (fromStorage || /\.loca\.lt$|localhost|127\.0\.0\.1/.test(API_BASE_URL)) {
       try { localStorage.removeItem('ball76_api'); } catch (_) {}
 
-      // Пробуем дефолтный туннельный адрес
-      if (API_BASE_URL !== DEFAULT_TUNNEL_URL) {
+      // Пробуем остальные известные туннели (в порядке списка, начиная со
+      // следующего после текущего). При успехе — сохраняем и перезагружаем.
+      const idx = KNOWN_TUNNELS.indexOf(API_BASE_URL);
+      for (let i = 1; i < KNOWN_TUNNELS.length; i++) {
+        const candidate = KNOWN_TUNNELS[(idx + i) % KNOWN_TUNNELS.length];
+        if (candidate === API_BASE_URL) continue;
         try {
           const ctrl2 = new AbortController();
           const t2 = setTimeout(() => ctrl2.abort(), 5000);
-          const resp2 = await fetch(`${DEFAULT_TUNNEL_URL}/api/config`, {
+          const resp2 = await fetch(`${candidate}/api/config`, {
             headers: { 'bypass-tunnel-reminder': '1' },
             signal: ctrl2.signal
           });
           clearTimeout(t2);
           if (resp2.ok) {
             CONFIG = await resp2.json();
-            API_BASE_URL = DEFAULT_TUNNEL_URL;
-            try { localStorage.setItem('ball76_api', DEFAULT_TUNNEL_URL); } catch (_) {}
+            // Обновляем список туннелей из конфига (единый источник правды).
+            if (Array.isArray(CONFIG.tunnels) && CONFIG.tunnels.length > 0) {
+              KNOWN_TUNNELS = [...CONFIG.tunnels];
+            }
+            API_BASE_URL = candidate;
+            saveApiUrl(candidate);
+            showToast(`Переключились на резервный туннель: ${candidate}`, 'info');
             return true;
           }
-        } catch (_) { /* дефолт тоже не работает */ }
+        } catch (_) { /* этот туннель не работает — пробуем следующий */ }
       }
 
-      openTunnelModal(`⚠️ API (${API_BASE_URL}) недоступен: ${err.message}. Введите правильный адрес:`);
+      openTunnelModal(`⚠️ API (${API_BASE_URL}) недоступен: ${err.message}. Выберите рабочий адрес:`);
     } else {
       showApiError(`API (${API_BASE_URL}) недоступен: ${err.message}`);
     }
@@ -146,18 +216,20 @@ function openTunnelModal(message) {
       <h3 class="tunnel-modal-title">Нет соединения с сервером</h3>
       <p class="tunnel-modal-text" id="tunnelModalMsg">${message}</p>
       <div class="tunnel-modal-row">
-        <input type="text" id="tunnelUrlInput" class="tunnel-modal-input"
-               placeholder="https://xxx.loca.lt" autocomplete="off" spellcheck="false">
+        <select id="tunnelUrlSelect" class="tunnel-modal-input tunnel-modal-select">
+          ${KNOWN_TUNNELS.map(u => `<option value="${u}">${u}</option>`).join('\n          ')}
+        </select>
         <button id="tunnelModalBtn" class="tunnel-modal-btn">Подключить</button>
       </div>
-      <p class="tunnel-modal-hint">Адрес выдаёт команда <code>./tunnel.sh</code></p>
+      <p class="tunnel-modal-hint">Туннели запускает команда <code>./tunnel.sh</code>. Выберите рабочий адрес.</p>
     </div>`;
   main.prepend(div);
   _tunnelModalEl = div;
-  setTimeout(() => document.getElementById('tunnelUrlInput')?.focus(), 100);
-  document.getElementById('tunnelUrlInput').addEventListener('keydown', e => {
-    if (e.key === 'Enter') connectTunnel();
-  });
+  // Предвыбираем текущий адрес, если он в списке
+  const sel = document.getElementById('tunnelUrlSelect');
+  if (sel && KNOWN_TUNNELS.includes(API_BASE_URL)) sel.value = API_BASE_URL;
+  setTimeout(() => sel?.focus(), 100);
+  sel.addEventListener('change', () => { setTunnelModalError(''); });
   document.getElementById('tunnelModalBtn').addEventListener('click', connectTunnel);
 }
 
@@ -167,39 +239,33 @@ function closeTunnelModal() {
 
 function setTunnelModalError(msg) {
   const el = document.getElementById('tunnelModalMsg');
-  if (el) { el.textContent = msg; el.style.color = '#e74c3c'; }
+  if (!el) return;
+  if (!msg) { el.textContent = ''; el.style.color = ''; return; }
+  el.textContent = msg;
+  el.style.color = '#e74c3c';
 }
 
 async function connectTunnel() {
-  const input = document.getElementById('tunnelUrlInput');
-  let url = (input?.value || '').trim().replace(/\/+$/, '');
-  if (!url) { setTunnelModalError('Введите адрес туннеля'); return; }
-  // Автодополнение протокола
-  if (!/^https?:\/\//i.test(url)) url = 'https://' + url;
+  const sel = document.getElementById('tunnelUrlSelect');
+  const url = (sel?.value || '').trim().replace(/\/+$/, '');
+  if (!url) { setTunnelModalError('Выберите адрес туннеля'); return; }
   // Базовая валидация
-  try { new URL(url); } catch { setTunnelModalError('Некорректный URL. Пример: https://ball76api.loca.lt'); return; }
+  try { new URL(url); } catch { setTunnelModalError('Некорректный URL. Пример: https://ball76api-1.loca.lt'); return; }
 
   const btn = document.getElementById('tunnelModalBtn');
   btn.disabled = true;
   btn.textContent = 'Проверка…';
 
   // Проверяем что API отвечает ПЕРЕД сохранением
-  try {
-    const ctrl = new AbortController();
-    const t = setTimeout(() => ctrl.abort(), 5000);
-    const isLocaLt = /\.loca\.lt$/.test(url);
-    const resp = await fetch(`${url}/api/status`, { headers: isLocaLt ? { 'bypass-tunnel-reminder': '1' } : {}, signal: ctrl.signal });
-    clearTimeout(t);
-    if (!resp.ok) throw new Error('HTTP ' + resp.status);
+  if (await probeTunnel(url)) {
     // Успех — сохраняем и перезагружаем
-    try { localStorage.setItem('ball76_api', url); } catch (_) {}
+    saveApiUrl(url);
     location.reload();
-  } catch (err) {
+  } else {
     // Ошибка — показываем в модалке, НЕ перезагружаем
-    setTunnelModalError(`⚠️ ${url} недоступен: ${err.message}. Попробуйте другой адрес.`);
+    setTunnelModalError(`⚠️ ${url} не отвечает. Выберите другой адрес из списка.`);
     btn.disabled = false;
     btn.textContent = 'Подключить';
-    input.select();
   }
 }
 
@@ -359,7 +425,13 @@ async function checkDbStatus() {
       updateDbWarning();
     }
   } catch (err) {
-    // Сервер не ответил вообще — считаем БД недоступной
+    // Сервер не ответил вообще. Если адрес — loca.lt туннель, пробуем
+    // переключиться на резервный (туннель мог отвалиться).
+    if (/\.loca\.lt$/.test(API_BASE_URL)) {
+      const switched = await failoverToNextTunnel(API_BASE_URL, 'Туннель не отвечает');
+      if (switched) return; // страница перезагружается
+    }
+    // Резервные не помогли (или адрес не loca.lt) — считаем БД недоступной
     if (dbOnline) {
       dbOnline = false;
       updateDbWarning();
@@ -450,6 +522,11 @@ async function loadFromAPI({ silent = false, refreshHall = true } = {}) {
     setApiStatus(true);
   } catch (err) {
     console.error('Ошибка при запросе API:', err);
+    // Туннель мог отвалиться — пробуем переключиться на резервный.
+    if (/\.loca\.lt$/.test(API_BASE_URL)) {
+      const switched = await failoverToNextTunnel(API_BASE_URL, 'Туннель не отвечает');
+      if (switched) return; // страница перезагружается
+    }
     // UX2: НЕ сбрасываем данные — держим последний успешный снимок
     setApiStatus(false);
     return;
@@ -547,6 +624,11 @@ async function addPlayer() {
     showToast(`${name} записан на игру`, 'success');
   } catch (err) {
     console.error('Ошибка при добавлении через API:', err);
+    // Туннель мог отвалиться — пробуем переключиться на резервный.
+    if (/\.loca\.lt$/.test(API_BASE_URL)) {
+      const switched = await failoverToNextTunnel(API_BASE_URL, 'Туннель не отвечает');
+      if (switched) return; // страница перезагружается
+    }
     showToast(err.message || 'Не удалось добавить игрока', 'error');
   } finally {
     btn.dataset.loading = '0';
@@ -615,6 +697,11 @@ async function doRemovePlayer(index) {
     showToast(`«${name}» удалён из списка`, 'success');
   } catch (err) {
     console.error('Ошибка при удалении через API:', err);
+    // Туннель мог отвалиться — пробуем переключиться на резервный.
+    if (/\.loca\.lt$/.test(API_BASE_URL)) {
+      const switched = await failoverToNextTunnel(API_BASE_URL, 'Туннель не отвечает');
+      if (switched) return; // страница перезагружается
+    }
     showToast(err.message || 'Не удалось удалить игрока', 'error');
   }
 }
@@ -672,6 +759,11 @@ async function submitEdit(index) {
     showToast(`Игрок переименован в «${newName}»`, 'success');
   } catch (err) {
     console.error('Ошибка при редактировании через API:', err);
+    // Туннель мог отвалиться — пробуем переключиться на резервный.
+    if (/\.loca\.lt$/.test(API_BASE_URL)) {
+      const switched = await failoverToNextTunnel(API_BASE_URL, 'Туннель не отвечает');
+      if (switched) return; // страница перезагружается
+    }
     showToast(err.message || 'Не удалось отредактировать игрока', 'error');
   }
 }
@@ -816,7 +908,13 @@ async function loadSignupStats(hall) {
     const resp = await fetch(`${API_BASE_URL}/api/signup-stats/${hall}`, { headers: getTunnelHeaders() });
     if (!resp.ok) return;
     signupStats = await resp.json();
-  } catch (_) { /* не критично */ }
+  } catch (err) {
+    // Туннель мог отвалиться — пробуем переключиться на резервный.
+    if (/\.loca\.lt$/.test(API_BASE_URL)) {
+      const switched = await failoverToNextTunnel(API_BASE_URL, 'Туннель не отвечает');
+      if (switched) return; // страница перезагружается
+    }
+  }
 }
 
 // Возвращает дату 'YYYY-MM-DD' для дня недели (1=Пн...7=Вс) в текущей МСК-неделе

@@ -98,28 +98,29 @@ function isValidApiUrl(url) {
 function detectApiBase() {
   const host = location.hostname;
 
-  // Страница открыта через туннель → API на том же адресе.
-  // Сохраняем, чтобы при переходе на GitHub Pages-копию не потерять.
-  if (/\.loca\.lt$/.test(host)) {
-    const base = location.origin;
-    saveApiUrl(base);
-    return base;
+  // Локальная разработка — API в Docker на localhost:8080.
+  if (host === 'localhost' || host === '127.0.0.1') {
+    return 'http://localhost:8080';
   }
 
+  // Продакшен (домен/IP CloudCore): страница и API живут на одном origin —
+  // nginx отдаёт статику и проксирует /api/ на Node-контейнер.
+  // Приоритет у сохранённого адреса, но «мёртвые» туннели loca.lt игнорируем.
   let saved = null;
   try { saved = localStorage.getItem('ball76_api'); } catch (_) {}
-  if (saved && isValidApiUrl(saved)) {
+  if (saved && isValidApiUrl(saved) && !/\.loca\.lt$/.test(saved)) {
     return saved.replace(/\/+$/, '');
   }
-  // Мусорный/невалидный URL в localStorage — очищаем
+  // Мусорный/невалидный/туннельный URL в localStorage — очищаем
   if (saved) {
     try { localStorage.removeItem('ball76_api'); } catch (_) {}
   }
 
-  // GitHub Pages без сохранённого туннеля — дефолтный адрес туннеля.
-  // Локальная разработка — Docker на localhost.
+  // GitHub Pages без сохранённого туннеля — легаси-режим (дефолтный туннель).
   if (host === 'swat92shtorm.github.io') return DEFAULT_TUNNEL_URL;
-  return 'http://localhost:8080';
+
+  // Всё остальное (IP или домен CloudCore) — API на том же хосте, что и страница.
+  return location.origin;
 }
 
 let API_BASE_URL = detectApiBase();

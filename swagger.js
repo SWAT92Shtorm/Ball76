@@ -24,8 +24,8 @@ API для управления записью на баскетбол в зал
       }
     },
     servers: [
-      { url: 'http://localhost:8080', description: 'Локальный сервер' },
-      { url: 'https://ball76.up.railway.app', description: 'Продакшен (Railway)' }
+      { url: 'https://ball76.duckdns.org', description: 'Продакшен (CloudCore)' },
+      { url: 'http://localhost:8080', description: 'Локальный сервер' }
     ],
     tags: [
       { name: 'Config', description: 'Конфигурация приложения' },

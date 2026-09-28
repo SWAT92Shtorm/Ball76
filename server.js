@@ -61,6 +61,12 @@ app.use((req, res, next) => {
 // Парсинг JSON
 app.use(express.json());
 
+// Перед приложением стоит один reverse-proxy (nginx), который передаёт
+// реальный IP клиента в заголовке X-Forwarded-For. Без этой настройки
+// express-rate-limit видит заголовок, но не доверяет прокси, и все запросы
+// считаются с одного IP (общий лимит на всех) + ошибка ERR_ERL_UNEXPECTED_X_FORWARDED_FOR.
+app.set('trust proxy', 1);
+
 // ==== Rate limiting (защита от спама/ботов) ====
 // Мутающие эндпоинты (POST/PATCH/DELETE): жёсткий лимит — 10 запросов
 // с одного IP в 1 минуту. Хватает для реального пользователя (запись,
@@ -105,7 +111,7 @@ app.get('/', (req, res) => {
  * /api/config:
  *   get:
  *     summary: Получить конфигурацию приложения
- *     description: Возвращает единый конфиг для клиента: цены, телефоны, расписание, лимиты.
+ *     description: "Возвращает единый конфиг для клиента: цены, телефоны, расписание, лимиты."
  *     tags: [Config]
  *     responses:
  *       200:
@@ -409,9 +415,9 @@ app.get('/api/players', readLimiter, async (req, res) => {
  *                   type: string
  *                   examples:
  *                     bad_request:
- *                       value: Bad request: name, date, and hallId required
+ *                       value: "Bad request: name, date, and hallId required"
  *                     full:
- *                       value: Игра заполнена: максимум 18 человек
+ *                       value: "Игра заполнена: максимум 18 человек"
  *                     duplicate:
  *                       value: Игрок уже записан на эту игру
  *       500:

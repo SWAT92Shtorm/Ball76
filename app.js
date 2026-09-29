@@ -103,23 +103,19 @@ function detectApiBase() {
     return 'http://localhost:8080';
   }
 
+  // Легаси-режим GitHub Pages: сохранённый туннель или дефолтный.
+  if (host === 'swat92shtorm.github.io') {
+    let saved = null;
+    try { saved = localStorage.getItem('ball76_api'); } catch (_) {}
+    if (saved && isValidApiUrl(saved)) return saved.replace(/\/+$/, '');
+    return DEFAULT_TUNNEL_URL;
+  }
+
   // Продакшен (домен/IP CloudCore): страница и API живут на одном origin —
   // nginx отдаёт статику и проксирует /api/ на Node-контейнер.
-  // Приоритет у сохранённого адреса, но «мёртвые» туннели loca.lt игнорируем.
-  let saved = null;
-  try { saved = localStorage.getItem('ball76_api'); } catch (_) {}
-  if (saved && isValidApiUrl(saved) && !/\.loca\.lt$/.test(saved)) {
-    return saved.replace(/\/+$/, '');
-  }
-  // Мусорный/невалидный/туннельный URL в localStorage — очищаем
-  if (saved) {
-    try { localStorage.removeItem('ball76_api'); } catch (_) {}
-  }
-
-  // GitHub Pages без сохранённого туннеля — легаси-режим (дефолтный туннель).
-  if (host === 'swat92shtorm.github.io') return DEFAULT_TUNNEL_URL;
-
-  // Всё остальное (IP или домен CloudCore) — API на том же хосте, что и страница.
+  // localStorage здесь игнорируем: старые адреса туннелей loca.lt не должны
+  // ломать боевой сайт (это была причина «Fetch is aborted»).
+  try { localStorage.removeItem('ball76_api'); } catch (_) {}
   return location.origin;
 }
 
@@ -145,12 +141,9 @@ async function loadConfig() {
     openTunnelModal('Адрес API не задан. Введите адрес туннеля:');
     return false;
   }
-  // Был ли адрес взят из localStorage (а не определён автоматически)?
-  let fromStorage = false;
-  try { fromStorage = !!localStorage.getItem('ball76_api'); } catch (_) {}
   try {
     const ctrl = new AbortController();
-    const t = setTimeout(() => ctrl.abort(), 5000);
+    const t = setTimeout(() => ctrl.abort(), 10000);
     const response = await fetch(`${API_BASE_URL}/api/config`, { headers: getTunnelHeaders(), signal: ctrl.signal });
     clearTimeout(t);
     if (!response.ok) throw new Error('HTTP ' + response.status);
@@ -162,9 +155,11 @@ async function loadConfig() {
     }
     return true;
   } catch (err) {
-    // Мёртвый/неверный туннель — очищаем и пробуем резервные адреса.
-    // Если ни один не работает — показываем модалку для выбора.
-    if (fromStorage || /\.loca\.lt$|localhost|127\.0\.0\.1/.test(API_BASE_URL)) {
+    // Туннельный/локальный режим — пробуем резервные адреса и показываем модалку.
+    // Боевой домен (один origin) — просто сообщаем об ошибке, без loca.lt-модалки.
+    const isTunnelMode = /\.loca\.lt$|localhost|127\.0\.0\.1/.test(API_BASE_URL)
+      || location.hostname === 'swat92shtorm.github.io';
+    if (isTunnelMode) {
       try { localStorage.removeItem('ball76_api'); } catch (_) {}
 
       // Пробуем остальные известные туннели (в порядке списка, начиная со
@@ -1493,6 +1488,15 @@ function closeTeamsModal() {
 
 const CHANGELOG = [
   {
+    label: 'v2026.09.28 — запуск в облаке',
+    items: [
+      '☁️ Сайт переехал в облако и работает круглосуточно',
+      '🌍 Постоянный адрес: ball76.duckdns.org',
+      '🔒 Защищённое соединение (HTTPS)',
+      '⚡ Стабильная работа без туннелей'
+    ]
+  },
+  {
     version: 'p',
     items: [
       '📊 В днях без игры — статистика записей на ближайшую игру'
@@ -1561,7 +1565,7 @@ function openChangelogModal() {
 
   content.innerHTML = CHANGELOG.map(entry => `
     <div class="changelog-entry">
-      <div class="changelog-version">v2026.08.25-${entry.version}</div>
+      <div class="changelog-version">${entry.label ? entry.label : `v2026.08.25-${entry.version}`}</div>
       <ul class="changelog-items">
         ${entry.items.map(item => `<li>${escapeHtml(item)}</li>`).join('')}
       </ul>

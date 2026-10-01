@@ -311,6 +311,22 @@ function escapeHtml(str) {
     .replace(/'/g, '&#39;');
 }
 
+// HTML-ссылка на профиль Telegram игрока (по ФИО) или пустая строка.
+// Имя приходит из БД и экранируется; username дополнительно санируется,
+// чтобы в href не попали посторонние символы (защита от инъекции).
+function telegramLinkHtml(name) {
+  const link = telegramLinks[name] || telegramLinks[String(name || '').trim()];
+  if (!link || !link.username) return '';
+  const uname = String(link.username).trim().replace(/^@/, '');
+  if (!/^[A-Za-z0-9_]{3,64}$/.test(uname)) return '';
+  const safeUname = encodeURIComponent(uname);
+  return `<a class="tg-link" href="https://t.me/${safeUname}" target="_blank"`
+    + ` rel="noopener noreferrer" title="Написать в Telegram: @${escapeHtml(uname)}">`
+    + `<svg class="tg-icon" width="14" height="14" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">`
+    + `<path d="M9.78 18.65l.28-4.23 7.68-6.92c.34-.31-.07-.46-.52-.19L7.74 13.3 3.64 12c-.88-.25-.89-.86.2-1.3l15.97-6.16c.73-.33 1.43.18 1.15 1.3l-2.72 12.81c-.19.91-.74 1.13-1.5.71L12.6 16.3l-1.99 1.93c-.23.23-.42.42-.83.42z"/></svg>`
+    + `@${escapeHtml(uname)}</a>`;
+}
+
 // Тосты (уведомления)
 function showToast(message, type = 'info', duration = 3500) {
   const container = document.getElementById('toastContainer');
@@ -395,6 +411,9 @@ function shuffleArray(arr) {
 let playersByHall = { hall1: [], hall2: [] };
 let playerNames = [];
 let historyByDate = {};
+// Карта «ФИО → аккаунт Telegram» (из таблицы telegram_links).
+// Используется, чтобы рядом с именем игрока показать кликабельную ссылку.
+let telegramLinks = {};
 let lastHallDateKey = null;   // «зал|дата» — ключ для перезагрузки при смене зала/даты
 let isInitialLoad = true;
 let editingIndex = null;        // индекс строки, открытой на редактирование (UX1)
@@ -512,6 +531,16 @@ async function loadFromAPI({ silent = false, refreshHall = true } = {}) {
     if (!historyResponse.ok) throw new Error('Не удалось загрузить историю');
     const historyData = await historyResponse.json();
     historyByDate = historyData.historyByDate || {};
+
+    // 2b. Связки с Telegram (ФИО → @username) — не критично для работы,
+    // поэтому при ошибке/отсутствии таблицы просто оставляем пустую карту.
+    try {
+      const linksResponse = await fetch(`${API_BASE_URL}/api/telegram-links`, { headers: getTunnelHeaders() });
+      if (linksResponse.ok) {
+        const linksData = await linksResponse.json();
+        telegramLinks = linksData.links || {};
+      }
+    } catch (_) { /* нет связок — не критично */ }
 
     // Пересчёт счётчика визитов для текущего зала (O(M) вместо O(N×M) на рендер)
     rebuildVisitCounts(currentHall);
@@ -1157,7 +1186,7 @@ function showList() {
       return `
         <div class="playerLine" id="playerLine${i}">
           <div class="playerName">
-            <span class="${overLimitCls.trim()}">${idx}. ${escapeHtml(name)}
+            <span class="${overLimitCls.trim()}">${idx}. ${escapeHtml(name)}${telegramLinkHtml(name)}
               <span class="visit-count">${getPlayerVisits(name)} <span class="visit-plus">+1</span></span>
             </span>
             <input type="text" id="nameEdit${i}" class="player-name-edit" value="${escapeHtml(name)}" />
@@ -1560,6 +1589,13 @@ function closeTeamsModal() {
 // ==================== 7.5. CHANGELOG (модалка истории версий) ====================
 
 const CHANGELOG = [
+  {
+    label: 'v2026.10.01 — Telegram-аккаунты в списке',
+    items: [
+      '🔗 Возле имени игрока — кликабельная ссылка на профиль Telegram',
+      '👆 Тап по ссылке открывает чат с игроком в Telegram'
+    ]
+  },
   {
     label: 'v2026.10.01 — мобильная вёрстка',
     items: [

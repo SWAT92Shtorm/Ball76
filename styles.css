@@ -572,6 +572,29 @@ th {
   color: #90ff90;
 }
 
+/* Ссылка на профиль Telegram рядом с именем игрока */
+.tg-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  margin-left: 6px;
+  font-size: 12px;
+  color: #4fc3f7;
+  text-decoration: none;
+  vertical-align: middle;
+  white-space: nowrap;
+}
+
+.tg-link:hover,
+.tg-link:active {
+  color: #81d4fa;
+  text-decoration: underline;
+}
+
+.tg-icon {
+  flex-shrink: 0;
+}
+
 /* ==== Список участников ==== */
 
 .list-header {

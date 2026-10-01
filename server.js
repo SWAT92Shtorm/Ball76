@@ -360,6 +360,68 @@ app.get('/api/players', readLimiter, async (req, res) => {
   }
 });
 
+/**
+ * @swagger
+ * /api/telegram-links:
+ *   get:
+ *     summary: Связки игроков с Telegram
+ *     description: >
+ *       Возвращает карту «ФИО игрока → аккаунт Telegram» из таблицы
+ *       telegram_links. Нужна фронтенду, чтобы рядом с именем показывать
+ *       кликабельную ссылку на профиль Telegram (@username).
+ *     tags: [Players]
+ *     responses:
+ *       200:
+ *         description: Карта связок получена
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 links:
+ *                   type: object
+ *                   additionalProperties:
+ *                     type: object
+ *                     properties:
+ *                       username:
+ *                         type: string
+ *                       telegramId:
+ *                         type: integer
+ *       500:
+ *         description: Ошибка чтения из БД
+ */
+app.get('/api/telegram-links', readLimiter, async (req, res) => {
+  try {
+    const result = await pool.query(`
+      SELECT DISTINCT ON (tl.player_name)
+             tl.player_name,
+             tl.username,
+             tl.telegram_id
+        FROM telegram_links tl
+       WHERE tl.player_name IS NOT NULL
+         AND tl.username IS NOT NULL
+       ORDER BY tl.player_name, tl.updated_at DESC
+    `);
+
+    const links = {};
+    for (const row of result.rows) {
+      links[row.player_name] = {
+        username: row.username,
+        telegramId: row.telegram_id
+      };
+    }
+
+    res.json({ links });
+  } catch (err) {
+    // Таблицы может не быть (миграция ещё не применена) — не ломаем интерфейс.
+    if (err.code === '42P01') {
+      return res.json({ links: {} });
+    }
+    console.error('Ошибка чтения связок Telegram:', err);
+    res.status(500).json({ error: 'Failed to read telegram links' });
+  }
+});
+
 
 
 /**

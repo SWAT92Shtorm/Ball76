@@ -560,12 +560,11 @@ th {
   cursor: pointer;
 }
 
-/* Счётчик визитов игрока (справа в строке списка) */
+/* Счётчик визитов игрока (сразу после имени) */
 .visit-count {
   color: #a0e0ff;
   font-size: 12px;
-  float: right;
-  margin-left: auto;
+  margin-left: 8px;
 }
 
 .visit-plus {
@@ -750,10 +749,40 @@ th {
   flex-grow: 1;
   margin-right: 10px;
   color: #ffffff;
+  min-width: 0;
 }
 
 .playerName span {
   margin-right: 10px;
+}
+
+/* Строка имени: имя прижато вправо, колонка Telegram — фиксированной
+   ширины, поэтому начало всех учётных записей выровнено по вертикали. */
+.playerNameMain {
+  display: inline-flex;
+  align-items: baseline;
+  justify-content: flex-end;
+  gap: 12px;
+  width: 100%;
+  margin-right: 0;
+}
+
+.playerNameText {
+  flex: 0 1 auto;
+  min-width: 0;
+  text-align: right;
+  margin-right: 0;
+}
+
+.playerNameTg {
+  flex: 0 0 128px;
+  text-align: left;
+  margin-right: 0;
+}
+
+/* Ссылка на TG внутри колонки — без собственного отступа слева */
+.playerNameTg .tg-link {
+  margin-left: 0;
 }
 
 /* Режим редактирования строки игрока */
@@ -1420,5 +1449,14 @@ th {
   }
   .modal-footer .modal-btn {
     flex: 1 1 auto;
+  }
+
+  /* Узкая колонка Telegram, чтобы длинные ФИО не выталкивали ссылку */
+  .playerNameMain {
+    gap: 8px;
+  }
+  .playerNameTg {
+    flex: 0 0 96px;
+    font-size: 11px;
   }
 }

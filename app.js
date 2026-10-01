@@ -1186,8 +1186,11 @@ function showList() {
       return `
         <div class="playerLine" id="playerLine${i}">
           <div class="playerName">
-            <span class="${overLimitCls.trim()}">${idx}. ${escapeHtml(name)}${telegramLinkHtml(name)}
-              <span class="visit-count">${getPlayerVisits(name)} <span class="visit-plus">+1</span></span>
+            <span class="playerNameMain ${overLimitCls.trim()}">
+              <span class="playerNameText">${idx}. ${escapeHtml(name)}
+                <span class="visit-count">${getPlayerVisits(name)} <span class="visit-plus">+1</span></span>
+              </span>
+              <span class="playerNameTg">${telegramLinkHtml(name)}</span>
             </span>
             <input type="text" id="nameEdit${i}" class="player-name-edit" value="${escapeHtml(name)}" />
           </div>
@@ -1593,7 +1596,8 @@ const CHANGELOG = [
     label: 'v2026.10.01 — Telegram-аккаунты в списке',
     items: [
       '🔗 Возле имени игрока — кликабельная ссылка на профиль Telegram',
-      '👆 Тап по ссылке открывает чат с игроком в Telegram'
+      '👆 Тап по ссылке открывает чат с игроком в Telegram',
+      '📐 Аккаунты выровнены в ровную колонку справа'
     ]
   },
   {

@@ -25,13 +25,23 @@ export const config = {
   // Пример: https://tg-proxy.<account>.workers.dev
   telegramApiRoot: optional('TELEGRAM_API_ROOT'),
 
-  // --- LLM (OpenAI-совместимый; по умолчанию vsegpt.ru — российский агрегатор) ---
-  // Внимание: Groq / OpenAI / OpenRouter / Gemini-регистрация — недоступны из РФ.
-  // vsegpt принимает российские карты и даёт доступ к gpt-4.1-nano и др.
+  // --- LLM ---
+  // Поддерживаются два режима:
+  //  1) OpenAI-совместимый провайдер (vsegpt.ru и др.) — LLM_BASE_URL + LLM_API_KEY.
+  //  2) GigaChat (Sber) — свой протокол: OAuth-токен + legacy `functions`.
+  //      Включается переменной GIGACHAT_AUTH_KEY (base64 от ClientID:ClientSecret).
   llm: {
     baseUrl: optional('LLM_BASE_URL', 'https://api.vsegpt.ru/v1'),
     apiKey: optional('LLM_API_KEY'),
-    model: optional('LLM_MODEL', 'openai/gpt-4.1-nano')
+    model: optional('LLM_MODEL', 'openai/gpt-4.1-nano'),
+
+    // --- GigaChat ---
+    // Authorization key = base64(ClientID:ClientSecret) из личного кабинета Sber.
+    gigachatAuthKey: optional('GIGACHAT_AUTH_KEY'),
+    gigachatScope: optional('GIGACHAT_SCOPE', 'GIGACHAT_API_PERS'),
+    gigachatModel: optional('GIGACHAT_MODEL', 'GigaChat-2'),
+    gigachatAuthUrl: optional('GIGACHAT_AUTH_URL', 'https://ngw.devices.sberbank.ru:9443/api/v2/oauth'),
+    gigachatBaseUrl: optional('GIGACHAT_BASE_URL', 'https://api.giga.chat/v1')
   },
 
   // --- Ball76 API ---
@@ -57,5 +67,8 @@ export const config = {
   gatherHoursBefore: Number(optional('GATHER_HOURS_BEFORE', '24'))
 };
 
-// Доступно ли ИИ (ключ задан)
-export const aiEnabled = Boolean(config.llm.apiKey);
+// Провайдер ИИ: GigaChat включается ключом GIGACHAT_AUTH_KEY, иначе — OpenAI-совместимый.
+export const llmProvider = config.llm.gigachatAuthKey ? 'gigachat' : 'openai';
+
+// Доступно ли ИИ (задан ключ любого из провайдеров)
+export const aiEnabled = llmProvider === 'gigachat' || Boolean(config.llm.apiKey);

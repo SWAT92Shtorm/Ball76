@@ -8,3 +8,7 @@ node_modules/
 .lt-1.log
 .lt-2.log
 .lt-3.log
+# Telegram-бот: секреты и артефакты сборки
+bot/.env
+bot/node_modules/
+bot/npm-debug.log*

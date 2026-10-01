@@ -1,0 +1,77 @@
+services:
+  db:
+    image: postgres:16
+    container_name: ball76-db
+    environment:
+      POSTGRES_DB: Ball76
+      POSTGRES_USER: Ball76
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    command: >
+      postgres -c shared_buffers=128MB -c max_connections=20
+               -c work_mem=4MB -c maintenance_work_mem=32MB
+               -c effective_cache_size=512MB
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U Ball76 -d Ball76"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    ports:
+      - "127.0.0.1:5432:5432"
+    restart: unless-stopped
+    networks:
+      - ball76
+
+  node:
+    image: node:20-alpine
+    container_name: ball76-node
+    working_dir: /app
+    command: sh -c "npm ci --omit=dev && node server.js"
+    environment:
+      DATABASE_URL: postgres://Ball76:${POSTGRES_PASSWORD}@db:5432/Ball76
+      PORT: 8080
+    volumes:
+      - ./:/app
+    depends_on:
+      db:
+        condition: service_healthy
+    ports:
+      - "127.0.0.1:8080:8080"
+    mem_limit: 384m
+    restart: unless-stopped
+    networks:
+      - ball76
+
+  # ==== Telegram-бот ====
+  bot:
+    build: ./bot
+    container_name: ball76-bot
+    env_file:
+      - ./bot/.env
+    environment:
+      # Внутри сети обращаемся к сервисам по именам.
+      API_BASE_URL: http://node:8080
+      DATABASE_URL: postgres://Ball76:${POSTGRES_PASSWORD}@db:5432/Ball76
+      TZ: Europe/Moscow
+    # Обход блокировки Telegram: пиннинг api.telegram.org на рабочий IP.
+    # ВАЖНО: стабильность ~82%, при сбое запрос повторяется (grammY).
+    # Для прод-надёжности перевести на TELEGRAM_API_ROOT (Cloudflare Worker).
+    extra_hosts:
+      - "api.telegram.org:149.154.167.220"
+    depends_on:
+      db:
+        condition: service_healthy
+      node:
+        condition: service_started
+    mem_limit: 256m
+    restart: unless-stopped
+    networks:
+      - ball76
+
+volumes:
+  pgdata:
+
+networks:
+  ball76:
+    driver: bridge

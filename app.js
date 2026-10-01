@@ -1647,9 +1647,8 @@ function renderTimeBanner(info, hall, date) {
   }
 
   const from = info.scheduledFrom || '—';
-  const to = info.endTime ? `–${info.endTime}` : '';
   banner.style.display = 'block';
-  banner.innerHTML = `⚠️ <strong>Время игры изменено:</strong> начало в ${escapeHtml(info.startTime)}${escapeHtml(to)} `
+  banner.innerHTML = `⚠️ <strong>Время игры изменено:</strong> начало в ${escapeHtml(info.startTime)} `
     + `(по расписанию было ${escapeHtml(from)})`
     + (info.note ? `<div class="time-change-note">Причина: ${escapeHtml(info.note)}</div>` : '');
 
@@ -1668,10 +1667,9 @@ function maybeShowTimeNotice(info, hall, date) {
   const modal = document.getElementById('timeNoticeModal');
   if (!body || !modal) return;
 
-  const to = info.endTime ? `–${info.endTime}` : '';
   body.innerHTML = `
     <p>Время игры <strong>${escapeHtml(hallName(hall))}</strong> на ${formatDateHuman(date)} изменено.</p>
-    <p class="time-notice-big">${escapeHtml(info.startTime)}${escapeHtml(to)}</p>
+    <p class="time-notice-big">${escapeHtml(info.startTime)}</p>
     <p class="time-notice-was">По расписанию было ${escapeHtml(info.scheduledFrom || '—')}</p>
     ${info.note ? `<p class="time-notice-reason">Причина: ${escapeHtml(info.note)}</p>` : ''}
   `;
@@ -1830,14 +1828,13 @@ async function loadAdminGameTime() {
 
 function updateAdminPreview() {
   const start = document.getElementById('adminStartTime').value;
-  const end = document.getElementById('adminEndTime').value;
   const note = document.getElementById('adminNote').value.trim();
   const preview = document.getElementById('adminPreview');
   if (!preview) return;
 
   if (!start) { preview.textContent = 'Укажите время начала'; return; }
   preview.innerHTML = `Предпросмотр для игроков: <br>⚠️ <strong>Время изменено:</strong> `
-    + `${escapeHtml(start)}${end ? '–' + escapeHtml(end) : ''}`
+    + `начало в ${escapeHtml(start)}`
     + (note ? `<br>Причина: ${escapeHtml(note)}` : '');
 }
 

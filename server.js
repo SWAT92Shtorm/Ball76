@@ -52,7 +52,10 @@ app.use((req, res, next) => {
     res.header('Access-Control-Allow-Origin', origin);
   }
   res.header('Access-Control-Allow-Methods', 'GET, POST, PATCH, DELETE, OPTIONS');
-  res.header('Access-Control-Allow-Headers', 'Content-Type, bypass-tunnel-reminder');
+  // X-Admin-Token обязателен в списке: браузер делает preflight (OPTIONS) для
+  // PATCH с этим заголовком, и без разрешения запрос блокируется (CORS),
+  // что проявляется как «ошибка соединения» при сохранении времени.
+  res.header('Access-Control-Allow-Headers', 'Content-Type, X-Admin-Token, bypass-tunnel-reminder');
   if (req.method === 'OPTIONS') {
     return res.status(200).end();
   }

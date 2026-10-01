@@ -1885,16 +1885,21 @@ async function loadAdminGameTime() {
 
     if (hint) {
       if (info.scheduledFrom) {
+        // Обычный день расписания.
         hint.textContent = `По расписанию: ${info.scheduledFrom}${info.scheduledTo ? '–' + info.scheduledTo : ''}`;
         hint.classList.remove('admin-hint-extra');
+      } else if (info.isOverride) {
+        // Игра на этот день уже запланирована (вне графика) — не путаем
+        // админа фразой «игры нет»: время задано ниже в поле.
+        hint.textContent = '📌 Игра запланирована вне обычного графика';
+        hint.classList.add('admin-hint-extra');
       } else {
-        hint.textContent = '📌 В этот день игры нет в графике';
+        // Игры на эту дату действительно нет — можно назначить время.
+        hint.textContent = '📌 На эту дату игра не запланирована';
         hint.classList.add('admin-hint-extra');
         // Подставим привычное время по умолчанию, чтобы админ не вводил с нуля.
-        if (!info.startTime) {
-          const defFrom = getDefaultStartTime(hall);
-          if (defFrom) document.getElementById('adminStartTime').value = defFrom;
-        }
+        const defFrom = getDefaultStartTime(hall);
+        if (defFrom) document.getElementById('adminStartTime').value = defFrom;
       }
     }
     updateAdminPreview();

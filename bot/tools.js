@@ -3,8 +3,8 @@
 // ИИ только выбирает инструмент и аргументы; выполняется код.
 // ============================================================
 
-import { getConfigCached, describeGame, doSignup, doCancel, nearestGame, upcomingDates, scheduleText } from './game.js';
-import { addDays, todayMSK } from './api.js';
+import { getConfigCached, describeGame, doSignup, doCancel, nearestGame, upcomingDates, hasGameDate, scheduleText } from './game.js';
+import { addDays, todayMSK, humanDate } from './api.js';
 import { log } from './logger.js';
 
 // JSON-схемы для function calling (формат OpenAI).
@@ -64,14 +64,33 @@ export const toolDefs = [
   }
 ];
 
-/** Разрешить дату: явную или ближайшую игру зала. */
+/**
+ * Разрешить дату: явную или ближайшую игру зала.
+ * Явную дату проверяем: если игры в этот день нет — возвращаем { noGame: true },
+ * чтобы бот не предлагал запись на день без игры.
+ */
 async function resolveDate(hall, date) {
   const cfg = await getConfigCached();
+  const hallName = cfg.halls[hall].name;
+
   if (date && /^\d{4}-\d{2}-\d{2}$/.test(date)) {
-    return { date, hallName: cfg.halls[hall].name };
+    const ok = await hasGameDate(hall, cfg.halls, date);
+    if (!ok) {
+      const dates = await upcomingDates(hall, cfg.halls, 5);
+      return { date: null, hallName, noGame: true, requested: date, available: dates };
+    }
+    return { date, hallName };
   }
+
   const dates = await upcomingDates(hall, cfg.halls, 1);
-  return { date: dates[0] || null, hallName: cfg.halls[hall].name };
+  return { date: dates[0] || null, hallName };
+}
+
+/** Понятный ответ, когда на запрошенную дату игры нет. */
+function noGameText(hallName, requested, available) {
+  const list = (available || []).map((d) => humanDate(d)).join(', ');
+  return `На ${humanDate(requested)} в зале ${hallName} игры нет.\n` +
+    (list ? `Ближайшие игровые дни: ${list}.` : 'Ближайших игр не найдено.');
 }
 
 /**
@@ -94,11 +113,12 @@ export async function runTool(name, args, ctxUser) {
     }
 
     case 'get_game_info': {
-      const { date, hallName } = await resolveDate(args.hall, args.date);
-      if (!date) return { text: 'Не нашёл игру для этого зала.' };
-      const g = await describeGame(args.hall, date, hallName);
+      const r = await resolveDate(args.hall, args.date);
+      if (r.noGame) return { text: noGameText(r.hallName, r.requested, r.available) };
+      if (!r.date) return { text: 'Не нашёл игру для этого зала.' };
+      const g = await describeGame(args.hall, r.date, r.hallName);
       return {
-        text: `${hallName}, ${g.humanDate}, ${g.startTime}${g.endTime ? '–' + g.endTime : ''}. ` +
+        text: `${r.hallName}, ${g.humanDate}, ${g.startTime}${g.endTime ? '–' + g.endTime : ''}. ` +
               `Записано ${g.count}/18, свободно ${g.free}.${g.note ? ' Примечание: ' + g.note : ''}`
       };
     }
@@ -107,19 +127,21 @@ export async function runTool(name, args, ctxUser) {
       if (!ctxUser || !ctxUser.playerName) {
         return { text: 'Не знаю ваше ФИО — сначала привяжите профиль.' };
       }
-      const { date, hallName } = await resolveDate(args.hall, args.date);
-      if (!date) return { text: 'Не нашёл игру для этого зала.' };
+      const r = await resolveDate(args.hall, args.date);
+      if (r.noGame) return { text: noGameText(r.hallName, r.requested, r.available) };
+      if (!r.date) return { text: 'Не нашёл игру для этого зала.' };
       // НЕ выполняем сразу — просим подтверждение (см. handlers/ai.js)
-      return { text: '', pendingAction: { action: 'signup', hallId: args.hall, date, hallName } };
+      return { text: '', pendingAction: { action: 'signup', hallId: args.hall, date: r.date, hallName: r.hallName } };
     }
 
     case 'cancel': {
       if (!ctxUser || !ctxUser.playerName) {
         return { text: 'Не знаю ваше ФИО — сначала привяжите профиль.' };
       }
-      const { date, hallName } = await resolveDate(args.hall, args.date);
-      if (!date) return { text: 'Не нашёл игру для этого зала.' };
-      return { text: '', pendingAction: { action: 'cancel', hallId: args.hall, date, hallName } };
+      const r = await resolveDate(args.hall, args.date);
+      if (r.noGame) return { text: noGameText(r.hallName, r.requested, r.available) };
+      if (!r.date) return { text: 'Не нашёл игру для этого зала.' };
+      return { text: '', pendingAction: { action: 'cancel', hallId: args.hall, date: r.date, hallName: r.hallName } };
     }
 
     default:

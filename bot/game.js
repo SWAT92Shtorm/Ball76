@@ -4,7 +4,7 @@
 // проверяет лимит и дубли до записи.
 // ============================================================
 
-import { api, todayMSK, humanDate, addDays, scheduleForDate, findNextGameDate, weekdayName } from './api.js';
+import { api, todayMSK, nowMSKHM, humanDate, addDays, scheduleForDate, findNextGameDate, weekdayName } from './api.js';
 import { log } from './logger.js';
 
 const MAX_PLAYERS = 18;
@@ -15,16 +15,54 @@ export async function getConfigCached() {
   return cachedConfig;
 }
 
-/** Ближайшие N дат игр для зала (по расписанию + override). */
+/**
+ * Дата (в пределах MAX_DAYS вперёд), на которую игра реально запланирована.
+ * Учитываем и обычное расписание, и доп. игры (override из БД).
+ * «Сегодняшнюю» игру пропускаем, если время начала уже прошло.
+ */
+async function hasGameOn(hallId, halls, date, overrides) {
+  const hasSchedule = Boolean(scheduleForDate(halls[hallId], date));
+  const hasExtra = Boolean(overrides && overrides[date]);
+  if (!hasSchedule && !hasExtra) return false;
+
+  if (date === todayMSK()) {
+    const time = await api.getGameTime(hallId, date).catch(() => null);
+    const start = time && time.startTime;
+    if (start && nowMSKHM() >= start) return false; // игра уже началась
+  }
+  return true;
+}
+
+/**
+ * Ближайшие N дат, на которые реально есть игры (расписание + доп. игры).
+ * Даты без игры не предлагаем, уже начавшуюся сегодняшнюю — пропускаем.
+ */
 export async function upcomingDates(hallId, halls, count = 4) {
+  let overrides = {};
+  try {
+    const ov = await api.getTimeOverrides(hallId);
+    overrides = (ov && ov.overrides) || {};
+  } catch (e) {
+    log.warn('Не удалось получить time-overrides:', e.message);
+  }
+
   const dates = [];
-  let cursor = todayMSK();
+  const cursor = todayMSK();
   for (let i = 0; i < 60 && dates.length < count; i++) {
     const d = addDays(cursor, i);
-    const hasSchedule = Boolean(scheduleForDate(halls[hallId], d));
-    if (hasSchedule) dates.push(d);
+    if (await hasGameOn(hallId, halls, d, overrides)) dates.push(d);
   }
   return dates;
+}
+
+/** Есть ли игра в конкретную дату (расписание + доп. игры). */
+export async function hasGameDate(hallId, halls, date) {
+  let overrides = {};
+  try {
+    const ov = await api.getTimeOverrides(hallId);
+    overrides = (ov && ov.overrides) || {};
+  } catch (_) { /* сеть недоступна — считаем по расписанию */ }
+  return hasGameOn(hallId, halls, date, overrides);
 }
 
 /** Осмысленное описание игры: зал, дата, время, сколько записано. */

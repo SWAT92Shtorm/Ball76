@@ -59,6 +59,13 @@ export const api = {
   /** Время игры (с учётом override). */
   getGameTime: (hallId, date) => call('GET', `/api/games/${hallId}/${date}/time`),
 
+  /**
+   * Даты с заданным временем (переносы и игры вне обычного графика).
+   * Возвращает { date: { startTime, note, isExtra } } — нужны, чтобы
+   * предлагать в боте только те дни, где игра реально запланирована.
+   */
+  getTimeOverrides: (hallId) => call('GET', `/api/games/${hallId}/time-overrides`),
+
   /** Все игроки, сгруппированные по залам { hall1: [names], hall2: [names] }. */
   async getAllPlayers() {
     const data = await call('GET', '/api/players');
@@ -100,6 +107,13 @@ const MONTHS_RU = ['янв', 'фев', 'мар', 'апр', 'мая', 'июн', '
 export function todayMSK() {
   return new Intl.DateTimeFormat('en-CA', {
     timeZone: config.tz, year: 'numeric', month: '2-digit', day: '2-digit'
+  }).format(new Date());
+}
+
+/** Текущее время в МСК: HH:MM (для сравнения с временем начала игры). */
+export function nowMSKHM() {
+  return new Intl.DateTimeFormat('en-GB', {
+    timeZone: config.tz, hour: '2-digit', minute: '2-digit'
   }).format(new Date());
 }
 

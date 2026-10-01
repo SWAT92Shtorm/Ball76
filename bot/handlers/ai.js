@@ -8,6 +8,7 @@ import { chat, aiEnabled } from '../llm.js';
 import { toolDefs, runTool, execConfirmed } from '../tools.js';
 import { buildSystemPrompt } from '../prompts/system.js';
 import { getConfigCached } from '../game.js';
+import { humanDate } from '../api.js';
 import { getLink } from '../db.js';
 import { mainMenu } from '../keyboards.js';
 import { log } from '../logger.js';
@@ -74,7 +75,7 @@ export async function handleText(ctx) {
       const { action, hallId, date, hallName } = result.pendingAction;
       const verb = action === 'signup' ? 'Записать' : 'Отменить запись';
       await ctx.reply(
-        `${verb}?\n\n${hallName}, ${date}`,
+        `${verb}?\n\n${hallName}, ${humanDate(date)}`,
         {
           reply_markup: new InlineKeyboard()
             .text('✅ Да', `confirm:${action}:${hallId}:${date}`)

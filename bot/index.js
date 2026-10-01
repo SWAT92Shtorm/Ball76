@@ -86,25 +86,40 @@ bot.callbackQuery(/^confirm:(signup|cancel):(hall\d):(\d{4}-\d{2}-\d{2})$/, asyn
 // --- Текст ---
 bot.on('message:text', async (ctx) => {
   const isGroup = ctx.chat.type === 'group' || ctx.chat.type === 'supergroup';
+  const rawText = ctx.message.text || '';
+  // Устойчивое распознавание @упоминания: не отличаем регистр и разделители,
+  // т.к. пользователи пишут @Ball76_bot / @ball76bot вместо точного @Ball76bot.
+  const norm = (s) => s.toLowerCase().replace(/[^a-z0-9]/g, '');
+  const botUsername = norm(ctx.me?.username || '');
+  const mentioned = Boolean(botUsername) && norm(rawText).includes(botUsername);
+  const isReplyToBot = ctx.message.reply_to_message?.from?.id === ctx.me?.id;
+  const cleaned = rawText.replace(/@\w+/g, '').trim();
 
+  // ==== Группы ====
   if (isGroup) {
-    const text = ctx.message.text || '';
-    const mentioned = ctx.me && text.includes(`@${ctx.me.username}`);
-    const isReplyToBot = ctx.message.reply_to_message?.from?.id === ctx.me?.id;
+    // Privacy mode обычно ON — бот и так видит только упоминания/ответы.
+    // Реагируем ТОЛЬКО на упоминание бота или ответ на его сообщение.
     if (mentioned || isReplyToBot) {
       await handleGroupMention(ctx);
     }
-    return; // в группах на остальное не реагируем (privacy ON)
+    return;
   }
 
-  // Личка
-  const text = (ctx.message.text || '').trim();
+  // ==== Личка ====
+  // Привязка профиля по ФИО — работает всегда (это не ИИ).
+  if (await tryLinkByName(ctx, rawText)) return;
 
-  // Сначала попытка привязать по ФИО (если не привязан или ввёл ФИО)
-  if (await tryLinkByName(ctx, text)) return;
+  // Режим «ИИ только по @упоминанию»: без тега ИИ молчит.
+  if (config.aiOnlyOnMention && !mentioned && !isReplyToBot) {
+    await sendMenu(
+      ctx,
+      `Напишите @${ctx.me?.username || 'бота'}, чтобы обратиться к ИИ. Или выберите действие:`
+    );
+    return;
+  }
 
-  // Затем — ИИ
-  const answered = await handleText(ctx);
+  // ИИ (текст без @упоминания)
+  const answered = await handleText(ctx, cleaned);
   if (!answered) {
     await sendMenu(ctx, 'ИИ недоступен, но команды работают');
   }

@@ -1,15 +1,15 @@
 // ============================================================
-// LLM-клиент: два провайдера, единый интерфейс chat(messages, tools).
+// LLM-клиент: единственный провайдер — GigaChat (Sber), интерфейс
+// chat(messages, tools).
 //
-//  1) OpenAI-совместимый (vsegpt.ru и др.) — как раньше.
-//  2) GigaChat (Sber) — свой протокол:
-//       • OAuth-токен (POST /api/v2/oauth, Authorization: Basic <authKey>),
-//         живёт ~30 мин → кэшируем и обновляем заранее;
-//       • для вызова инструментов использует legacy-поле `functions`
-//         (современное `tools` не поддерживается) и возвращает
-//         `message.function_call` вместо `tool_calls`.
-//     Наружу оба провайдера отдают сообщение в формате OpenAI, поэтому
-//     handlers/ai.js и tools.js менять не нужно.
+//  GigaChat использует свой протокол:
+//    • OAuth-токен (POST /api/v2/oauth, Authorization: Basic <authKey>),
+//      живёт ~30 мин → кэшируем и обновляем заранее;
+//    • для вызова инструментов использует legacy-поле `functions`
+//      (современное `tools` не поддерживается) и возвращает
+//      `message.function_call` вместо `tool_calls`.
+//  Наружу отдаём сообщение в формате OpenAI, поэтому
+//  handlers/ai.js и tools.js менять не нужно.
 // ============================================================
 
 import { config, aiEnabled, llmProvider } from './config.js';
@@ -143,28 +143,8 @@ function fromGigaMessage(msg) {
  * Возвращает объект message (assistant) в формате OpenAI.
  */
 export async function chat(messages, tools = null) {
-  if (!aiEnabled) throw new Error('ИИ не настроен (нет ключа LLM)');
-  return llmProvider === 'gigachat'
-    ? chatGigaChat(messages, tools)
-    : chatOpenAI(messages, tools);
-}
-
-async function chatOpenAI(messages, tools) {
-  const body = {
-    model: config.llm.model,
-    messages,
-    temperature: 0.2
-  };
-  if (tools && tools.length) {
-    body.tools = tools;
-    body.tool_choice = 'auto';
-  }
-
-  const msg = await requestWithRetry(`${config.llm.baseUrl}/chat/completions`, {
-    'Content-Type': 'application/json',
-    Authorization: `Bearer ${config.llm.apiKey}`
-  }, body, 'LLM');
-  return msg;
+  if (!aiEnabled) throw new Error('ИИ не настроен (нет ключа GigaChat)');
+  return chatGigaChat(messages, tools);
 }
 
 async function chatGigaChat(messages, tools, retried = false) {

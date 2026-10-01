@@ -1,10 +1,12 @@
 // ============================================================
 // Обработка групп: регистрация чата, реакция на @bot и команды.
 // Privacy mode ON: бот видит только упоминания/ответы и команды.
+// ИИ отвечает на упоминание; если ИИ недоступен — канонический ответ.
 // ============================================================
 
 import { upsertChat } from '../db.js';
 import { getConfigCached, nearestGame, scheduleText } from '../game.js';
+import { handleText } from './ai.js';
 import { log } from '../logger.js';
 
 /** Запомнить группу (при добавлении бота / любом апдейте). */
@@ -24,29 +26,30 @@ export async function registerChat(ctx) {
   }
 }
 
-/** Ответ в группе на упоминание бота. */
+/** Ответ в группе на упоминание бота. Возвращает true, если ответил ИИ. */
 export async function handleGroupMention(ctx) {
-  const text = (ctx.message?.text || '').replace(/@\w+/g, '').trim().toLowerCase();
+  // Текст без @упоминания — именно его отправляем в ИИ.
+  const cleaned = (ctx.message?.text || '').replace(/@\w+/g, '').trim();
 
-  if (!text || /расписан|когда|игр/.test(text)) {
-    const cfg = await getConfigCached();
-    const near = [];
-    for (const hallId of Object.keys(cfg.halls)) {
-      const g = await nearestGame(hallId).catch(() => null);
-      if (g) near.push(`${g.hallName}: ${g.humanDate} ${g.startTime} (${g.count}/18)`);
-    }
-    await ctx.reply(`📅 Ближайшие игры:\n${near.join('\n')}`);
-    return;
+  // Приоритет — ИИ (он понимает намерение и вызывает инструменты).
+  try {
+    if (await handleText(ctx, cleaned)) return true;
+  } catch (e) {
+    log.warn('Group AI:', e.message);
   }
 
-  // Для записи/отмены отправляем в личку
-  if (/запиш|записат|отмен/.test(text)) {
-    await ctx.reply(
-      'Чтобы записаться или отменить, напишите мне в личку — там удобнее подтверждать.',
-      { reply_markup: undefined }
-    );
-    return;
-  }
+  // Fallback: ИИ недоступен — канонический ответ.
+  await showGroupSchedule(ctx);
+  return false;
+}
 
-  await ctx.reply('Я умею: подсказать расписание. Для записи напишите в личку.');
+/** Показать расписание (для группы). */
+export async function showGroupSchedule(ctx) {
+  const cfg = await getConfigCached();
+  const near = [];
+  for (const hallId of Object.keys(cfg.halls)) {
+    const g = await nearestGame(hallId).catch(() => null);
+    if (g) near.push(`${g.hallName}: ${g.humanDate} ${g.startTime} (${g.count}/18)`);
+  }
+  await ctx.reply(`📅 Ближайшие игры:\n${near.join('\n')}`);
 }

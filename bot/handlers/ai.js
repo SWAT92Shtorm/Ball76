@@ -29,12 +29,13 @@ export { aiEnabled };
 
 /**
  * Обработать свободный текст.
+ * overrideText — текст без @упоминания (для групп), если задан.
  * Возвращает true, если ответил; false — если ИИ недоступен (нужен fallback).
  */
-export async function handleText(ctx) {
+export async function handleText(ctx, overrideText = null) {
   if (!aiEnabled) return false;
 
-  const text = (ctx.message.text || '').trim();
+  const text = (overrideText ?? ctx.message.text ?? '').trim();
   if (!text) return true;
 
   const link = await getLink(ctx.from.id);

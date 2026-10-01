@@ -100,65 +100,32 @@ Telegram ──► Bot (grammY, long polling)
 - `console.groq.com` → HTTP 403 — сайт регистрации недоступен.
 - Вывод: Groq использовать нельзя.
 
-**✅ Google Gemini — доступен из РФ:**
-- `generativelanguage.googleapis.com` → отвечает по существу (`400 "API key not valid"`),
-  это **не** блокировка.
-- OpenAI-совместимый эндпоинт: `POST /v1beta/openai/chat/completions` — работает.
-- `aistudio.google.com` — сайт для получения ключа открывается.
-- Бесплатный тир щедрый (~15 req/min, ~1500 req/day для flash-моделей).
-- Поддерживает function calling → код бота **менять не нужно**, только `.env`.
+**✅ GigaChat (Sber) — выбранный провайдер:**
+- Свой протокол (не OpenAI-совместимый), поэтому в [`llm.js`](bot/llm.js:1) есть
+  отдельная ветка под него.
+- Авторизация: OAuth по `Authorization: Basic <GIGACHAT_AUTH_KEY>`
+  (`GIGACHAT_AUTH_KEY` = base64 от `ClientID:ClientSecret`), токен живёт ~30 мин
+  и кэшируется с обновлением заранее.
+- Function calling — через **legacy-поле `functions`** (современное `tools`
+  GigaChat не поддерживает); ответ приходит в `message.function_call`,
+  [`llm.js`](bot/llm.js:1) нормализует его в OpenAI-формат `tool_calls`.
+- ⚠️ TLS: сертификат требует корневой CA НУЦ Минцифры. В образ добавлен
+  `bot/certs/russiantrustedca.pem` и `NODE_EXTRA_CA_CERTS` (см. [`Dockerfile`](bot/Dockerfile:1)),
+  иначе — `self signed certificate in certificate chain`.
 
 Конфиг (`.env`):
 ```
-LLM_BASE_URL=https://generativelanguage.googleapis.com/v1beta/openai
-LLM_API_KEY=<ключ из aistudio.google.com>
-LLM_MODEL=gemini-2.0-flash
+GIGACHAT_AUTH_KEY=<base64(ClientID:ClientSecret)>
+GIGACHAT_SCOPE=GIGACHAT_API_PERS
+GIGACHAT_MODEL=GigaChat-2
 ```
 
-Клиент [`llm.js`](bot/llm.js:1) использует `${baseUrl}/chat/completions`, поэтому любые
-OpenAI-совместимые провайдеры переключаются сменой `.env` без правок кода.
+Ключ: [developers.sber.ru](https://developers.sber.ru) → GigaChat API →
+«Авторизационные данные».
 
-**⚠️ Google Gemini — API доступен, но РЕГИСТРАЦИЯ из РФ заблокирована:**
-- `aistudio.google.com` → «Failed to list imported projects: permission denied» —
-  Google блокирует аккаунты из РФ.
-- Значит получить ключ из РФ нельзя → вариант отпадает.
-
-**Прочие провайдеры (проверено с прода):**
-
-| Провайдер | API из РФ | Бесплатно | Function calling | Примечание |
-|---|---|---|---|---|
-| **vsegpt.ru** | ✅ 200 | ✅ есть free-модели | ✅ | **РЕКОМЕНДУЕТСЯ** (RU-агрегатор) |
-| **proxyapi.ru** | ✅ 401 | ⚠️ пробный период | ✅ | RU-агрегатор, платный |
-| Groq | ❌ 403 | — | — | гео-блок РФ |
-| OpenRouter | ❌ 403 | — | — | гео-блок РФ |
-| Cerebras | ❌ 403 | — | — | гео-блок РФ |
-| OpenAI | ❌ 403 | ❌ | — | гео-блок РФ |
-| Google Gemini | ⚠️ API ок | ✅ | — | **регистрация из РФ заблокирована** |
-| DeepSeek | ✅ 401 | ❌ платно | — | нужна оплата |
-| Mistral | ✅ 401 | частично | — | нужна оплата |
-| GigaChat (Sber) | ❌ timeout | частично | — | свой формат API |
-| YandexGPT | ✅ 405 | ❌ платно | — | свой формат API |
-
-### Рекомендация: vsegpt.ru (российский агрегатор)
-
-**Почему:**
-- Доступен из РФ (`api.vsegpt.ru` → HTTP 200).
-- **OpenAI-совместим** → код бота менять не нужно, только `.env`.
-- **Есть бесплатные текстовые модели**: `perplexity/latest-small-online`
-  (prompt=0, completion=0).
-- Дешёвые модели с function calling: `openai/gpt-4.1-nano` (0.015/0.06),
-  `openai/gpt-oss-20b` (0.014/0.06), `google/gemini-flash-1.5-8b` (0.015/0.04).
-- Оплата российскими картами, регистрация простая.
-
-Конфиг (`.env`) для vsegpt:
-```
-LLM_BASE_URL=https://api.vsegpt.ru/v1
-LLM_API_KEY=<ключ из личного кабинета vsegpt.ru>
-LLM_MODEL=openai/gpt-4.1-nano          # дёшево, с function calling
-# либо бесплатно: LLM_MODEL=perplexity/latest-small-online
-```
-
-Регистрация: [vsegpt.ru/apikeys](https://vsegpt.ru/apikeys).
+> **Отказ от мультипровайдерности.** Ранее поддерживался также OpenAI-совместимый
+> провайдер (`LLM_BASE_URL` / `LLM_API_KEY` / `LLM_MODEL`, например vsegpt.ru).
+> Он **удалён**: работаем только с GigaChat и моделью `GigaChat-2`.
 
 **Страховка при слабом tool calling:**
 1. Модель вызывает функцию.
@@ -399,9 +366,10 @@ bot/
 ```
 TELEGRAM_BOT_TOKEN=...
 TELEGRAM_API_ROOT=                                        # пусто при пиннинге IP (мы используем extra_hosts)
-LLM_BASE_URL=https://generativelanguage.googleapis.com/v1beta/openai
-LLM_API_KEY=<ключ Gemini из aistudio.google.com>
-LLM_MODEL=gemini-2.0-flash
+GIGACHAT_AUTH_KEY=<base64(ClientID:ClientSecret)>
+GIGACHAT_SCOPE=GIGACHAT_API_PERS
+GIGACHAT_MODEL=GigaChat-2
+AI_ONLY_ON_MENTION=true                                   # ИИ отвечает только по @упоминанию/реплаю
 API_BASE_URL=http://127.0.0.1:8080
 DATABASE_URL=postgres://Ball76:...@ball76-db:5432/Ball76
 NOTIFY_GROUP_IDS=...

@@ -291,6 +291,13 @@ function hallPrice(hallId, durationKey) {
 function hallSchedule(hallId)  { return CONFIG?.halls?.[hallId]?.schedule || []; }
 function maxPlayers()          { return CONFIG?.maxPlayers || 18; }
 
+// Обычное время начала игры зала (первый слот расписания) в формате HH:MM.
+// Используется как значение по умолчанию для дополнительной игры.
+function getDefaultStartTime(hallId) {
+  const slot = hallSchedule(hallId)[0];
+  return slot ? `${String(slot.from).padStart(2, '0')}:00` : '';
+}
+
 // ==================== 2. UTILS ====================
 
 // Экранирование HTML-спецсимволов: имена игроков приходят из БД/сети
@@ -361,6 +368,15 @@ function getMSKNow() {
   d.setFullYear(+get('year'), +get('month') - 1, +get('day'));
   d.setHours(+get('hour') % 24, +get('minute'), +get('second'), 0);
   return d;
+}
+
+// Сегодняшняя дата 'YYYY-MM-DD' по московскому времени (для min у date input).
+function mskToday() {
+  const now = getMSKNow();
+  const y = now.getFullYear();
+  const m = String(now.getMonth() + 1).padStart(2, '0');
+  const day = String(now.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
 }
 
 // Fisher–Yates shuffle (в отличие от sort(() => Math.random() - 0.5)
@@ -784,6 +800,16 @@ function getDayCode(dayName) {
   return map[dayName] || 0;
 }
 
+// Обратное преобразование: код дня (1=Пн...7=Вс) → английское имя дня,
+// как в расписании. Нужно для дней без слотов (например, игра вне графика).
+function dayNameFromCode(dayCode) {
+  const map = {
+    1: 'Monday', 2: 'Tuesday', 3: 'Wednesday', 4: 'Thursday',
+    5: 'Friday', 6: 'Saturday', 7: 'Sunday'
+  };
+  return map[dayCode] || '';
+}
+
 // Общий расчёт ближайшей игры для зала: возвращает
 // { date: 'YYYY-MM-DD', text: 'Ближайшая игра: ...', dayDiff } или null.
 // Раньше логика была продублирована в getNearestGameDate и getNearestGameText.
@@ -954,18 +980,23 @@ function showSchedule() {
   const dayLetters = ['П', 'В', 'С', 'Ч', 'П', 'С', 'В'];
   const gridCells = dayCodes.map((code, i) => {
     const slots = h.schedule.filter(s => getDayCode(s.day) === code);
+    const dateStr = dateForDayCode(code);
+    const ov = timeOverrides[dateStr]; // изменение времени или доп. игра
     const isToday = code === todayCode;
     const isNearest = nearest && getDayCode(nearest.day) === code;
     const classes = ['sched-cell'];
     if (isToday) classes.push('today');
     if (isNearest) classes.push('nearest');
 
-    // В днях без игры: если есть статистика — показываем +N вместо прочерка
     let slotHtml;
-    if (slots.length) {
+    if (ov) {
+      // Игра с заданным временем: изменение расписания либо игра вне графика.
+      const cls = ov.isExtra ? 'sched-slot sched-slot-extra' : 'sched-slot sched-slot-changed';
+      const mark = ov.isExtra ? ' ⭐' : ' ⚠️';
+      slotHtml = `<div class="${cls}">${escapeHtml(ov.startTime)}${mark}</div>`;
+    } else if (slots.length) {
       slotHtml = slots.map(s => `<div class="sched-slot">${s.from}:00–${s.to}:00</div>`).join('');
     } else if (signupStats) {
-      const dateStr = dateForDayCode(code);
       const dayCnt = (signupStats.byDate && signupStats.byDate[dateStr]) || 0;
       const showCnt = dayCnt > 0 ? dayCnt : (isToday ? signupStats.total : 0);
       slotHtml = showCnt > 0
@@ -975,10 +1006,12 @@ function showSchedule() {
       slotHtml = '<div class="sched-off">—</div>';
     }
 
+    const dayName = slots[0]?.day || dayNameFromCode(code);
+
     return `
       <div class="${classes.join(' ')}">
         <div class="sched-day-letter">${dayLetters[i]}</div>
-        <div class="sched-day-name">${dayNamesRU[slots[0]?.day] || ''}</div>
+        <div class="sched-day-name">${dayNamesRU[dayName] || ''}</div>
         ${slotHtml}
         ${isNearest ? '<div class="sched-badge">ближайшая</div>' : ''}
       </div>
@@ -1635,6 +1668,32 @@ function timeOverride(hall, date) {
   return info && info.isOverride ? info : null;
 }
 
+// Будущие изменения времени по залу: { 'YYYY-MM-DD': { startTime, isExtra, note } }.
+let timeOverrides = {};
+
+async function loadTimeOverrides(hall) {
+  if (!hall) return;
+  try {
+    const resp = await fetch(`${API_BASE_URL}/api/games/${hall}/time-overrides`, { headers: getTunnelHeaders() });
+    if (!resp.ok) return;
+    const data = await resp.json();
+    timeOverrides = data.overrides || {};
+    // Заносим в общий кэш времени, чтобы «Ближайшая игра» их тоже видела.
+    for (const date in timeOverrides) {
+      const t = timeOverrides[date];
+      gameTimeCache[`${hall}|${date}`] = {
+        startTime: t.startTime,
+        endTime: null,
+        note: t.note || '',
+        isOverride: true,
+        isExtra: !!t.isExtra,
+        scheduledFrom: null,
+        scheduledTo: null
+      };
+    }
+  } catch (_) { /* не критично */ }
+}
+
 // Баннер над формой + разовое модальное уведомление для игроков.
 function renderTimeBanner(info, hall, date) {
   const banner = document.getElementById('timeChangeBanner');
@@ -1646,10 +1705,14 @@ function renderTimeBanner(info, hall, date) {
     return;
   }
 
-  const from = info.scheduledFrom || '—';
+  // Для игры вне обычного графика «по расписанию было …» не показываем —
+  // сообщаем только новое время начала.
+  const wasHtml = info.scheduledFrom
+    ? ` (по расписанию было ${escapeHtml(info.scheduledFrom)})`
+    : '';
   banner.style.display = 'block';
-  banner.innerHTML = `⚠️ <strong>Время игры изменено:</strong> начало в ${escapeHtml(info.startTime)} `
-    + `(по расписанию было ${escapeHtml(from)})`
+  banner.innerHTML = `⚠️ <strong>Время игры:</strong> начало в ${escapeHtml(info.startTime)}`
+    + wasHtml
     + (info.note ? `<div class="time-change-note">Причина: ${escapeHtml(info.note)}</div>` : '');
 
   maybeShowTimeNotice(info, hall, date);
@@ -1670,7 +1733,7 @@ function maybeShowTimeNotice(info, hall, date) {
   body.innerHTML = `
     <p>Время игры <strong>${escapeHtml(hallName(hall))}</strong> на ${formatDateHuman(date)} изменено.</p>
     <p class="time-notice-big">${escapeHtml(info.startTime)}</p>
-    <p class="time-notice-was">По расписанию было ${escapeHtml(info.scheduledFrom || '—')}</p>
+    ${info.scheduledFrom ? `<p class="time-notice-was">По расписанию было ${escapeHtml(info.scheduledFrom)}</p>` : ''}
     ${info.note ? `<p class="time-notice-reason">Причина: ${escapeHtml(info.note)}</p>` : ''}
   `;
   modal.style.display = 'flex';
@@ -1780,9 +1843,12 @@ function openAdminPanel() {
   const mainHall = document.getElementById('hallSelect').value || 'hall1';
   hallSelect.value = mainHall;
 
+  // Запрещаем выбирать прошедшие даты (min = сегодня по МСК).
+  dateInput.min = mskToday();
+
   if (!dateInput.value) {
     const nearest = getNearestGameDate(mainHall);
-    dateInput.value = nearest || new Date().toISOString().slice(0, 10);
+    dateInput.value = nearest || mskToday();
   }
 
   modal.style.display = 'flex';
@@ -1818,22 +1884,34 @@ async function loadAdminGameTime() {
     document.getElementById('adminNote').value = info.note || '';
 
     if (hint) {
-      hint.textContent = info.scheduledFrom
-        ? `По расписанию: ${info.scheduledFrom}${info.scheduledTo ? '–' + info.scheduledTo : ''}`
-        : 'В этот день игра не входит в расписание';
+      if (info.scheduledFrom) {
+        hint.textContent = `По расписанию: ${info.scheduledFrom}${info.scheduledTo ? '–' + info.scheduledTo : ''}`;
+        hint.classList.remove('admin-hint-extra');
+      } else {
+        hint.textContent = '📌 В этот день игры нет в графике';
+        hint.classList.add('admin-hint-extra');
+        // Подставим привычное время по умолчанию, чтобы админ не вводил с нуля.
+        if (!info.startTime) {
+          const defFrom = getDefaultStartTime(hall);
+          if (defFrom) document.getElementById('adminStartTime').value = defFrom;
+        }
+      }
     }
     updateAdminPreview();
   } catch (_) { /* игнорируем — форма остаётся пустой */ }
 }
 
 function updateAdminPreview() {
+  const hall = document.getElementById('adminHallSelect').value;
+  const date = document.getElementById('adminDateInput').value;
   const start = document.getElementById('adminStartTime').value;
   const note = document.getElementById('adminNote').value.trim();
   const preview = document.getElementById('adminPreview');
   if (!preview) return;
 
   if (!start) { preview.textContent = 'Укажите время начала'; return; }
-  preview.innerHTML = `Предпросмотр для игроков: <br>⚠️ <strong>Время изменено:</strong> `
+
+  preview.innerHTML = `Предпросмотр для игроков: <br>⚠️ <strong>Время игры:</strong> `
     + `начало в ${escapeHtml(start)}`
     + (note ? `<br>Причина: ${escapeHtml(note)}` : '');
 }
@@ -1862,9 +1940,11 @@ async function saveGameTime() {
       return;
     }
     showToast('Время игры обновлено', 'success');
-    // Обновляем баннер/уведомление и список для игроков.
+    // Обновляем баннер/уведомление, сетку недели и список для игроков.
+    await loadTimeOverrides(hall);
     if (date === getNearestGameDate(hall)) await loadGameTime(hall, date);
     showList();
+    showSchedule();
   } catch (_) {
     showToast('Ошибка соединения с сервером', 'error');
   }
@@ -1883,9 +1963,11 @@ async function resetGameTime() {
     if (resp.status === 403) { adminLogout(); return; }
     if (!resp.ok) { showToast('Не удалось сбросить', 'error'); return; }
     showToast('Время сброшено к расписанию', 'info');
+    await loadTimeOverrides(hall);
     await loadAdminGameTime();
     if (date === getNearestGameDate(hall)) await loadGameTime(hall, date);
     showList();
+    showSchedule();
   } catch (_) {
     showToast('Ошибка соединения с сервером', 'error');
   }
@@ -1914,8 +1996,9 @@ window.addEventListener('DOMContentLoaded', async function () {
     document.getElementById('nearestGameInfo').textContent = getNearestGameText(hall);
   }
 
-  // 4. Загружаем статистику записей и показываем расписание
+  // 4. Загружаем статистику записей, изменения времени и показываем расписание
   await loadSignupStats(hall);
+  await loadTimeOverrides(hall);
   showSchedule();
 
   // 5. Длительность по количеству игроков (только при первом открытии)
@@ -2009,7 +2092,10 @@ window.addEventListener('DOMContentLoaded', async function () {
   });
   document.getElementById('hallSelect').addEventListener('change', function () {
     showList();
-    loadSignupStats(this.value).then(() => showSchedule());
+    Promise.all([
+      loadSignupStats(this.value),
+      loadTimeOverrides(this.value)
+    ]).then(() => showSchedule());
     loadGameTime(this.value, getNearestGameDate(this.value));
   });
   document.getElementById('durationSelect').addEventListener('change', function () {

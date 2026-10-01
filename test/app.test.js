@@ -83,3 +83,26 @@ test('escapeHtml: апостроф не ломает строку в JS-конт
   assert.ok(!out.includes(String.fromCharCode(39)));
   assert.ok(out.includes(APOS));
 });
+
+// --- dayNameFromCode: обратное преобразование кода дня в имя ---
+// Нужно для дней без слотов расписания (например, игра вне графика):
+// showSchedule() берёт имя дня по коду, когда slots пуст.
+
+const dayNameFromCode = extractFunction('app.js', 'dayNameFromCode');
+
+test('dayNameFromCode: 1..7 → английские имена дней', () => {
+  assert.equal(dayNameFromCode(1), 'Monday');
+  assert.equal(dayNameFromCode(2), 'Tuesday');
+  assert.equal(dayNameFromCode(3), 'Wednesday');
+  assert.equal(dayNameFromCode(4), 'Thursday');
+  assert.equal(dayNameFromCode(5), 'Friday');
+  assert.equal(dayNameFromCode(6), 'Saturday');
+  assert.equal(dayNameFromCode(7), 'Sunday');
+});
+
+test('dayNameFromCode: некорректный код даёт пустую строку', () => {
+  assert.equal(dayNameFromCode(0), '');
+  assert.equal(dayNameFromCode(8), '');
+  assert.equal(dayNameFromCode(null), '');
+  assert.equal(dayNameFromCode(undefined), '');
+});

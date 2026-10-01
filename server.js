@@ -1200,6 +1200,9 @@ async function getGameTime(hallId, dateStr) {
   const row = result.rows[0] || null;
   const schedule = scheduleForDate(hallId, dateStr);
   const hasOverride = !!(row && row.start_time);
+  // «Дополнительная игра» — игра вне обычного графика (день недели не в
+  // расписании), время для которой задал админ.
+  const isExtra = hasOverride && !schedule;
 
   if (hasOverride) {
     return {
@@ -1208,6 +1211,7 @@ async function getGameTime(hallId, dateStr) {
       note: row.time_note || '',
       changedAt: row.time_changed_at || null,
       isOverride: true,
+      isExtra,
       scheduledFrom: schedule ? formatHour(schedule.from) : null,
       scheduledTo: schedule ? formatHour(schedule.to) : null
     };
@@ -1219,9 +1223,15 @@ async function getGameTime(hallId, dateStr) {
     note: '',
     changedAt: null,
     isOverride: false,
+    isExtra: false,
     scheduledFrom: schedule ? formatHour(schedule.from) : null,
     scheduledTo: schedule ? formatHour(schedule.to) : null
   };
+}
+
+// Дата в прошлом? (сравниваем с сегодняшним днём по МСК)
+function isPastDate(dateStr) {
+  return dateStr < formatDateMSK(new Date());
 }
 
 /**
@@ -1262,6 +1272,56 @@ app.get('/api/games/:hallId/:date/time', readLimiter, async (req, res) => {
 
 /**
  * @swagger
+ * /api/games/{hallId}/time-overrides:
+ *   get:
+ *     summary: Будущие изменения времени по залу
+ *     description: Возвращает даты с изменённым временем начала игры.
+ *     tags: [Games]
+ *     parameters:
+ *       - in: path
+ *         name: hallId
+ *         required: true
+ *         schema: { type: string, enum: [hall1, hall2] }
+ *     responses:
+ *       200:
+ *         description: Карта дат с заданным временем начала игры.
+ *       400:
+ *         description: Неверный зал
+ */
+app.get('/api/games/:hallId/time-overrides', readLimiter, async (req, res) => {
+  const { hallId } = req.params;
+  if (!HALLS.includes(hallId)) {
+    return res.status(400).json({ error: 'Неверный зал' });
+  }
+  try {
+    const today = formatDateMSK(new Date());
+    const result = await pool.query(
+      `SELECT date, start_time, time_note
+         FROM games
+        WHERE hall_id = $1 AND start_time IS NOT NULL AND date >= $2
+        ORDER BY date`,
+      [hallId, today]
+    );
+
+    const overrides = {};
+    result.rows.forEach(row => {
+      const dateStr = formatDateMSK(row.date);
+      overrides[dateStr] = {
+        startTime: row.start_time,
+        note: row.time_note || '',
+        isExtra: !scheduleForDate(hallId, dateStr)
+      };
+    });
+
+    res.json({ overrides });
+  } catch (err) {
+    console.error('Ошибка чтения изменений времени:', err);
+    res.status(500).json({ error: 'Failed to read time overrides' });
+  }
+});
+
+/**
+ * @swagger
  * /api/games/{hallId}/{date}/time:
  *   patch:
  *     summary: Изменить время игры
@@ -1288,6 +1348,9 @@ app.patch('/api/games/:hallId/:date/time', mutationLimiter, requireAdmin, async 
 
   if (!HALLS.includes(hallId) || !isValidDateStr(date)) {
     return res.status(400).json({ error: 'Неверный зал или дата' });
+  }
+  if (isPastDate(date)) {
+    return res.status(400).json({ error: 'Нельзя менять время прошедшей игры' });
   }
   if (!isValidTime(startTime)) {
     return res.status(400).json({ error: 'startTime должен быть в формате HH:MM' });

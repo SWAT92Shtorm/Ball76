@@ -1106,9 +1106,11 @@ function showList() {
             <input type="text" id="nameEdit${i}" class="player-name-edit" value="${escapeHtml(name)}" />
           </div>
           <div class="icons">
-            <span class="icon-btn icon-edit" onclick="startEdit(${i})">✎</span>
-            <span class="icon-btn icon-save" onclick="submitEdit(${i})">✔</span>
-            <span class="icon-btn icon-cancel" onclick="cancelEdit(${i})">✖</span>
+            ${isAdmin() ? `
+              <span class="icon-btn icon-edit" onclick="startEdit(${i})">✎</span>
+              <span class="icon-btn icon-save" onclick="submitEdit(${i})">✔</span>
+              <span class="icon-btn icon-cancel" onclick="cancelEdit(${i})">✖</span>
+            ` : ''}
             <span class="icon-btn icon-delete" onclick="openDeleteModal(${i})" title="Удалить">🗑️</span>
           </div>
         </div>
@@ -1488,6 +1490,15 @@ function closeTeamsModal() {
 
 const CHANGELOG = [
   {
+    label: 'v2026.10.01 — админ и время игры',
+    items: [
+      '⚠️ Предупреждение, если время игры отличается от расписания',
+      '⚙️ Админ-панель: вход долгим нажатием на версию внизу страницы',
+      '✏️ Редактирование имени — только для администратора',
+      '🕒 Изменение времени игры без перезапуска сервера'
+    ]
+  },
+  {
     label: 'v2026.09.28 — запуск в облаке',
     items: [
       '☁️ Сайт переехал в облако и работает круглосуточно',
@@ -1559,6 +1570,16 @@ const CHANGELOG = [
   }
 ];
 
+// Обычный клик по версии — changelog; после долгого нажатия клик подавляется
+// (иначе после входа в админ тут же открывалась бы история версий).
+function onVersionClick() {
+  if (suppressVersionClick) {
+    suppressVersionClick = false;
+    return;
+  }
+  openChangelogModal();
+}
+
 function openChangelogModal() {
   const modal = document.getElementById('changelogModal');
   const content = document.getElementById('changelogContent');
@@ -1577,6 +1598,281 @@ function openChangelogModal() {
 
 function closeChangelogModal() {
   document.getElementById('changelogModal').style.display = 'none';
+}
+
+// ==================== 7.6. TIME OVERRIDE (время игры) ====================
+
+// Текущее эффективное время игры для выбранного зала/даты (с сервера).
+let currentGameTime = null;
+
+// Запросить время игры (override или расписание) и обновить баннер/уведомление.
+async function loadGameTime(hall, date) {
+  if (!hall || !date) return;
+  try {
+    const resp = await fetch(`${API_BASE_URL}/api/games/${hall}/${date}/time`, { headers: getTunnelHeaders() });
+    if (!resp.ok) return;
+    currentGameTime = await resp.json();
+    renderTimeBanner(currentGameTime, hall, date);
+  } catch (_) { /* нет данных о времени — не критично */ }
+}
+
+// Баннер над формой + разовое модальное уведомление для игроков.
+function renderTimeBanner(info, hall, date) {
+  const banner = document.getElementById('timeChangeBanner');
+  if (!banner) return;
+
+  if (!info || !info.isOverride) {
+    banner.style.display = 'none';
+    banner.innerHTML = '';
+    return;
+  }
+
+  const from = info.scheduledFrom || '—';
+  const to = info.endTime ? `–${info.endTime}` : '';
+  banner.style.display = 'block';
+  banner.innerHTML = `⚠️ <strong>Время игры изменено:</strong> начало в ${escapeHtml(info.startTime)}${escapeHtml(to)} `
+    + `(по расписанию было ${escapeHtml(from)})`
+    + (info.note ? `<div class="time-change-note">Причина: ${escapeHtml(info.note)}</div>` : '');
+
+  maybeShowTimeNotice(info, hall, date);
+}
+
+// Показать модалку-уведомление один раз на устройство для конкретного изменения.
+function maybeShowTimeNotice(info, hall, date) {
+  const stamp = String(info.changedAt || info.startTime);
+  const key = `ball76_time_notice_${hall}_${date}`;
+  let seen = null;
+  try { seen = localStorage.getItem(key); } catch (_) {}
+  if (seen === stamp) return;
+
+  const body = document.getElementById('timeNoticeBody');
+  const modal = document.getElementById('timeNoticeModal');
+  if (!body || !modal) return;
+
+  const to = info.endTime ? `–${info.endTime}` : '';
+  body.innerHTML = `
+    <p>Время игры <strong>${escapeHtml(hallName(hall))}</strong> на ${formatDateHuman(date)} изменено.</p>
+    <p class="time-notice-big">${escapeHtml(info.startTime)}${escapeHtml(to)}</p>
+    <p class="time-notice-was">По расписанию было ${escapeHtml(info.scheduledFrom || '—')}</p>
+    ${info.note ? `<p class="time-notice-reason">Причина: ${escapeHtml(info.note)}</p>` : ''}
+  `;
+  modal.style.display = 'flex';
+  try { localStorage.setItem(key, stamp); } catch (_) {}
+}
+
+function closeTimeNotice() {
+  document.getElementById('timeNoticeModal').style.display = 'none';
+}
+
+// Человекочитаемая дата из YYYY-MM-DD (для уведомления).
+function formatDateHuman(dateStr) {
+  try {
+    const d = new Date(dateStr + 'T12:00:00Z');
+    return d.toLocaleDateString('ru-RU', { day: 'numeric', month: 'long', timeZone: 'UTC' });
+  } catch (_) {
+    return dateStr;
+  }
+}
+
+// ==================== 7.7. ADMIN (вход длинным нажатием на версию) ====================
+
+const ADMIN_TOKEN_KEY = 'ball76_admin_token';
+let adminToken = null;
+try { adminToken = localStorage.getItem(ADMIN_TOKEN_KEY); } catch (_) {}
+
+function isAdmin() { return !!adminToken; }
+
+function adminHeaders() {
+  const h = { 'Content-Type': 'application/json' };
+  if (adminToken) h['X-Admin-Token'] = adminToken;
+  return h;
+}
+
+// Длинное нажатие на версию в футере → вход в админ-панель.
+let versionPressTimer = null;
+let suppressVersionClick = false;
+
+function initAdminLongPress() {
+  const el = document.getElementById('appVersion');
+  if (!el) return;
+
+  const start = () => {
+    clearTimeout(versionPressTimer);
+    versionPressTimer = setTimeout(() => {
+      suppressVersionClick = true; // подавляем обычный клик по версии (changelog)
+      if (isAdmin()) openAdminPanel();
+      else openAdminLogin();
+    }, 1500);
+  };
+  const cancel = () => clearTimeout(versionPressTimer);
+
+  el.addEventListener('pointerdown', start);
+  el.addEventListener('pointerup', cancel);
+  el.addEventListener('pointerleave', cancel);
+  el.addEventListener('pointercancel', cancel);
+}
+
+function openAdminLogin() {
+  const modal = document.getElementById('adminLoginModal');
+  const err = document.getElementById('adminLoginError');
+  const input = document.getElementById('adminPassword');
+  if (err) err.textContent = '';
+  if (input) input.value = '';
+  modal.style.display = 'flex';
+  setTimeout(() => input && input.focus(), 100);
+}
+
+function closeAdminLogin() {
+  document.getElementById('adminLoginModal').style.display = 'none';
+}
+
+async function submitAdminLogin() {
+  const input = document.getElementById('adminPassword');
+  const err = document.getElementById('adminLoginError');
+  const password = (input?.value || '').trim();
+  if (!password) { if (err) err.textContent = 'Введите пароль'; return; }
+
+  try {
+    const resp = await fetch(`${API_BASE_URL}/api/admin/login`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ password })
+    });
+    if (!resp.ok) {
+      if (err) err.textContent = 'Неверный пароль';
+      return;
+    }
+    const data = await resp.json();
+    adminToken = data.token;
+    try { localStorage.setItem(ADMIN_TOKEN_KEY, adminToken); } catch (_) {}
+    closeAdminLogin();
+    showToast('Вход выполнен', 'success');
+    showList(); // перерисовать список — появятся иконки редактирования
+    openAdminPanel();
+  } catch (_) {
+    if (err) err.textContent = 'Ошибка соединения с сервером';
+  }
+}
+
+function openAdminPanel() {
+  const modal = document.getElementById('adminModal');
+  const hallSelect = document.getElementById('adminHallSelect');
+  const dateInput = document.getElementById('adminDateInput');
+
+  // Зал — как на основной форме; дата — ближайшая игра или сегодня.
+  const mainHall = document.getElementById('hallSelect').value || 'hall1';
+  hallSelect.value = mainHall;
+
+  if (!dateInput.value) {
+    const nearest = getNearestGameDate(mainHall);
+    dateInput.value = nearest || new Date().toISOString().slice(0, 10);
+  }
+
+  modal.style.display = 'flex';
+  loadAdminGameTime();
+}
+
+function closeAdminPanel() {
+  document.getElementById('adminModal').style.display = 'none';
+}
+
+function adminLogout() {
+  adminToken = null;
+  try { localStorage.removeItem(ADMIN_TOKEN_KEY); } catch (_) {}
+  closeAdminPanel();
+  showToast('Вы вышли из админа', 'info');
+  showList();
+}
+
+// Подтянуть текущее время игры в поля формы.
+async function loadAdminGameTime() {
+  const hall = document.getElementById('adminHallSelect').value;
+  const date = document.getElementById('adminDateInput').value;
+  const hint = document.getElementById('adminScheduleHint');
+  if (!hall || !date) return;
+
+  try {
+    const resp = await fetch(`${API_BASE_URL}/api/games/${hall}/${date}/time`, { headers: getTunnelHeaders() });
+    if (!resp.ok) return;
+    const info = await resp.json();
+
+    document.getElementById('adminStartTime').value = info.startTime || '';
+    document.getElementById('adminEndTime').value = info.endTime || '';
+    document.getElementById('adminNote').value = info.note || '';
+
+    if (hint) {
+      hint.textContent = info.scheduledFrom
+        ? `По расписанию: ${info.scheduledFrom}${info.scheduledTo ? '–' + info.scheduledTo : ''}`
+        : 'В этот день игра не входит в расписание';
+    }
+    updateAdminPreview();
+  } catch (_) { /* игнорируем — форма остаётся пустой */ }
+}
+
+function updateAdminPreview() {
+  const start = document.getElementById('adminStartTime').value;
+  const end = document.getElementById('adminEndTime').value;
+  const note = document.getElementById('adminNote').value.trim();
+  const preview = document.getElementById('adminPreview');
+  if (!preview) return;
+
+  if (!start) { preview.textContent = 'Укажите время начала'; return; }
+  preview.innerHTML = `Предпросмотр для игроков: <br>⚠️ <strong>Время изменено:</strong> `
+    + `${escapeHtml(start)}${end ? '–' + escapeHtml(end) : ''}`
+    + (note ? `<br>Причина: ${escapeHtml(note)}` : '');
+}
+
+async function saveGameTime() {
+  const hall = document.getElementById('adminHallSelect').value;
+  const date = document.getElementById('adminDateInput').value;
+  const startTime = document.getElementById('adminStartTime').value;
+  const endTime = document.getElementById('adminEndTime').value;
+  const note = document.getElementById('adminNote').value.trim();
+
+  if (!date) { showToast('Укажите дату', 'error'); return; }
+  if (!startTime) { showToast('Укажите время начала', 'error'); return; }
+  if (!note) { showToast('Укажите причину изменения', 'error'); return; }
+
+  try {
+    const resp = await fetch(`${API_BASE_URL}/api/games/${hall}/${date}/time`, {
+      method: 'PATCH',
+      headers: adminHeaders(),
+      body: JSON.stringify({ startTime, endTime: endTime || null, note })
+    });
+    if (resp.status === 403) { adminLogout(); return; }
+    if (!resp.ok) {
+      const e = await resp.json().catch(() => ({}));
+      showToast(e.error || 'Не удалось сохранить', 'error');
+      return;
+    }
+    showToast('Время игры обновлено', 'success');
+    // Обновляем баннер/уведомление и список для игроков.
+    if (date === getNearestGameDate(hall)) await loadGameTime(hall, date);
+    showList();
+  } catch (_) {
+    showToast('Ошибка соединения с сервером', 'error');
+  }
+}
+
+async function resetGameTime() {
+  const hall = document.getElementById('adminHallSelect').value;
+  const date = document.getElementById('adminDateInput').value;
+  if (!date) { showToast('Укажите дату', 'error'); return; }
+
+  try {
+    const resp = await fetch(`${API_BASE_URL}/api/games/${hall}/${date}/time`, {
+      method: 'DELETE',
+      headers: adminHeaders()
+    });
+    if (resp.status === 403) { adminLogout(); return; }
+    if (!resp.ok) { showToast('Не удалось сбросить', 'error'); return; }
+    showToast('Время сброшено к расписанию', 'info');
+    await loadAdminGameTime();
+    if (date === getNearestGameDate(hall)) await loadGameTime(hall, date);
+    showList();
+  } catch (_) {
+    showToast('Ошибка соединения с сервером', 'error');
+  }
 }
 
 // ==================== 8. INIT ====================
@@ -1618,6 +1914,22 @@ window.addEventListener('DOMContentLoaded', async function () {
     nameInput.value = lastName;
     validatePlayerName();
   }
+
+  // 6.5. Время игры (override расписания): баннер + уведомление игрокам
+  if (hall) await loadGameTime(hall, getNearestGameDate(hall));
+
+  // 6.6. Админ: длинное нажатие на версию в футере
+  initAdminLongPress();
+
+  // 6.7. Слушатели формы админ-панели
+  const adminHallSel = document.getElementById('adminHallSelect');
+  const adminDateInp = document.getElementById('adminDateInput');
+  if (adminHallSel) adminHallSel.addEventListener('change', loadAdminGameTime);
+  if (adminDateInp) adminDateInp.addEventListener('change', loadAdminGameTime);
+  ['adminStartTime', 'adminEndTime', 'adminNote'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.addEventListener('input', updateAdminPreview);
+  });
 
   // 7. Снимаем флаг первой загрузки
   isInitialLoad = false;
@@ -1682,6 +1994,7 @@ window.addEventListener('DOMContentLoaded', async function () {
   document.getElementById('hallSelect').addEventListener('change', function () {
     showList();
     loadSignupStats(this.value).then(() => showSchedule());
+    loadGameTime(this.value, getNearestGameDate(this.value));
   });
   document.getElementById('durationSelect').addEventListener('change', function () {
     showList();
@@ -1697,14 +2010,23 @@ window.addEventListener('DOMContentLoaded', async function () {
     if (del.style.display === 'flex') closeDeleteModal();
     const cl = document.getElementById('changelogModal');
     if (cl.style.display === 'flex') closeChangelogModal();
+    const al = document.getElementById('adminLoginModal');
+    if (al.style.display === 'flex') closeAdminLogin();
+    const ad = document.getElementById('adminModal');
+    if (ad.style.display === 'flex') closeAdminPanel();
+    const tn = document.getElementById('timeNoticeModal');
+    if (tn.style.display === 'flex') closeTimeNotice();
   });
 
-  ['teamsModal', 'deleteModal', 'changelogModal'].forEach(id => {
+  ['teamsModal', 'deleteModal', 'changelogModal', 'adminLoginModal', 'adminModal', 'timeNoticeModal'].forEach(id => {
     const modal = document.getElementById(id);
     modal.addEventListener('click', function (e) {
       if (e.target === modal) { // клик именно по подложке, не по содержимому
         if (id === 'teamsModal') closeTeamsModal();
         else if (id === 'deleteModal') closeDeleteModal();
+        else if (id === 'adminLoginModal') closeAdminLogin();
+        else if (id === 'adminModal') closeAdminPanel();
+        else if (id === 'timeNoticeModal') closeTimeNotice();
         else closeChangelogModal();
       }
     });

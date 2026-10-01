@@ -32,6 +32,9 @@
 
   <h1>Запись на баскетбол в Ярославле</h1>
 
+  <!-- Баннер об изменении времени игры (показывается, если время отличается от расписания) -->
+  <div id="timeChangeBanner" class="time-change-banner" style="display: none;"></div>
+
   <!-- Зал -->
   <div class="form-row">
     <label>Выбери зал:</label>
@@ -122,13 +125,89 @@
     </div>
   </div>
 
+  <!-- Модалка входа в админ (открывается длинным нажатием на версию) -->
+  <div id="adminLoginModal" class="modal-overlay">
+    <div class="modal-content admin-modal-content">
+      <div class="modal-header">
+        <strong>🔑 Вход администратора</strong>
+        <span class="modal-close-btn" onclick="closeAdminLogin()">×</span>
+      </div>
+      <div class="admin-form">
+        <div class="form-row">
+          <label for="adminPassword">Пароль:</label>
+          <input type="password" id="adminPassword" inputmode="numeric" placeholder="••••"
+                 style="width: 160px; padding: 8px; font-size: 16px;" />
+        </div>
+        <div id="adminLoginError" class="admin-error"></div>
+      </div>
+      <div class="modal-footer">
+        <button class="modal-btn modal-btn-cancel" onclick="closeAdminLogin()">Отмена</button>
+        <button class="modal-btn modal-btn-primary" onclick="submitAdminLogin()">Войти</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Модалка админ-панели: управление временем игры -->
+  <div id="adminModal" class="modal-overlay">
+    <div class="modal-content admin-modal-content">
+      <div class="modal-header">
+        <strong>⚙️ Админ-панель</strong>
+        <span class="modal-close-btn" onclick="closeAdminPanel()">×</span>
+      </div>
+      <div class="admin-form">
+        <h3 class="admin-section-title">Изменение времени игры</h3>
+        <div class="form-row">
+          <label>Зал:</label>
+          <select id="adminHallSelect">
+            <option value="hall1">ЛОКОМОТИВ</option>
+            <option value="hall2">АТЛАНТ</option>
+          </select>
+        </div>
+        <div class="form-row">
+          <label for="adminDateInput">Дата:</label>
+          <input type="date" id="adminDateInput" />
+        </div>
+        <div id="adminScheduleHint" class="admin-hint"></div>
+        <div class="form-row">
+          <label for="adminStartTime">Начало:</label>
+          <input type="time" id="adminStartTime" />
+          <label for="adminEndTime" style="margin-left: 10px;">Конец:</label>
+          <input type="time" id="adminEndTime" />
+        </div>
+        <div class="form-row">
+          <label for="adminNote">Причина:</label>
+          <input type="text" id="adminNote" maxlength="200" placeholder="Например: турнир в зале" />
+        </div>
+        <div class="admin-preview" id="adminPreview"></div>
+      </div>
+      <div class="modal-footer">
+        <button class="modal-btn modal-btn-danger" onclick="resetGameTime()">Сбросить к расписанию</button>
+        <button class="modal-btn modal-btn-primary" onclick="saveGameTime()">Сохранить</button>
+        <button class="modal-btn modal-btn-cancel" onclick="adminLogout()">Выйти</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Модалка-уведомление об изменении времени (видна игрокам, закрывается вручную) -->
+  <div id="timeNoticeModal" class="modal-overlay">
+    <div class="modal-content time-notice-content">
+      <div class="modal-header">
+        <strong>⚠️ Время игры изменено</strong>
+      </div>
+      <div id="timeNoticeBody" class="time-notice-body"></div>
+      <div class="modal-footer">
+        <button class="modal-btn modal-btn-primary" onclick="closeTimeNotice()">Понятно</button>
+      </div>
+    </div>
+  </div>
+
   </main>
 
   <noscript>
     <p>Для записи на баскетбол включите JavaScript в браузере.</p>
   </noscript>
 
-  <footer class="app-version" id="appVersion" onclick="openChangelogModal()" title="Нажмите для просмотра изменений">v2026.09.28-prod</footer>
+  <footer class="app-version" id="appVersion" onclick="onVersionClick()" title="Нажмите для просмотра изменений">v2026.10.01-admin</footer>
 
   <!-- Модалка changelog -->
   <div id="changelogModal" class="modal-overlay">
@@ -144,6 +223,6 @@
     </div>
   </div>
 
-  <script src="app.js?v=20260928cloud"></script>
+  <script src="app.js?v=20261001admin"></script>
 </body>
 </html>

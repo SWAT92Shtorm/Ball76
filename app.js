@@ -838,13 +838,22 @@ function getNearestGame(hall) {
 
   // Если для этой игры задано изменённое время — показываем его, а не расписание.
   const ov = timeOverride(hall, dateStr);
-  const startText = ov ? ov.startTime : `${nearest.from}:00`;
-  const changed = ov ? ' ⚠️ время изменено' : '';
+  const scheduledFrom = `${nearest.from}:00`;
+  const startText = ov ? ov.startTime : scheduledFrom;
+
+  // «По расписанию было …» показываем только когда время реально сдвинуто
+  // относительно графика (игра «вне расписания» графика не имеет).
+  const scheduledText = ov && !ov.isExtra ? (ov.scheduledFrom || scheduledFrom) : null;
 
   return {
     date: dateStr,
     dayDiff: nearest.dayDiff,
-    text: `Ближайшая игра: ${weekday}, ${dayNum} ${month}, в ${startText}${changed}`
+    weekday, dayNum, month,
+    startTime: startText,
+    scheduledFrom: scheduledText,
+    isOverride: !!ov,
+    note: ov && ov.note ? ov.note : '',
+    text: `Ближайшая игра: ${weekday}, ${dayNum} ${month}, в ${startText}${ov ? ' ⚠️' : ''}`
   };
 }
 
@@ -886,12 +895,30 @@ async function showNearestGame() {
   const info = document.getElementById('nearestGameInfo');
 
   if (!hall) {
+    info.className = '';
     info.textContent = 'Ближайшая игра: не выбран зал';
     return;
   }
 
   const g = getNearestGame(hall);
-  info.textContent = g ? g.text : 'Ближайшая игра: не найдено';
+  if (!g) {
+    info.className = '';
+    info.textContent = 'Ближайшая игра: не найдено';
+    return;
+  }
+
+  // Когда время отличается от расписания — подсвечиваем блок и дописываем
+  // подпись «время изменено, (по расписанию было …)» + причину.
+  if (g.isOverride) {
+    const was = g.scheduledFrom ? ` (по расписанию было ${escapeHtml(g.scheduledFrom)})` : '';
+    info.className = 'nearest-changed';
+    info.innerHTML = `Ближайшая игра: ${escapeHtml(g.weekday)}, ${escapeHtml(g.dayNum)} ${escapeHtml(g.month)}, в ${escapeHtml(g.startTime)} ⚠️`
+      + `<div class="nearest-changed-note">время изменено${was}</div>`
+      + (g.note ? `<div class="nearest-changed-reason">Причина: ${escapeHtml(g.note)}</div>` : '');
+  } else {
+    info.className = '';
+    info.textContent = g.text;
+  }
 
   // При первой загрузке — только текст, данные загрузит DOMContentLoaded
   if (isInitialLoad) return;
@@ -1691,27 +1718,11 @@ async function loadTimeOverrides(hall) {
   } catch (_) { /* не критично */ }
 }
 
-// Баннер над формой + разовое модальное уведомление для игроков.
+// Информация об изменении времени теперь выводится прямо в блоке
+// «Ближайшая игра» (см. showNearestGame), поэтому отдельный баннер не нужен.
+// Здесь остаётся только разовое модальное уведомление для игроков.
 function renderTimeBanner(info, hall, date) {
-  const banner = document.getElementById('timeChangeBanner');
-  if (!banner) return;
-
-  if (!info || !info.isOverride) {
-    banner.style.display = 'none';
-    banner.innerHTML = '';
-    return;
-  }
-
-  // Для игры вне обычного графика «по расписанию было …» не показываем —
-  // сообщаем только новое время начала.
-  const wasHtml = info.scheduledFrom
-    ? ` (по расписанию было ${escapeHtml(info.scheduledFrom)})`
-    : '';
-  banner.style.display = 'block';
-  banner.innerHTML = `⚠️ <strong>Время игры:</strong> начало в ${escapeHtml(info.startTime)}`
-    + wasHtml
-    + (info.note ? `<div class="time-change-note">Причина: ${escapeHtml(info.note)}</div>` : '');
-
+  if (!info || !info.isOverride) return;
   maybeShowTimeNotice(info, hall, date);
 }
 
@@ -1995,7 +2006,7 @@ window.addEventListener('DOMContentLoaded', async function () {
   const hall = document.getElementById('hallSelect').value;
   if (hall) {
     lastHallDateKey = hall + '|' + getNearestGameDate(hall);
-    document.getElementById('nearestGameInfo').textContent = getNearestGameText(hall);
+    showNearestGame();
   }
 
   // 4. Загружаем статистику записей, изменения времени и показываем расписание

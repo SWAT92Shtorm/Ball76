@@ -422,6 +422,66 @@ app.get('/api/telegram-links', readLimiter, async (req, res) => {
   }
 });
 
+/**
+ * @swagger
+ * /api/players-directory:
+ *   post:
+ *     summary: Добавить игрока в справочник (без записи на игру)
+ *     description: >
+ *       Валидирует ФИО и добавляет его в таблицу players, если такого игрока
+ *       ещё нет. Используется ботом Telegram, когда пользователь ввёл своё ФИО,
+ *       которого нет в базе — чтобы сразу добавить нового участника.
+ *     tags: [Players]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [name]
+ *             properties:
+ *               name:
+ *                 type: string
+ *                 example: Иванов Иван Иванович
+ *     responses:
+ *       200:
+ *         description: Игрок добавлен или уже существует
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 created:
+ *                   type: boolean
+ *                 name:
+ *                   type: string
+ *       400:
+ *         description: Ошибка валидации ФИО
+ */
+app.post('/api/players-directory', mutationLimiter, async (req, res) => {
+  let { name } = req.body || {};
+  const nameError = validateFullName(name);
+  if (nameError) {
+    return res.status(400).json({ error: nameError });
+  }
+  name = name.trim();
+
+  try {
+    const insert = await pool.query(
+      `INSERT INTO players (name)
+         VALUES ($1)
+       ON CONFLICT (name) DO NOTHING
+       RETURNING id;`,
+      [name]
+    );
+    const created = insert.rows.length > 0;
+    res.json({ created, name });
+  } catch (err) {
+    console.error('API players-directory:', err);
+    res.status(500).json({ error: 'Не удалось добавить игрока' });
+  }
+});
+
 
 
 /**

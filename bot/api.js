@@ -78,7 +78,14 @@ export const api = {
   },
 
   /** История записей (все игроки со счётчиками — используется для поиска). */
-  getHistory: () => call('GET', '/api/history')
+  getHistory: () => call('GET', '/api/history'),
+
+  /**
+   * Добавить игрока в справочник (без записи на игру).
+   * Сервер сам валидирует ФИО и не создаёт дубликат.
+   * Возвращает { created, name }.
+   */
+  addPlayerToDirectory: (name) => call('POST', '/api/players-directory', { name })
 };
 
 // ============================================================

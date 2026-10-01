@@ -10,7 +10,8 @@ import { pool } from './db.js';
 
 import {
   handleStart, startSignup, startCancel, chooseHall, chooseDate,
-  doAction, myGames, showSchedule, tryLinkByName, sendMenu
+  doAction, myGames, showSchedule, tryLinkByName, sendMenu,
+  confirmCreatePlayer, cancelCreatePlayer
 } from './handlers/flow.js';
 import { handleText, aiEnabled, confirmAction } from './handlers/ai.js';
 import { registerChat, handleGroupMention } from './handlers/group.js';
@@ -58,6 +59,10 @@ bot.callbackQuery('act:signup', async (ctx) => { await ctx.answerCallbackQuery()
 bot.callbackQuery('act:cancel', async (ctx) => { await ctx.answerCallbackQuery(); await startCancel(ctx); });
 bot.callbackQuery('act:mygames', async (ctx) => { await ctx.answerCallbackQuery(); await myGames(ctx); });
 bot.callbackQuery('act:schedule', async (ctx) => { await ctx.answerCallbackQuery(); await showSchedule(ctx); });
+
+// Добавление нового игрока в базу по ФИО из Telegram
+bot.callbackQuery('link:create', (ctx) => confirmCreatePlayer(ctx));
+bot.callbackQuery('link:cancel', (ctx) => cancelCreatePlayer(ctx));
 
 // Выбор зала: signup:hall:hall1 | cancel:hall:hall2
 bot.callbackQuery(/^(signup|cancel):hall:(hall\d)$/, async (ctx) => {

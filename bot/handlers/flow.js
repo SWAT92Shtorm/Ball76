@@ -3,6 +3,7 @@
 // Все мутации — только через подтверждение.
 // ============================================================
 
+import { InlineKeyboard } from 'grammy';
 import { getConfigCached, upcomingDates, describeGame, doSignup, doCancel, scheduleText, nearestGame } from '../game.js';
 import { api, todayMSK } from '../api.js';
 import { mainMenu, hallPicker, datePicker, confirm, menuHint } from '../keyboards.js';
@@ -11,6 +12,28 @@ import { log } from '../logger.js';
 
 // То же правило, что на сервере: 3–5 слов, буквы/дефис/апостроф.
 const NAME_REGEX = /^[A-Za-zА-Яа-яЁё][A-Za-zА-Яа-яЁё'\-]*(?:\s+[A-Za-zА-Яа-яЁё][A-Za-zА-Яа-яЁё'\-]*){2,4}$/;
+
+// Стоп-слова: если хотя бы одно слово фразы совпадает — это не ФИО, а запрос.
+// Проверяем по целым словам (не подстроки), чтобы не задеть фамилии
+// вроде «Залевский» или «Игрушкин».
+const COMMAND_WORDS = new Set([
+  'запиши', 'запишите', 'записать', 'записаться', 'записал',
+  'отмени', 'отмените', 'отменить', 'удали', 'удалите', 'удалить',
+  'мои', 'игры', 'игра', 'игру', 'расписание', 'расписании', 'когда',
+  'меню', 'помощь', 'подпишись', 'подписка', 'хочу', 'можно',
+  'зал', 'зале', 'сегодня', 'завтра', 'послезавтра',
+  'понедельник', 'вторник', 'среду', 'среда', 'четверг', 'пятницу', 'пятница',
+  'субботу', 'суббота', 'воскресенье'
+]);
+
+/** Похоже ли сообщение на команду-запрос, а не на ФИО. */
+function looksLikeCommand(text) {
+  const words = String(text).toLowerCase().split(/[\s,]+/).filter(Boolean);
+  return words.some((w) => COMMAND_WORDS.has(w));
+}
+
+// Ожидающие подтверждения ФИО при добавлении нового участника: telegramId → имя.
+const pendingName = new Map();
 
 /** Переслать главное меню. */
 export async function sendMenu(ctx, text = '🏀 Главное меню') {
@@ -34,29 +57,133 @@ async function matchPlayerName(typed) {
   return null;
 }
 
-/** Привязка профиля по введённому ФИО. */
-export async function tryLinkByName(ctx, typed) {
-  if (!NAME_REGEX.test(String(typed).trim())) return false;
-  const matched = await matchPlayerName(typed);
-  if (!matched) {
-    await ctx.reply(
-      'Такого игрока нет в базе. ФИО должно точно совпадать с тем, как вы записаны на сайте ' +
-      '(Фамилия Имя Отчество). Либо запишитесь на сайте — и нажмите там «Подписаться».'
-    );
-    return true; // это была попытка ввести имя — обработали
+// Валидация введённого ФИО (та же логика, что на сервере): 3–5 слов.
+function validateName(input) {
+  const name = String(input || '').trim().replace(/\s+/g, ' ');
+  if (!name) return { error: 'ФИО не может быть пустым.' };
+  if (name.length > 80) return { error: 'ФИО слишком длинное (максимум 80 символов).' };
+  if (!NAME_REGEX.test(name)) {
+    return {
+      error: 'ФИО должно состоять из 3–5 слов: Фамилия Имя Отчество ' +
+        '(только буквы, дефис и апостроф).\nПример: Иванов Иван Иванович'
+    };
   }
+  return { name };
+}
+
+// Привести ФИО к виду «Фамилия Имя Отчество» (каждое слово с заглавной,
+// в т.ч. после дефиса: Петрова-Сидорова).
+function prettifyName(name) {
+  return name
+    .split(' ')
+    .map((w) => w.toLowerCase().replace(/(^|[-'])([a-zа-яё])/g, (_, p, c) => p + c.toUpperCase()))
+    .join(' ');
+}
+
+/** Привязать telegram_id к ФИО (после проверки/создания игрока). */
+async function linkPlayer(ctx, playerName) {
   await upsertLink({
     telegramId: ctx.from.id,
-    playerName: matched,
+    playerName,
     username: ctx.from.username || null,
     firstName: ctx.from.first_name || null,
     lastName: ctx.from.last_name || null
   });
+}
+
+/**
+ * Привязка профиля по введённому ФИО.
+ * 1) Сначала ищем совпадение в базе.
+ * 2) Если нет — валидируем ФИО и предлагаем добавить нового участника.
+ */
+export async function tryLinkByName(ctx, typed) {
+  const raw = String(typed || '').trim();
+
+  // Стоп-слова: типичные фразы-команды не должны приниматься за ФИО.
+  // Например, «запиши меня на четверг» формально похоже на 3 слова.
+  if (looksLikeCommand(raw)) {
+    return false; // отдаём дальше — ИИ/командам
+  }
+
+  // Похоже ли это вообще на ФИО? Если нет — это не наша команда (отдаём ИИ).
+  if (!NAME_REGEX.test(raw)) {
+    // Но если пользователь уже пытался ввести имя (есть буквы/пробелы) и не привязан —
+    // подскажем корректный формат, чтобы он не потерялся.
+    const link = await getLink(ctx.from.id);
+    if (!link?.player_name && /[A-Za-zА-Яа-яЁё]/.test(raw) && raw.includes(' ')) {
+      const v = validateName(raw);
+      await ctx.reply(`⚠️ ${v.error || 'Проверьте ФИО.'}`);
+      return true;
+    }
+    return false;
+  }
+
+  // 1. Ищем существующего игрока.
+  const matched = await matchPlayerName(raw);
+  if (matched) {
+    await linkPlayer(ctx, matched);
+    await ctx.reply(
+      `✅ Привязано: «${matched}».\nТеперь можно записываться и отменять.`,
+      { reply_markup: mainMenu() }
+    );
+    return true;
+  }
+
+  // Если пользователь уже привязан — не принимаем произвольный текст за ФИО
+  // (иначе фраза «запиши меня на четверг» создала бы мусорного игрока).
+  // Отдаём дальше ИИ/командам.
+  const existing = await getLink(ctx.from.id);
+  if (existing?.player_name) return false;
+
+  // 2. Совпадения нет — валидируем и предлагаем добавить нового игрока.
+  const v = validateName(raw);
+  if (v.error) {
+    await ctx.reply(`⚠️ ${v.error}`);
+    return true;
+  }
+  const pretty = prettifyName(v.name);
   await ctx.reply(
-    `✅ Привязано: «${matched}».\nТеперь можно записываться и отменять.`,
-    { reply_markup: mainMenu() }
+    `Игрока «${pretty}» нет в базе.\n\nДобавить вас как нового участника с таким ФИО?`,
+    {
+      reply_markup: new InlineKeyboard()
+        .text('✅ Да, добавить', 'link:create')
+        .row()
+        .text('✖️ Нет', 'link:cancel')
+    }
   );
+  // Запоминаем предложенное имя для подтверждения.
+  pendingName.set(ctx.from.id, pretty);
   return true;
+}
+
+/** Подтверждение «добавить нового участника». */
+export async function confirmCreatePlayer(ctx) {
+  const name = pendingName.get(ctx.from.id);
+  pendingName.delete(ctx.from.id);
+  await ctx.answerCallbackQuery?.();
+
+  if (!name) {
+    await ctx.reply('Нечего добавлять. Отправьте ваше ФИО (Фамилия Имя Отчество).');
+    return;
+  }
+  try {
+    const res = await api.addPlayerToDirectory(name);
+    await linkPlayer(ctx, res.name || name);
+    await ctx.reply(
+      `✅ Готово! Вы добавлены как «${res.name || name}».\nТеперь можно записываться и отменять.`,
+      { reply_markup: mainMenu() }
+    );
+  } catch (e) {
+    log.error('addPlayerToDirectory:', e.message);
+    await ctx.reply(`Не удалось добавить: ${e.message}`);
+  }
+}
+
+/** Отмена добавления нового участника. */
+export async function cancelCreatePlayer(ctx) {
+  pendingName.delete(ctx.from.id);
+  await ctx.answerCallbackQuery?.();
+  await ctx.reply('Отменено. Отправьте правильное ФИО (Фамилия Имя Отчество).');
 }
 
 /** /start и глубокие ссылки. */
@@ -105,8 +232,8 @@ export async function handleStart(ctx, payload) {
   await ctx.reply(
     '🏀 Привет! Я бот записи на баскетбол Ball76.\n\n' +
     'ЛОКОМОТИВ — вт/чт 21:00\nАТЛАНТ — пт 21:00\n\n' +
-    'Чтобы записываться, сначала привяжите профиль: отправьте ваше ФИО ' +
-    '(Фамилия Имя Отчество) — точно как на сайте.',
+    'Чтобы записываться, отправьте ваше ФИО (Фамилия Имя Отчество).\n' +
+    'Если вас ещё нет в базе — я предложу добавить вас как нового участника.',
     { reply_markup: mainMenu() }
   );
 }

@@ -25,12 +25,13 @@ export const config = {
   // Пример: https://tg-proxy.<account>.workers.dev
   telegramApiRoot: optional('TELEGRAM_API_ROOT'),
 
-  // --- LLM (OpenAI-совместимый; по умолчанию Google Gemini, доступный из РФ) ---
-  // Внимание: Groq заблокирован для РФ — не использовать.
+  // --- LLM (OpenAI-совместимый; по умолчанию vsegpt.ru — российский агрегатор) ---
+  // Внимание: Groq / OpenAI / OpenRouter / Gemini-регистрация — недоступны из РФ.
+  // vsegpt принимает российские карты и даёт доступ к gpt-4.1-nano и др.
   llm: {
-    baseUrl: optional('LLM_BASE_URL', 'https://generativelanguage.googleapis.com/v1beta/openai'),
+    baseUrl: optional('LLM_BASE_URL', 'https://api.vsegpt.ru/v1'),
     apiKey: optional('LLM_API_KEY'),
-    model: optional('LLM_MODEL', 'gemini-2.0-flash')
+    model: optional('LLM_MODEL', 'openai/gpt-4.1-nano')
   },
 
   // --- Ball76 API ---

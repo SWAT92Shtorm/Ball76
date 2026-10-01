@@ -118,19 +118,47 @@ LLM_MODEL=gemini-2.0-flash
 Клиент [`llm.js`](bot/llm.js:1) использует `${baseUrl}/chat/completions`, поэтому любые
 OpenAI-совместимые провайдеры переключаются сменой `.env` без правок кода.
 
+**⚠️ Google Gemini — API доступен, но РЕГИСТРАЦИЯ из РФ заблокирована:**
+- `aistudio.google.com` → «Failed to list imported projects: permission denied» —
+  Google блокирует аккаунты из РФ.
+- Значит получить ключ из РФ нельзя → вариант отпадает.
+
 **Прочие провайдеры (проверено с прода):**
 
-| Провайдер | API из РФ | Бесплатно | Примечание |
-|---|---|---|---|
-| **Google Gemini** | ✅ 400 (доступен) | ✅ да | **рекомендуется** |
-| Groq | ❌ 403 | — | гео-блок РФ |
-| OpenRouter | ❌ 403 | — | гео-блок РФ |
-| Cerebras | ❌ 403 | — | гео-блок РФ |
-| OpenAI | ❌ 403 | ❌ | гео-блок РФ |
-| DeepSeek | ✅ 401 (доступен) | ❌ платно (дёшево) | нужна оплата |
-| Mistral | ✅ 401 (доступен) | частично | нужна оплата |
-| GigaChat (Sber) | ⚠️ timeout | частично | требует настройки |
-| YandexGPT | ✅ 405 (доступен) | ❌ платно | нужна оплата |
+| Провайдер | API из РФ | Бесплатно | Function calling | Примечание |
+|---|---|---|---|---|
+| **vsegpt.ru** | ✅ 200 | ✅ есть free-модели | ✅ | **РЕКОМЕНДУЕТСЯ** (RU-агрегатор) |
+| **proxyapi.ru** | ✅ 401 | ⚠️ пробный период | ✅ | RU-агрегатор, платный |
+| Groq | ❌ 403 | — | — | гео-блок РФ |
+| OpenRouter | ❌ 403 | — | — | гео-блок РФ |
+| Cerebras | ❌ 403 | — | — | гео-блок РФ |
+| OpenAI | ❌ 403 | ❌ | — | гео-блок РФ |
+| Google Gemini | ⚠️ API ок | ✅ | — | **регистрация из РФ заблокирована** |
+| DeepSeek | ✅ 401 | ❌ платно | — | нужна оплата |
+| Mistral | ✅ 401 | частично | — | нужна оплата |
+| GigaChat (Sber) | ❌ timeout | частично | — | свой формат API |
+| YandexGPT | ✅ 405 | ❌ платно | — | свой формат API |
+
+### Рекомендация: vsegpt.ru (российский агрегатор)
+
+**Почему:**
+- Доступен из РФ (`api.vsegpt.ru` → HTTP 200).
+- **OpenAI-совместим** → код бота менять не нужно, только `.env`.
+- **Есть бесплатные текстовые модели**: `perplexity/latest-small-online`
+  (prompt=0, completion=0).
+- Дешёвые модели с function calling: `openai/gpt-4.1-nano` (0.015/0.06),
+  `openai/gpt-oss-20b` (0.014/0.06), `google/gemini-flash-1.5-8b` (0.015/0.04).
+- Оплата российскими картами, регистрация простая.
+
+Конфиг (`.env`) для vsegpt:
+```
+LLM_BASE_URL=https://api.vsegpt.ru/v1
+LLM_API_KEY=<ключ из личного кабинета vsegpt.ru>
+LLM_MODEL=openai/gpt-4.1-nano          # дёшево, с function calling
+# либо бесплатно: LLM_MODEL=perplexity/latest-small-online
+```
+
+Регистрация: [vsegpt.ru/apikeys](https://vsegpt.ru/apikeys).
 
 **Страховка при слабом tool calling:**
 1. Модель вызывает функцию.

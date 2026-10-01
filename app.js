@@ -995,7 +995,10 @@ function showSchedule() {
       const mark = ov.isExtra ? ' ⭐' : ' ⚠️';
       slotHtml = `<div class="${cls}">${escapeHtml(ov.startTime)}${mark}</div>`;
     } else if (slots.length) {
-      slotHtml = slots.map(s => `<div class="sched-slot">${s.from}:00–${s.to}:00</div>`).join('');
+      // Показываем только время начала: длительность игры выбирается отдельно.
+      slotHtml = slots
+        .map(s => `<div class="sched-slot">${String(s.from).padStart(2, '0')}:00</div>`)
+        .join('');
     } else if (signupStats) {
       const dayCnt = (signupStats.byDate && signupStats.byDate[dateStr]) || 0;
       const showCnt = dayCnt > 0 ? dayCnt : (isToday ? signupStats.total : 0);

@@ -1,5 +1,6 @@
 const express = require('express');
 const rateLimit = require('express-rate-limit');
+const crypto = require('crypto');
 
 const app = express();
 
@@ -706,7 +707,7 @@ app.get('/api/players/:hallId/:date', readLimiter, async (req, res) => {
  *       500:
  *         description: Внутренняя ошибка сервера
  */
-app.patch('/api/player/name', mutationLimiter, async (req, res) => {
+app.patch('/api/player/name', mutationLimiter, requireAdmin, async (req, res) => {
   const { currentName } = req.body;
   let { newName } = req.body;
 
@@ -1067,6 +1068,309 @@ app.get('/api/signup-stats/:hallId', readLimiter, async (req, res) => {
   } catch (err) {
     console.error('Ошибка signup-stats:', err);
     res.status(500).json({ error: 'Failed to get signup stats' });
+  }
+});
+
+// ============================================================
+// Администрирование: вход по паролю, токен-сессии
+// ============================================================
+// Пароль администратора. По умолчанию '0000' (как оговорено), в проде
+// переопределяется через переменную окружения ADMIN_PASSWORD в .env.
+const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || '0000';
+
+// Активные админ-токены: token -> expiry (ms). Храним в памяти процесса —
+// при рестарте контейнера все админ-сессии сбрасываются (это нормально,
+// админ просто войдёт заново).
+const adminTokens = new Map();
+const ADMIN_TOKEN_TTL_MS = 12 * 60 * 60 * 1000; // 12 часов
+
+function issueAdminToken() {
+  const token = crypto.randomBytes(24).toString('hex');
+  adminTokens.set(token, Date.now() + ADMIN_TOKEN_TTL_MS);
+  return token;
+}
+
+function isValidAdminToken(token) {
+  if (!token) return false;
+  const expiry = adminTokens.get(token);
+  if (!expiry) return false;
+  if (Date.now() > expiry) {
+    adminTokens.delete(token);
+    return false;
+  }
+  return true;
+}
+
+// Middleware: пропускает только запросы с валидным админ-токеном.
+// Токен передаётся в заголовке X-Admin-Token.
+function requireAdmin(req, res, next) {
+  const token = req.headers['x-admin-token'];
+  if (!isValidAdminToken(token)) {
+    return res.status(403).json({ error: 'Требуется вход администратора' });
+  }
+  next();
+}
+
+/**
+ * @swagger
+ * /api/admin/login:
+ *   post:
+ *     summary: Вход администратора
+ *     description: Проверяет пароль и возвращает токен для админ-операций.
+ *     tags: [Admin]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [password]
+ *             properties:
+ *               password:
+ *                 type: string
+ *                 example: '0000'
+ *     responses:
+ *       200:
+ *         description: Успешный вход, возвращён токен
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 token:
+ *                   type: string
+ *       401:
+ *         description: Неверный пароль
+ */
+app.post('/api/admin/login', mutationLimiter, (req, res) => {
+  const { password } = req.body || {};
+  if (typeof password !== 'string' || password !== ADMIN_PASSWORD) {
+    return res.status(401).json({ error: 'Неверный пароль' });
+  }
+  const token = issueAdminToken();
+  res.json({ token });
+});
+
+// ============================================================
+// Время игры: отклонение от расписания (override)
+// ============================================================
+
+// Валидация времени в формате HH:MM (00:00–23:59).
+function isValidTime(str) {
+  return typeof str === 'string' && /^([01]\d|2[0-3]):[0-5]\d$/.test(str);
+}
+
+// Валидация даты YYYY-MM-DD.
+function isValidDateStr(str) {
+  return typeof str === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(str)
+    && !Number.isNaN(Date.parse(str + 'T12:00:00Z'));
+}
+
+const HALLS = ['hall1', 'hall2'];
+
+// Расписание зала на конкретную дату: { from, to } или null.
+// from/to — целые часы (как в APP_CONFIG).
+function scheduleForDate(hallId, dateStr) {
+  const hall = APP_CONFIG.halls[hallId];
+  if (!hall) return null;
+  const d = new Date(dateStr + 'T12:00:00Z'); // полдень UTC — не сдвигаем день
+  const dayName = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'][d.getUTCDay()];
+  const slot = (hall.schedule || []).find(s => s.day === dayName);
+  return slot ? { from: slot.from, to: slot.to } : null;
+}
+
+function formatHour(h) {
+  return String(h).padStart(2, '0') + ':00';
+}
+
+// Эффективное время игры: override из БД, если задан, иначе расписание.
+// На таблице games уникальность (hall_id, date) не гарантирована, поэтому
+// строку с заданным override выбираем приоритетно.
+async function getGameTime(hallId, dateStr) {
+  const result = await pool.query(
+    `SELECT start_time, end_time, time_note, time_changed_at
+       FROM games WHERE hall_id = $1 AND date = $2
+       ORDER BY (start_time IS NOT NULL) DESC, id DESC
+       LIMIT 1`,
+    [hallId, dateStr]
+  );
+  const row = result.rows[0] || null;
+  const schedule = scheduleForDate(hallId, dateStr);
+  const hasOverride = !!(row && row.start_time);
+
+  if (hasOverride) {
+    return {
+      startTime: row.start_time,
+      endTime: row.end_time || null,
+      note: row.time_note || '',
+      changedAt: row.time_changed_at || null,
+      isOverride: true,
+      scheduledFrom: schedule ? formatHour(schedule.from) : null,
+      scheduledTo: schedule ? formatHour(schedule.to) : null
+    };
+  }
+
+  return {
+    startTime: schedule ? formatHour(schedule.from) : null,
+    endTime: schedule ? formatHour(schedule.to) : null,
+    note: '',
+    changedAt: null,
+    isOverride: false,
+    scheduledFrom: schedule ? formatHour(schedule.from) : null,
+    scheduledTo: schedule ? formatHour(schedule.to) : null
+  };
+}
+
+/**
+ * @swagger
+ * /api/games/{hallId}/{date}/time:
+ *   get:
+ *     summary: Время игры на дату
+ *     description: Возвращает эффективное время игры (override или расписание).
+ *     tags: [Games]
+ *     parameters:
+ *       - in: path
+ *         name: hallId
+ *         required: true
+ *         schema: { type: string, enum: [hall1, hall2] }
+ *       - in: path
+ *         name: date
+ *         required: true
+ *         schema: { type: string, format: date }
+ *     responses:
+ *       200:
+ *         description: Время игры
+ *       400:
+ *         description: Неверные параметры
+ */
+app.get('/api/games/:hallId/:date/time', readLimiter, async (req, res) => {
+  const { hallId, date } = req.params;
+  if (!HALLS.includes(hallId) || !isValidDateStr(date)) {
+    return res.status(400).json({ error: 'Неверный зал или дата' });
+  }
+  try {
+    const info = await getGameTime(hallId, date);
+    res.json(info);
+  } catch (err) {
+    console.error('Ошибка чтения времени игры:', err);
+    res.status(500).json({ error: 'Failed to read game time' });
+  }
+});
+
+/**
+ * @swagger
+ * /api/games/{hallId}/{date}/time:
+ *   patch:
+ *     summary: Изменить время игры
+ *     description: Только для администратора. Задаёт отклонение от расписания.
+ *     tags: [Games]
+ *     parameters:
+ *       - in: path
+ *         name: hallId
+ *         required: true
+ *         schema: { type: string, enum: [hall1, hall2] }
+ *       - in: path
+ *         name: date
+ *         required: true
+ *         schema: { type: string, format: date }
+ *     responses:
+ *       200:
+ *         description: Время изменено
+ *       403:
+ *         description: Требуется вход администратора
+ */
+app.patch('/api/games/:hallId/:date/time', mutationLimiter, requireAdmin, async (req, res) => {
+  const { hallId, date } = req.params;
+  let { startTime, endTime, note } = req.body || {};
+
+  if (!HALLS.includes(hallId) || !isValidDateStr(date)) {
+    return res.status(400).json({ error: 'Неверный зал или дата' });
+  }
+  if (!isValidTime(startTime)) {
+    return res.status(400).json({ error: 'startTime должен быть в формате HH:MM' });
+  }
+  if (endTime != null && endTime !== '' && !isValidTime(endTime)) {
+    return res.status(400).json({ error: 'endTime должен быть в формате HH:MM' });
+  }
+  note = typeof note === 'string' ? note.trim().slice(0, 200) : '';
+  if (!note) {
+    return res.status(400).json({ error: 'Укажите причину изменения времени' });
+  }
+  endTime = endTime || null;
+
+  try {
+    // Уникальность (hall_id, date) не гарантирована — обновляем существующую
+    // игру, а если её ещё нет, создаём. Всё в транзакции.
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+      const upd = await client.query(
+        `UPDATE games
+            SET start_time = $3, end_time = $4, time_note = $5, time_changed_at = now()
+          WHERE hall_id = $1 AND date = $2`,
+        [hallId, date, startTime, endTime, note]
+      );
+      if (upd.rowCount === 0) {
+        await client.query(
+          `INSERT INTO games (hall_id, date, start_time, end_time, time_note, time_changed_at)
+            VALUES ($1, $2, $3, $4, $5, now())`,
+          [hallId, date, startTime, endTime, note]
+        );
+      }
+      await client.query('COMMIT');
+    } catch (txErr) {
+      try { await client.query('ROLLBACK'); } catch (_) {}
+      throw txErr;
+    } finally {
+      client.release();
+    }
+    const info = await getGameTime(hallId, date);
+    res.json(info);
+  } catch (err) {
+    console.error('Ошибка изменения времени игры:', err);
+    res.status(500).json({ error: 'Failed to update game time' });
+  }
+});
+
+/**
+ * @swagger
+ * /api/games/{hallId}/{date}/time:
+ *   delete:
+ *     summary: Сбросить время игры к расписанию
+ *     description: Только для администратора. Удаляет отклонение от расписания.
+ *     tags: [Games]
+ *     parameters:
+ *       - in: path
+ *         name: hallId
+ *         required: true
+ *         schema: { type: string, enum: [hall1, hall2] }
+ *       - in: path
+ *         name: date
+ *         required: true
+ *         schema: { type: string, format: date }
+ *     responses:
+ *       200:
+ *         description: Время сброшено к расписанию
+ *       403:
+ *         description: Требуется вход администратора
+ */
+app.delete('/api/games/:hallId/:date/time', mutationLimiter, requireAdmin, async (req, res) => {
+  const { hallId, date } = req.params;
+  if (!HALLS.includes(hallId) || !isValidDateStr(date)) {
+    return res.status(400).json({ error: 'Неверный зал или дата' });
+  }
+  try {
+    await pool.query(
+      `UPDATE games
+          SET start_time = NULL, end_time = NULL, time_note = NULL, time_changed_at = NULL
+        WHERE hall_id = $1 AND date = $2`,
+      [hallId, date]
+    );
+    const info = await getGameTime(hallId, date);
+    res.json(info);
+  } catch (err) {
+    console.error('Ошибка сброса времени игры:', err);
+    res.status(500).json({ error: 'Failed to reset game time' });
   }
 });
 

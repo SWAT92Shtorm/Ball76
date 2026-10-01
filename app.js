@@ -794,9 +794,16 @@ async function submitEdit(index) {
   try {
     const response = await fetch(`${API_BASE_URL}/api/player/name`, {
       method: 'PATCH',
-      headers: { 'Content-Type': 'application/json', ...getTunnelHeaders() },
+      headers: adminHeaders(),
       body: JSON.stringify({ currentName: oldName, newName })
     });
+
+    // Токен протух/отозван — разлогиниваем и просим войти заново.
+    if (response.status === 403) {
+      adminLogout();
+      showToast('Сессия администратора истекла — войдите заново', 'error');
+      return;
+    }
 
     if (!response.ok) {
       const data = await response.json();
@@ -1842,7 +1849,8 @@ try { adminToken = localStorage.getItem(ADMIN_TOKEN_KEY); } catch (_) {}
 function isAdmin() { return !!adminToken; }
 
 function adminHeaders() {
-  const h = { 'Content-Type': 'application/json' };
+  // Включаем и tunnel-bypass заголовки: админ-запросы идут так же через loca.lt.
+  const h = { 'Content-Type': 'application/json', ...getTunnelHeaders() };
   if (adminToken) h['X-Admin-Token'] = adminToken;
   return h;
 }

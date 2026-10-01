@@ -25,11 +25,12 @@ export const config = {
   // Пример: https://tg-proxy.<account>.workers.dev
   telegramApiRoot: optional('TELEGRAM_API_ROOT'),
 
-  // --- LLM (Groq, OpenAI-совместимый) ---
+  // --- LLM (OpenAI-совместимый; по умолчанию Google Gemini, доступный из РФ) ---
+  // Внимание: Groq заблокирован для РФ — не использовать.
   llm: {
-    baseUrl: optional('LLM_BASE_URL', 'https://api.groq.com/openai/v1'),
+    baseUrl: optional('LLM_BASE_URL', 'https://generativelanguage.googleapis.com/v1beta/openai'),
     apiKey: optional('LLM_API_KEY'),
-    model: optional('LLM_MODEL', 'llama-3.3-70b-versatile')
+    model: optional('LLM_MODEL', 'gemini-2.0-flash')
   },
 
   // --- Ball76 API ---

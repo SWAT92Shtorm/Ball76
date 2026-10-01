@@ -93,12 +93,44 @@ Telegram ──► Bot (grammY, long polling)
 4. **Планировщик** — `node-cron` для напоминаний и рассылок.
 5. **Связка tg ↔ игрок** — таблица `telegram_links`.
 
-### Провайдер ИИ: Groq (бесплатный тир)
+### Провайдер ИИ: Google Gemini (ПРОВЕРЕНО, что доступен из РФ)
 
-- Base URL: `https://api.groq.com/openai/v1`
-- Полностью OpenAI-совместим → смена провайдера = правка `.env`.
-- Rate limit ~30 req/min (пиковая скорость). Один диалог = 1–2 запроса.
-- Для клуба на 18 мест — с большим запасом. Уведомления ИИ **не используют**.
+**⚠️ Groq ЗАБЛОКИРОВАН для России** (проверено с прода `31.56.211.5`):
+- `api.groq.com` → HTTP **403 Forbidden** даже с ключом (гео-блок Cloudflare).
+- `console.groq.com` → HTTP 403 — сайт регистрации недоступен.
+- Вывод: Groq использовать нельзя.
+
+**✅ Google Gemini — доступен из РФ:**
+- `generativelanguage.googleapis.com` → отвечает по существу (`400 "API key not valid"`),
+  это **не** блокировка.
+- OpenAI-совместимый эндпоинт: `POST /v1beta/openai/chat/completions` — работает.
+- `aistudio.google.com` — сайт для получения ключа открывается.
+- Бесплатный тир щедрый (~15 req/min, ~1500 req/day для flash-моделей).
+- Поддерживает function calling → код бота **менять не нужно**, только `.env`.
+
+Конфиг (`.env`):
+```
+LLM_BASE_URL=https://generativelanguage.googleapis.com/v1beta/openai
+LLM_API_KEY=<ключ из aistudio.google.com>
+LLM_MODEL=gemini-2.0-flash
+```
+
+Клиент [`llm.js`](bot/llm.js:1) использует `${baseUrl}/chat/completions`, поэтому любые
+OpenAI-совместимые провайдеры переключаются сменой `.env` без правок кода.
+
+**Прочие провайдеры (проверено с прода):**
+
+| Провайдер | API из РФ | Бесплатно | Примечание |
+|---|---|---|---|
+| **Google Gemini** | ✅ 400 (доступен) | ✅ да | **рекомендуется** |
+| Groq | ❌ 403 | — | гео-блок РФ |
+| OpenRouter | ❌ 403 | — | гео-блок РФ |
+| Cerebras | ❌ 403 | — | гео-блок РФ |
+| OpenAI | ❌ 403 | ❌ | гео-блок РФ |
+| DeepSeek | ✅ 401 (доступен) | ❌ платно (дёшево) | нужна оплата |
+| Mistral | ✅ 401 (доступен) | частично | нужна оплата |
+| GigaChat (Sber) | ⚠️ timeout | частично | требует настройки |
+| YandexGPT | ✅ 405 (доступен) | ❌ платно | нужна оплата |
 
 **Страховка при слабом tool calling:**
 1. Модель вызывает функцию.
@@ -304,10 +336,10 @@ bot/
 
 ```
 TELEGRAM_BOT_TOKEN=...
-TELEGRAM_API_ROOT=https://tg-proxy.<account>.workers.dev   # обход блокировки (см. §8.2)
-LLM_BASE_URL=https://api.groq.com/openai/v1
-LLM_API_KEY=gsk_...
-LLM_MODEL=llama-3.3-70b-versatile
+TELEGRAM_API_ROOT=                                        # пусто при пиннинге IP (мы используем extra_hosts)
+LLM_BASE_URL=https://generativelanguage.googleapis.com/v1beta/openai
+LLM_API_KEY=<ключ Gemini из aistudio.google.com>
+LLM_MODEL=gemini-2.0-flash
 API_BASE_URL=http://127.0.0.1:8080
 DATABASE_URL=postgres://Ball76:...@ball76-db:5432/Ball76
 NOTIFY_GROUP_IDS=...

@@ -4,14 +4,34 @@
 // проверяет лимит и дубли до записи.
 // ============================================================
 
-import { api, todayMSK, nowMSKHM, humanDate, addDays, scheduleForDate, findNextGameDate, weekdayName } from './api.js';
+import { api, todayMSK, nowMSKHM, humanDate, addDays, scheduleForDate, weekdayName } from './api.js';
 import { log } from './logger.js';
 
 const MAX_PLAYERS = 18;
 
+// Конфиг меняется редко (расписание/залы), но и не должен «замерзать» навсегда:
+// держим TTL, чтобы правки подхватывались без перезапуска бота.
+const CONFIG_TTL_MS = 5 * 60 * 1000; // 5 минут
 let cachedConfig = null;
-export async function getConfigCached() {
-  if (!cachedConfig) cachedConfig = await api.getConfig();
+let cachedConfigAt = 0;
+
+/**
+ * Конфиг залов с кэшем на CONFIG_TTL_MS.
+ * force=true — принудительно обновить.
+ * Если обновление не удалось, а старый конфиг есть — отдаём его (устойчивость
+ * к кратковременной недоступности API).
+ */
+export async function getConfigCached({ force = false } = {}) {
+  const fresh = cachedConfig && Date.now() - cachedConfigAt <= CONFIG_TTL_MS;
+  if (!force && fresh) return cachedConfig;
+
+  try {
+    cachedConfig = await api.getConfig();
+    cachedConfigAt = Date.now();
+  } catch (e) {
+    if (!cachedConfig) throw e; // данных нет вообще — пусть вызывающий решит
+    log.warn('Не удалось обновить конфиг, использую кэш:', e.message);
+  }
   return cachedConfig;
 }
 
@@ -145,7 +165,8 @@ export async function doCancel(hallId, date, name) {
 /** Найти ближайшую игру зала. */
 export async function nearestGame(hallId) {
   const cfg = await getConfigCached();
-  const date = await findNextGameDate(hallId, cfg.halls);
+  // Единый источник правды для поиска игровых дат — upcomingDates().
+  const [date] = await upcomingDates(hallId, cfg.halls, 1);
   if (!date) return null;
   return describeGame(hallId, date, cfg.halls[hallId].name);
 }

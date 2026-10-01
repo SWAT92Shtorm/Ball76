@@ -4,7 +4,7 @@
 // ============================================================
 
 import { getConfigCached, describeGame, doSignup, doCancel, nearestGame, upcomingDates, hasGameDate, scheduleText } from './game.js';
-import { addDays, todayMSK, humanDate } from './api.js';
+import { humanDate } from './api.js';
 import { log } from './logger.js';
 
 // JSON-схемы для function calling (формат OpenAI).
@@ -64,13 +64,21 @@ export const toolDefs = [
   }
 ];
 
+/** Ответ при неверном зале (аргумент LLM не прошёл проверку). */
+const INVALID_HALL_TEXT =
+  'Неизвестный зал. Доступны: ЛОКОМОТИВ (hall1) и АТЛАНТ (hall2).';
+
 /**
  * Разрешить дату: явную или ближайшую игру зала.
  * Явную дату проверяем: если игры в этот день нет — возвращаем { noGame: true },
  * чтобы бот не предлагал запись на день без игры.
+ * Зал приходит от LLM — если такого зала нет, возвращаем { invalidHall: true }.
  */
 async function resolveDate(hall, date) {
   const cfg = await getConfigCached();
+  if (typeof hall !== 'string' || !cfg.halls[hall]) {
+    return { invalidHall: true, hallName: String(hall) };
+  }
   const hallName = cfg.halls[hall].name;
 
   if (date && /^\d{4}-\d{2}-\d{2}$/.test(date)) {
@@ -97,9 +105,22 @@ function noGameText(hallName, requested, available) {
  * Выполнить инструмент.
  * ctxUser: { telegramId, playerName } — для мутаций.
  * Возвращает { text, pendingAction? } — pendingAction сигналит о нужде подтверждения.
+ *
+ * Любая ошибка (сеть, неожиданные аргументы LLM) перехватывается здесь: инструмент
+ * НИКОГДА не бросает исключение наружу, чтобы не уронить обработчик апдейта.
  */
 export async function runTool(name, args, ctxUser) {
   log.info(`tool: ${name}`, JSON.stringify(args || {}));
+  try {
+    return await dispatchTool(name, args, ctxUser);
+  } catch (e) {
+    log.error(`Ошибка инструмента ${name}:`, e.message);
+    return { text: 'Не получилось выполнить запрос. Попробуйте ещё раз или воспользуйтесь кнопками.' };
+  }
+}
+
+async function dispatchTool(name, args, ctxUser) {
+  const a = args && typeof args === 'object' ? args : {};
 
   switch (name) {
     case 'get_schedule': {
@@ -113,10 +134,11 @@ export async function runTool(name, args, ctxUser) {
     }
 
     case 'get_game_info': {
-      const r = await resolveDate(args.hall, args.date);
+      const r = await resolveDate(a.hall, a.date);
+      if (r.invalidHall) return { text: INVALID_HALL_TEXT };
       if (r.noGame) return { text: noGameText(r.hallName, r.requested, r.available) };
       if (!r.date) return { text: 'Не нашёл игру для этого зала.' };
-      const g = await describeGame(args.hall, r.date, r.hallName);
+      const g = await describeGame(a.hall, r.date, r.hallName);
       return {
         text: `${r.hallName}, ${g.humanDate}, ${g.startTime}${g.endTime ? '–' + g.endTime : ''}. ` +
               `Записано ${g.count}/18, свободно ${g.free}.${g.note ? ' Примечание: ' + g.note : ''}`
@@ -127,21 +149,23 @@ export async function runTool(name, args, ctxUser) {
       if (!ctxUser || !ctxUser.playerName) {
         return { text: 'Не знаю ваше ФИО — сначала привяжите профиль.' };
       }
-      const r = await resolveDate(args.hall, args.date);
+      const r = await resolveDate(a.hall, a.date);
+      if (r.invalidHall) return { text: INVALID_HALL_TEXT };
       if (r.noGame) return { text: noGameText(r.hallName, r.requested, r.available) };
       if (!r.date) return { text: 'Не нашёл игру для этого зала.' };
       // НЕ выполняем сразу — просим подтверждение (см. handlers/ai.js)
-      return { text: '', pendingAction: { action: 'signup', hallId: args.hall, date: r.date, hallName: r.hallName } };
+      return { text: '', pendingAction: { action: 'signup', hallId: a.hall, date: r.date, hallName: r.hallName } };
     }
 
     case 'cancel': {
       if (!ctxUser || !ctxUser.playerName) {
         return { text: 'Не знаю ваше ФИО — сначала привяжите профиль.' };
       }
-      const r = await resolveDate(args.hall, args.date);
+      const r = await resolveDate(a.hall, a.date);
+      if (r.invalidHall) return { text: INVALID_HALL_TEXT };
       if (r.noGame) return { text: noGameText(r.hallName, r.requested, r.available) };
       if (!r.date) return { text: 'Не нашёл игру для этого зала.' };
-      return { text: '', pendingAction: { action: 'cancel', hallId: args.hall, date: r.date, hallName: r.hallName } };
+      return { text: '', pendingAction: { action: 'cancel', hallId: a.hall, date: r.date, hallName: r.hallName } };
     }
 
     default:

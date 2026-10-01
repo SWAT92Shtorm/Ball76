@@ -145,39 +145,6 @@ export function scheduleForDate(hallConfig, dateStr) {
   return (hallConfig.schedule || []).find((s) => s.day === dayName) || null;
 }
 
-/**
- * Найти ближайшую дату игры для зала (в пределах N дней).
- * Проверяет override из БД, поэтому функция асинхронная.
- */
-export async function findNextGameDate(hallId, halls, { from = todayMSK(), maxDays = 30 } = {}) {
-  // 1) Проверяем override-даты (в т.ч. «дополнительные игры»)
-  let overrides = {};
-  try {
-    const ov = await call('GET', `/api/games/${hallId}/time-overrides`);
-    overrides = (ov && ov.overrides) || {};
-  } catch (e) {
-    log.warn('Не удалось получить time-overrides:', e.message);
-  }
-
-  for (let i = 0; i <= maxDays; i++) {
-    const date = addDays(from, i);
-    // «Сегодня» считаем только если игра ещё не началась
-    const hasOverride = Boolean(overrides[date]);
-    const hasSchedule = Boolean(scheduleForDate(halls[hallId], date));
-    if (!hasSchedule && !hasOverride) continue;
-
-    if (i === 0) {
-      // сегодня — проверяем, не прошло ли время начала
-      const info = await call('GET', `/api/games/${hallId}/${date}/time`).catch(() => null);
-      const start = info && info.startTime;
-      if (start) {
-        const now = new Intl.DateTimeFormat('en-GB', {
-          timeZone: config.tz, hour: '2-digit', minute: '2-digit'
-        }).format(new Date());
-        if (now >= start) continue; // уже началось — ищем следующую
-      }
-    }
-    return date;
-  }
-  return null;
-}
+// Поиск ближайших игровых дат (с учётом override и уже начавшихся игр)
+// живёт в game.js — upcomingDates()/hasGameDate(). Дублирующей функции здесь
+// намеренно нет: единый источник правды исключает расхождение логики.

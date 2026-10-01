@@ -1187,10 +1187,9 @@ function showList() {
         <div class="playerLine" id="playerLine${i}">
           <div class="playerName">
             <span class="playerNameMain ${overLimitCls.trim()}">
-              <span class="playerNameText">${idx}. ${escapeHtml(name)}
-                <span class="visit-count">${getPlayerVisits(name)} <span class="visit-plus">+1</span></span>
-              </span>
+              <span class="playerNameText">${idx}. ${escapeHtml(name)}</span>
               <span class="playerNameTg">${telegramLinkHtml(name)}</span>
+              <span class="visit-count">${getPlayerVisits(name)} <span class="visit-plus">+1</span></span>
             </span>
             <input type="text" id="nameEdit${i}" class="player-name-edit" value="${escapeHtml(name)}" />
           </div>
@@ -1597,7 +1596,7 @@ const CHANGELOG = [
     items: [
       '🔗 Возле имени игрока — кликабельная ссылка на профиль Telegram',
       '👆 Тап по ссылке открывает чат с игроком в Telegram',
-      '📐 Аккаунты выровнены в ровную колонку справа'
+      '📐 ФИО слева, справа — @аккаунт и счётчик визитов (ровной колонкой)'
     ]
   },
   {

@@ -756,28 +756,35 @@ th {
   margin-right: 10px;
 }
 
-/* Строка имени: имя прижато вправо, колонка Telegram — фиксированной
-   ширины, поэтому начало всех учётных записей выровнено по вертикали. */
+/* Строка: ФИО слева, а справа — @аккаунт и счётчик визитов.
+   Колонка Telegram фиксированной ширины, поэтому начало всех
+   учётных записей выровнено по вертикали. */
 .playerNameMain {
-  display: inline-flex;
+  display: flex;
   align-items: baseline;
-  justify-content: flex-end;
-  gap: 12px;
   width: 100%;
   margin-right: 0;
 }
 
 .playerNameText {
-  flex: 0 1 auto;
+  flex: 1 1 auto;
   min-width: 0;
-  text-align: right;
-  margin-right: 0;
+  text-align: left;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  margin-right: 8px;
 }
 
 .playerNameTg {
   flex: 0 0 128px;
   text-align: left;
   margin-right: 0;
+}
+
+.playerNameMain .visit-count {
+  flex: 0 0 44px;
+  text-align: right;
+  margin-left: 8px;
 }
 
 /* Ссылка на TG внутри колонки — без собственного отступа слева */
@@ -1451,12 +1458,13 @@ th {
     flex: 1 1 auto;
   }
 
-  /* Узкая колонка Telegram, чтобы длинные ФИО не выталкивали ссылку */
-  .playerNameMain {
-    gap: 8px;
-  }
+  /* Узкие колонки справа, чтобы длинные ФИО не выталкивали @аккаунт */
   .playerNameTg {
     flex: 0 0 96px;
     font-size: 11px;
+  }
+  .playerNameMain .visit-count {
+    flex: 0 0 38px;
+    margin-left: 6px;
   }
 }

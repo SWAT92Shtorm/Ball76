@@ -12,6 +12,11 @@ import { log } from '../logger.js';
 // То же правило, что на сервере: 3–5 слов, буквы/дефис/апостроф.
 const NAME_REGEX = /^[A-Za-zА-Яа-яЁё][A-Za-zА-Яа-яЁё'\-]*(?:\s+[A-Za-zА-Яа-яЁё][A-Za-zА-Яа-яЁё'\-]*){2,4}$/;
 
+/** Переслать главное меню. */
+export async function sendMenu(ctx, text = '🏀 Главное меню') {
+  await ctx.reply(`${text}\n${menuHint}`, { reply_markup: mainMenu() });
+}
+
 /** Нормализация ФИО для сравнения. */
 function normalizeName(s) {
   return String(s || '').trim().replace(/\s+/g, ' ').toLowerCase().replace(/ё/g, 'е');

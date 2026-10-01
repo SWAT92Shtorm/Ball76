@@ -311,6 +311,23 @@ function escapeHtml(str) {
     .replace(/'/g, '&#39;');
 }
 
+// Открыть чат с пользователем Telegram: сначала пытаемся открыть само
+// приложение (deep-link tg://), а если оно не установлено — через 1.2 c
+// откатываемся на веб-версию t.me. Возвращает false, чтобы отменить
+// переход по href (иначе браузер уйдёт на tg:// без отката).
+function openTelegram(uname) {
+  const web = `https://t.me/${uname}`;
+  let timer = setTimeout(() => { window.location.href = web; }, 1200);
+  const cancel = () => clearTimeout(timer);
+  // Если приложение открылось — вкладка уходит в фон: отменяем откат.
+  window.addEventListener('blur', cancel, { once: true });
+  document.addEventListener('visibilitychange', () => {
+    if (document.hidden) cancel();
+  }, { once: true });
+  window.location.href = `tg://resolve?domain=${uname}`;
+  return false;
+}
+
 // HTML-ссылка на профиль Telegram игрока (по ФИО) или пустая строка.
 // Имя приходит из БД и экранируется; username дополнительно санируется,
 // чтобы в href не попали посторонние символы (защита от инъекции).
@@ -320,8 +337,9 @@ function telegramLinkHtml(name) {
   const uname = String(link.username).trim().replace(/^@/, '');
   if (!/^[A-Za-z0-9_]{3,64}$/.test(uname)) return '';
   const safeUname = encodeURIComponent(uname);
-  return `<a class="tg-link" href="https://t.me/${safeUname}" target="_blank"`
-    + ` rel="noopener noreferrer" title="Написать в Telegram: @${escapeHtml(uname)}">`
+  return `<a class="tg-link" href="tg://resolve?domain=${safeUname}"`
+    + ` onclick="return openTelegram('${uname}')"`
+    + ` title="Написать в Telegram: @${escapeHtml(uname)}">`
     + `<svg class="tg-icon" width="14" height="14" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">`
     + `<path d="M9.78 18.65l.28-4.23 7.68-6.92c.34-.31-.07-.46-.52-.19L7.74 13.3 3.64 12c-.88-.25-.89-.86.2-1.3l15.97-6.16c.73-.33 1.43.18 1.15 1.3l-2.72 12.81c-.19.91-.74 1.13-1.5.71L12.6 16.3l-1.99 1.93c-.23.23-.42.42-.83.42z"/></svg>`
     + `@${escapeHtml(uname)}</a>`;
@@ -1595,8 +1613,8 @@ const CHANGELOG = [
     label: 'v2026.10.01 — Telegram-аккаунты в списке',
     items: [
       '🔗 Возле имени игрока — кликабельная ссылка на профиль Telegram',
-      '👆 Тап по ссылке открывает чат с игроком в Telegram',
-      '📐 ФИО слева, справа — @аккаунт и счётчик визитов (ровной колонкой)'
+      '📐 ФИО слева, справа — @аккаунт и счётчик визитов (ровной колонкой)',
+      '📲 Тап по @аккаунту открывает приложение Telegram с диалогом'
     ]
   },
   {

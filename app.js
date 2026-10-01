@@ -782,16 +782,6 @@ async function submitEdit(index) {
 
 // ==================== 5. SCHEDULE (ближайшая игра) ====================
 
-const dayNamesRU = {
-  Monday: 'понедельник',
-  Tuesday: 'вторник',
-  Wednesday: 'среда',
-  Thursday: 'четверг',
-  Friday: 'пятница',
-  Saturday: 'суббота',
-  Sunday: 'воскресенье'
-};
-
 function getDayCode(dayName) {
   const map = {
     Monday: 1, Tuesday: 2, Wednesday: 3, Thursday: 4,
@@ -1009,12 +999,9 @@ function showSchedule() {
       slotHtml = '<div class="sched-off">—</div>';
     }
 
-    const dayName = slots[0]?.day || dayNameFromCode(code);
-
     return `
       <div class="${classes.join(' ')}">
         <div class="sched-day-letter">${dayLetters[i]}</div>
-        <div class="sched-day-name">${dayNamesRU[dayName] || ''}</div>
         ${slotHtml}
         ${isNearest ? '<div class="sched-badge">ближайшая</div>' : ''}
       </div>
@@ -1532,6 +1519,13 @@ function closeTeamsModal() {
 // ==================== 7.5. CHANGELOG (модалка истории версий) ====================
 
 const CHANGELOG = [
+  {
+    label: 'v2026.10.01 — мобильная вёрстка',
+    items: [
+      '📱 Сетка недели компактнее: без полных названий дней',
+      '⚙️ Админ-панель адаптирована под телефоны: поля не выходят за экран'
+    ]
+  },
   {
     label: 'v2026.10.01 — админ и время игры',
     items: [

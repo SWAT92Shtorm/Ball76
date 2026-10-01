@@ -19,7 +19,7 @@
 
   <title>Запись на баскетбол в Ярославле — ЛОКОМОТИВ и АТЛАНТ</title>
 
-  <link rel="stylesheet" href="styles.css">
+  <link rel="stylesheet" href="styles.css?v=20261001mobile">
 
 </head>
 <body>
@@ -135,8 +135,7 @@
       <div class="admin-form">
         <div class="form-row">
           <label for="adminPassword">Пароль:</label>
-          <input type="password" id="adminPassword" inputmode="numeric" placeholder="••••"
-                 style="width: 160px; padding: 8px; font-size: 16px;" />
+          <input type="password" id="adminPassword" inputmode="numeric" placeholder="••••" />
         </div>
         <div id="adminLoginError" class="admin-error"></div>
       </div>
@@ -168,10 +167,10 @@
           <input type="date" id="adminDateInput" />
         </div>
         <div id="adminScheduleHint" class="admin-hint"></div>
-        <div class="form-row">
+        <div class="form-row form-row-time">
           <label for="adminStartTime">Начало:</label>
           <input type="time" id="adminStartTime" />
-          <label for="adminEndTime" style="margin-left: 10px;">Конец:</label>
+          <label for="adminEndTime">Конец:</label>
           <input type="time" id="adminEndTime" />
         </div>
         <div class="form-row">
@@ -207,7 +206,7 @@
     <p>Для записи на баскетбол включите JavaScript в браузере.</p>
   </noscript>
 
-  <footer class="app-version" id="appVersion" onclick="onVersionClick()" title="Нажмите для просмотра изменений">v2026.10.01-admin</footer>
+  <footer class="app-version" id="appVersion" onclick="onVersionClick()" title="Нажмите для просмотра изменений">v2026.10.01-mobile</footer>
 
   <!-- Модалка changelog -->
   <div id="changelogModal" class="modal-overlay">
@@ -223,6 +222,6 @@
     </div>
   </div>
 
-  <script src="app.js?v=20261001start"></script>
+  <script src="app.js?v=20261001mobile"></script>
 </body>
 </html>

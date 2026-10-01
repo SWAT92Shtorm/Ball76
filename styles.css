@@ -216,14 +216,6 @@ th {
   line-height: 1;
 }
 
-.sched-day-name {
-  font-size: 10px;
-  color: #666666;
-  text-transform: uppercase;
-  letter-spacing: 0.4px;
-  min-height: 12px;
-}
-
 .sched-slot {
   font-size: 11px;
   font-weight: 600;
@@ -980,6 +972,7 @@ th {
   margin-top: 16px;
   display: flex;
   justify-content: flex-end;
+  flex-wrap: wrap;
   gap: 10px;
 }
 
@@ -1115,6 +1108,7 @@ th {
   gap: 8px;
   margin-bottom: 10px;
   flex-wrap: wrap;
+  height: auto; /* не фиксируем высоту: на телефоне строки переносятся */
 }
 .admin-form label {
   min-width: 70px;
@@ -1122,17 +1116,38 @@ th {
 }
 .admin-form input[type="time"],
 .admin-form input[type="date"],
-.admin-form input[type="text"] {
+.admin-form input[type="text"],
+.admin-form input[type="password"],
+.admin-form select {
   padding: 6px 8px;
   border-radius: 5px;
   border: 1px solid #4a4a4a;
   background: #1e1e1e;
   color: #e0e0e0;
   font-size: 14px;
+  min-width: 0; /* позволяем полям сжиматься внутри flex-строки */
 }
-.admin-form input[type="text"] {
+.admin-form input[type="password"] {
   flex: 1;
-  min-width: 160px;
+  font-size: 16px; /* 16px — чтобы iOS не зумил при фокусе */
+  padding: 8px 10px;
+}
+.admin-form input[type="text"],
+.admin-form input[type="date"],
+.admin-form select {
+  flex: 1;
+}
+/* Строка «Начало / Конец»: оба времени должны помещаться рядом */
+.admin-form .form-row-time {
+  gap: 6px;
+}
+.admin-form .form-row-time label {
+  min-width: 0;
+  font-size: 13px;
+}
+.admin-form .form-row-time input[type="time"] {
+  flex: 1;
+  width: auto;
 }
 .admin-hint {
   margin: 0 0 10px;
@@ -1333,4 +1348,35 @@ th {
   border-radius: 4px;
   font-size: 11px;
   color: #999;
+}
+
+/* ==== Адаптив: узкие экраны (телефоны) ==== */
+@media (max-width: 480px) {
+  /* Модалка админа занимает всю доступную ширину */
+  .admin-modal-content {
+    width: 100%;
+    max-width: 100%;
+  }
+
+  /* Подпись и поле — в столбик, чтобы всё помещалось без горизонтальной прокрутки */
+  .admin-form .form-row {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 4px;
+  }
+  .admin-form label {
+    min-width: 0;
+  }
+  .admin-form input,
+  .admin-form select {
+    width: 100%;
+  }
+
+  /* Кнопки в подвале модалок — на всю ширину */
+  .modal-footer {
+    justify-content: stretch;
+  }
+  .modal-footer .modal-btn {
+    flex: 1 1 auto;
+  }
 }

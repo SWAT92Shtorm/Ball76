@@ -15,14 +15,38 @@ import { log } from '../logger.js';
 
 // Краткая память диалога (в оперативной памяти). Для клуба этого достаточно.
 const history = new Map(); // telegramId → [{role, content}]
-const MAX_HISTORY = 8;
+const lastSeen = new Map(); // telegramId → timestamp последнего сообщения
+const MAX_HISTORY = 8;              // сообщений на пользователя
+const MAX_USERS = 1000;             // верхняя граница числа пользователей в памяти
+const HISTORY_TTL = 6 * 3600 * 1000; // чистим диалоги, неактивные > 6 ч
 
 function pushHistory(id, msg) {
   const arr = history.get(id) || [];
   arr.push(msg);
   while (arr.length > MAX_HISTORY) arr.shift();
   history.set(id, arr);
+  lastSeen.set(id, Date.now());
+
+  // Защита от неограниченного роста: если пользователей слишком много,
+  // удаляем тех, кто дольше всех молчал.
+  if (history.size > MAX_USERS) {
+    let oldestId = null;
+    let oldestTs = Infinity;
+    for (const [uid, ts] of lastSeen) {
+      if (ts < oldestTs) { oldestTs = ts; oldestId = uid; }
+    }
+    if (oldestId !== null) { history.delete(oldestId); lastSeen.delete(oldestId); }
+  }
 }
+
+// Периодическая TTL-очистка (раз в час). unref — чтобы таймер не держал процесс.
+const cleanupTimer = setInterval(() => {
+  const now = Date.now();
+  for (const [uid, ts] of lastSeen) {
+    if (now - ts > HISTORY_TTL) { history.delete(uid); lastSeen.delete(uid); }
+  }
+}, 3600 * 1000);
+cleanupTimer.unref?.();
 
 /** Есть ли ИИ. */
 export { aiEnabled };

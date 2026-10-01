@@ -33,7 +33,17 @@ function looksLikeCommand(text) {
 }
 
 // Ожидающие подтверждения ФИО при добавлении нового участника: telegramId → имя.
+// Обычно чистится при подтверждении/отмене; предохранитель — на случай, если
+// пользователь не нажал ни одну кнопку (запись осталась висеть).
 const pendingName = new Map();
+const MAX_PENDING_NAMES = 500;
+function rememberPendingName(id, name) {
+  if (pendingName.size >= MAX_PENDING_NAMES) {
+    const first = pendingName.keys().next().value;
+    if (first !== undefined) pendingName.delete(first);
+  }
+  pendingName.set(id, name);
+}
 
 /** Переслать главное меню. */
 export async function sendMenu(ctx, text = '🏀 Главное меню') {
@@ -152,7 +162,7 @@ export async function tryLinkByName(ctx, typed) {
     }
   );
   // Запоминаем предложенное имя для подтверждения.
-  pendingName.set(ctx.from.id, pretty);
+  rememberPendingName(ctx.from.id, pretty);
   return true;
 }
 

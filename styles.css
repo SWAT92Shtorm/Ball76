@@ -182,11 +182,16 @@ th {
 }
 
 .schedule-title {
+  display: flex;
+  align-items: center;
+  gap: 6px;
   font-size: 17px;
   font-weight: 600;
   color: #a0e0ff;
   margin-bottom: 10px;
 }
+/* .schedule-title использует общий класс .hist-icon (серый, currentColor) —
+   см. блок «История записей» */
 
 .sched-grid {
   display: grid;

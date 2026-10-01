@@ -1126,7 +1126,10 @@ th {
   color: #e0e0e0;
   font-size: 14px;
   min-width: 0; /* позволяем полям сжиматься внутри flex-строки */
-  height: 40px; /* единая высота: у date/time она иначе больше, чем у text/select */
+  /* Единая высота у всех полей: у нативных date/time UA-стили задают
+     больше min-height, из-за чего они выглядели выше text/select */
+  height: 40px;
+  min-height: 40px;
   box-sizing: border-box;
 }
 .admin-form input[type="password"] {

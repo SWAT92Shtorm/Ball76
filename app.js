@@ -1284,7 +1284,7 @@ function showHistoryTable() {
   }).join('');
 
   historyTableContainer.innerHTML = `
-    <h3 class="hist-title">📜 История записей — ${escapeHtml(hallName(hall))}</h3>
+    <h3 class="hist-title">⌛︎ История записей — ${escapeHtml(hallName(hall))}</h3>
     <div class="hist-timeline">${cards}</div>
   `;
 }

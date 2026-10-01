@@ -6,7 +6,7 @@
 import { InlineKeyboard } from 'grammy';
 import { getConfigCached, upcomingDates, describeGame, doSignup, doCancel, scheduleText, nearestGame } from '../game.js';
 import { api, todayMSK } from '../api.js';
-import { mainMenu, hallPicker, datePicker, confirm, menuHint } from '../keyboards.js';
+import { mainMenu, hallPicker, datePicker, confirm, menuHint, siteUrl } from '../keyboards.js';
 import { getLink, upsertLink } from '../db.js';
 import { log } from '../logger.js';
 
@@ -233,7 +233,8 @@ export async function handleStart(ctx, payload) {
     '🏀 Привет! Я бот записи на баскетбол Ball76.\n\n' +
     'ЛОКОМОТИВ — вт/чт 21:00\nАТЛАНТ — пт 21:00\n\n' +
     'Чтобы записываться, отправьте ваше ФИО (Фамилия Имя Отчество).\n' +
-    'Если вас ещё нет в базе — я предложу добавить вас как нового участника.',
+    'Если вас ещё нет в базе — я предложу добавить вас как нового участника.\n\n' +
+    `🌐 Все записи можно посмотреть на сайте: ${siteUrl}`,
     { reply_markup: mainMenu() }
   );
 }

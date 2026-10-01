@@ -37,6 +37,9 @@ export const config = {
   // --- Ball76 API ---
   apiBaseUrl: optional('API_BASE_URL', 'http://127.0.0.1:8080'),
 
+  // --- Сайт записи (показывается пользователям в боте) ---
+  siteUrl: optional('SITE_URL', 'https://ball76.duckdns.org'),
+
   // --- PostgreSQL ---
   databaseUrl: required('DATABASE_URL'),
 

@@ -46,7 +46,8 @@ bot.command('schedule', (ctx) => showSchedule(ctx));
 bot.command('help', (ctx) =>
   ctx.reply(
     'Команды:\n/signup — записаться\n/cancel — отменить\n/mygames — мои игры\n/schedule — расписание\n\n' +
-    'Или просто напишите: «запиши меня на четверг».'
+    'Или просто напишите: «запиши меня на четверг».\n\n' +
+    `🌐 Все записи на сайте: ${config.siteUrl}`
   )
 );
 

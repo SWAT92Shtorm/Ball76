@@ -3,6 +3,9 @@ import { InlineKeyboard } from 'grammy';
 import { humanDate } from './api.js';
 import { config } from './config.js';
 
+/** Ссылка на сайт записи (показывается пользователям). */
+export const siteUrl = config.siteUrl;
+
 /** Главное меню. */
 export function mainMenu() {
   return new InlineKeyboard()
@@ -10,7 +13,9 @@ export function mainMenu() {
     .text('❌ Отменить', 'act:cancel')
     .row()
     .text('📋 Мои игры', 'act:mygames')
-    .text('📅 Расписание', 'act:schedule');
+    .text('📅 Расписание', 'act:schedule')
+    .row()
+    .url('🌐 Все записи на сайте', siteUrl);
 }
 
 /** Выбор зала. */
@@ -47,4 +52,5 @@ export function subscribeHint(botUsername) {
   );
 }
 
-export const menuHint = 'Выберите действие 👇';
+export const menuHint =
+  'Выберите действие 👇\n🌐 Все записи смотрите на сайте: ' + siteUrl;

@@ -24,8 +24,10 @@ if (config.telegramApiRoot) {
 }
 const bot = new Bot(config.botToken, botConfig);
 
-// --- Регистрация чатов (личка и группы) ---
+// --- Логирование входящих апдейтов + регистрация чатов ---
 bot.use(async (ctx, next) => {
+  const t = ctx.message?.text || ctx.callbackQuery?.data || ctx.chat?.id || '?';
+  log.info(`← апдейт от ${ctx.from?.id || '?'} (${ctx.chat?.type || '?'}): ${String(t).slice(0, 60)}`);
   if (ctx.chat) await registerChat(ctx);
   return next();
 });
@@ -129,14 +131,36 @@ async function main() {
   startScheduler(bot);
 
   log.info(`Бот запускается… ИИ: ${aiEnabled ? 'включён' : 'выключен (нет ключа)'}`);
-  await bot.start({
-    onStart: (info) => log.info(`Бот @${info.username} запущен (long polling)`)
-  });
-}
 
-// Аккуратное завершение
-process.once('SIGINT', () => bot.stop());
-process.once('SIGTERM', () => bot.stop());
+  // Канал до Telegram в РФ нестабилен (ping-IP, обход блокировки) — polling
+  // может рваться. Вместо падения переподключаемся с нарастающей паузой.
+  let stopping = false;
+  const stop = () => { stopping = true; bot.stop(); };
+  process.once('SIGINT', stop);
+  process.once('SIGTERM', stop);
+
+  let attempt = 0;
+  while (!stopping) {
+    try {
+      await bot.start({
+        onStart: (info) => {
+          attempt = 0;
+          log.info(`Бот @${info.username} запущен (long polling)`);
+        }
+      });
+      // bot.start() завершился штатно (stop) — выходим
+      break;
+    } catch (e) {
+      if (stopping) break;
+      attempt++;
+      const delay = Math.min(30, 2 ** attempt); // 2,4,8,16,30… сек
+      log.error(`Polling оборвался (${e.message}). Переподключение через ${delay} с`);
+      await new Promise((r) => setTimeout(r, delay * 1000));
+    }
+  }
+  log.info('Бот остановлен');
+  process.exit(0);
+}
 
 main().catch((e) => {
   log.error('Фатальная ошибка:', e.message);

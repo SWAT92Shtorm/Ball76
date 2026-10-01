@@ -818,10 +818,17 @@ function getNearestGame(hall) {
   const month = parts[2].replace('.', '');
   const weekday = parts[0].replace(',', '').charAt(0).toUpperCase() + parts[0].slice(1, -1);
 
+  const dateStr = `${y}-${m}-${day}`;
+
+  // Если для этой игры задано изменённое время — показываем его, а не расписание.
+  const ov = timeOverride(hall, dateStr);
+  const startText = ov ? ov.startTime : `${nearest.from}:00`;
+  const changed = ov ? ' ⚠️ время изменено' : '';
+
   return {
-    date: `${y}-${m}-${day}`,
+    date: dateStr,
     dayDiff: nearest.dayDiff,
-    text: `Ближайшая игра: ${weekday}, ${dayNum} ${month}, в ${nearest.from}:00`
+    text: `Ближайшая игра: ${weekday}, ${dayNum} ${month}, в ${startText}${changed}`
   };
 }
 
@@ -1604,6 +1611,9 @@ function closeChangelogModal() {
 
 // Текущее эффективное время игры для выбранного зала/даты (с сервера).
 let currentGameTime = null;
+// Кэш времени по ключу 'hall|date' — чтобы «Ближайшая игра» и график
+// показывали изменённое время, а не только расписание.
+const gameTimeCache = {};
 
 // Запросить время игры (override или расписание) и обновить баннер/уведомление.
 async function loadGameTime(hall, date) {
@@ -1612,8 +1622,17 @@ async function loadGameTime(hall, date) {
     const resp = await fetch(`${API_BASE_URL}/api/games/${hall}/${date}/time`, { headers: getTunnelHeaders() });
     if (!resp.ok) return;
     currentGameTime = await resp.json();
+    gameTimeCache[`${hall}|${date}`] = currentGameTime;
     renderTimeBanner(currentGameTime, hall, date);
+    // Обновить тексты, где время берётся из расписания.
+    if (typeof showNearestGame === 'function') showNearestGame();
   } catch (_) { /* нет данных о времени — не критично */ }
+}
+
+// Изменённое (override) время для зала/даты или null.
+function timeOverride(hall, date) {
+  const info = gameTimeCache[`${hall}|${date}`];
+  return info && info.isOverride ? info : null;
 }
 
 // Баннер над формой + разовое модальное уведомление для игроков.

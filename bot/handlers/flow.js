@@ -6,7 +6,7 @@
 import { InlineKeyboard } from 'grammy';
 import { getConfigCached, upcomingDates, describeGame, doSignup, doCancel, scheduleText, nearestGame } from '../game.js';
 import { api, todayMSK } from '../api.js';
-import { mainMenu, hallPicker, datePicker, confirm, menuHint, siteUrl } from '../keyboards.js';
+import { mainMenu, hallPicker, confirm, menuHint, siteUrl } from '../keyboards.js';
 import { getLink, upsertLink } from '../db.js';
 import { log } from '../logger.js';
 
@@ -261,15 +261,13 @@ export async function startCancel(ctx) {
   await ctx.reply('Выберите зал для отмены:', { reply_markup: hallPicker(cfg.halls, 'cancel') });
 }
 
-/** Выбран зал → показать даты. */
+/** Выбран зал → сразу подтверждение на БЛИЖАЙШУЮ игру (без списка дат). */
 export async function chooseHall(ctx, action, hallId) {
   const cfg = await getConfigCached();
-  const dates = await upcomingDates(hallId, cfg.halls, 6);
-  if (dates.length === 0) { await ctx.reply('Нет доступных дат.'); return; }
-  await ctx.reply(
-    `${cfg.halls[hallId].name} — выберите дату:`,
-    { reply_markup: datePicker(action, hallId, dates) }
-  );
+  const dates = await upcomingDates(hallId, cfg.halls, 1);
+  if (dates.length === 0) { await ctx.reply('Нет доступных игр.'); return; }
+  // Сразу переходим к подтверждению ближайшей даты — без выбора из списка.
+  await chooseDate(ctx, action, hallId, dates[0]);
 }
 
 /** Выбрана дата → подтверждение. */

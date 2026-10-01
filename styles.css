@@ -329,11 +329,18 @@ th {
 /* ==== История записей: таймлайн с карточками и чипами ==== */
 
 .hist-title {
+  display: flex;
+  align-items: center;
+  gap: 6px;
   font-size: 16px;
   font-weight: 600;
   color: #a0e0ff;
   margin-top: 14px;
   margin-bottom: 10px;
+}
+.hist-icon {
+  flex: 0 0 auto;
+  color: #a0e0ff;
 }
 
 .hist-timeline {

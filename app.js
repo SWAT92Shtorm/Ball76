@@ -1310,8 +1310,22 @@ function showHistoryTable() {
     `;
   }).join('');
 
+  const histIcon = `<svg class="hist-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+      <rect x="4" y="4.5" width="16" height="17" rx="2"/>
+      <rect x="8.5" y="2.5" width="7" height="3.2" rx="1.2"/>
+      <rect x="6.6" y="9" width="3.2" height="3.2" rx="0.8"/>
+      <path d="M7.3 10.6l0.9 0.9 1.5-1.7"/>
+      <line x1="12" y1="10.6" x2="17.4" y2="10.6"/>
+      <rect x="6.6" y="13.6" width="3.2" height="3.2" rx="0.8"/>
+      <path d="M7.3 15.2l0.9 0.9 1.5-1.7"/>
+      <line x1="12" y1="15.2" x2="17.4" y2="15.2"/>
+      <rect x="6.6" y="18.2" width="3.2" height="3.2" rx="0.8"/>
+      <path d="M7.3 19.8l0.9 0.9 1.5-1.7"/>
+      <line x1="12" y1="19.8" x2="17.4" y2="19.8"/>
+    </svg>`;
+
   historyTableContainer.innerHTML = `
-    <h3 class="hist-title">⌛︎ История записей — ${escapeHtml(hallName(hall))}</h3>
+    <h3 class="hist-title">${histIcon}История записей — ${escapeHtml(hallName(hall))}</h3>
     <div class="hist-timeline">${cards}</div>
   `;
 }

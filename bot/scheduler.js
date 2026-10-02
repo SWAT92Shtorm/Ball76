@@ -93,7 +93,10 @@ async function checkGather(bot) {
 
       const key = `gather:${hallId}:${date}`;
       if (alreadySent(key)) continue;
-      if (g.count === 0) continue; // если вообще никто не записан — не спамим
+
+      // Недобор шлём только при 7–9 участниках: меньше 7 — игра фактически
+      // ещё не собирается, 10+ — уже достаточно для полноценной игры.
+      if (g.count < 7 || g.count > 9) continue;
 
       const free = 18 - g.count;
       await broadcast(bot, `📣 Недобор!\n${gameSummary(g)}\nСвободно мест: ${free}`);

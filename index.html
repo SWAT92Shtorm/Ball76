@@ -19,12 +19,18 @@
 
   <title>Запись на баскетбол в Ярославле — ЛОКОМОТИВ и АТЛАНТ</title>
 
-  <link rel="stylesheet" href="styles.css?v=20261003autoname1">
+  <link rel="stylesheet" href="styles.css?v=20261003adminbar1">
 
 </head>
 <body>
 
   <main>
+  <!-- Баннер режима администратора (показывается только админу) -->
+  <div id="adminStatusBar" class="admin-status-bar" style="display:none">
+    <span class="admin-status-text">🔑 Режим администратора</span>
+    <button class="admin-status-exit" onclick="adminLogout()">Выйти</button>
+  </div>
+
   <!-- Время вверху -->
   <div id="currentDateTime">
     Загрузка... дата и время
@@ -294,6 +300,6 @@
     </div>
   </div>
 
-  <script src="app.js?v=20261003autoname1"></script>
+  <script src="app.js?v=20261003adminbar1"></script>
 </body>
 </html>

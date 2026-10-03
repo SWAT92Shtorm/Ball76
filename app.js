@@ -1851,6 +1851,12 @@ try { adminToken = localStorage.getItem(ADMIN_TOKEN_KEY); } catch (_) {}
 
 function isAdmin() { return !!adminToken; }
 
+// Показать/скрыть баннер «Режим администратора» над строкой даты.
+function updateAdminStatusBar() {
+  const bar = document.getElementById('adminStatusBar');
+  if (bar) bar.style.display = isAdmin() ? 'flex' : 'none';
+}
+
 function adminHeaders() {
   // Включаем и tunnel-bypass заголовки: админ-запросы идут так же через loca.lt.
   const h = { 'Content-Type': 'application/json', ...getTunnelHeaders() };
@@ -1917,6 +1923,7 @@ async function submitAdminLogin() {
     try { localStorage.setItem(ADMIN_TOKEN_KEY, adminToken); } catch (_) {}
     closeAdminLogin();
     showToast('Вход выполнен', 'success');
+    updateAdminStatusBar();
     showList(); // перерисовать список — появятся иконки редактирования
     openAdminPanel();
   } catch (_) {
@@ -1953,6 +1960,7 @@ function adminLogout() {
   adminToken = null;
   try { localStorage.removeItem(ADMIN_TOKEN_KEY); } catch (_) {}
   closeAdminPanel();
+  updateAdminStatusBar();
   showToast('Вы вышли из админа', 'info');
   showList();
 }
@@ -2382,6 +2390,7 @@ window.addEventListener('DOMContentLoaded', async function () {
 
   // 6.6. Админ: длинное нажатие на версию в футере
   initAdminLongPress();
+  updateAdminStatusBar(); // показать баннер, если токен сохранён с прошлого раза
 
   // 6.7. Слушатели формы админ-панели
   const adminHallSel = document.getElementById('adminHallSelect');

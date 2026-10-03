@@ -78,6 +78,33 @@ th {
 
 /* ==== Шапка: дата/время и ближайшая игра ==== */
 
+/* Баннер режима администратора (над строкой даты) */
+.admin-status-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 8px;
+  padding: 8px 12px;
+  background: #3a2a00;
+  border: 1px solid #b8860b;
+  border-radius: 5px;
+  color: #ffd76e;
+  font-size: 14px;
+}
+.admin-status-exit {
+  flex-shrink: 0;
+  padding: 4px 12px;
+  background: #b8860b;
+  color: #1a1a1a;
+  border: none;
+  border-radius: 4px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.admin-status-exit:hover { background: #d4a017; }
+
 #currentDateTime {
   margin-bottom: 15px;
   padding: 10px;

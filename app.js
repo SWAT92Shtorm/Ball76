@@ -2058,6 +2058,9 @@ async function loadAdminGameTime() {
   const hint = document.getElementById('adminScheduleHint');
   if (!hall || !date) return;
 
+  // До загрузки — разблокируем (если предыдущая дата была подтверждена).
+  applyConfirmLock(false);
+
   try {
     const resp = await fetch(`${API_BASE_URL}/api/games/${hall}/${date}/time`, { headers: getTunnelHeaders() });
     if (!resp.ok) return;
@@ -2165,6 +2168,24 @@ function updateConfirmButton() {
     ? `Игра подтверждена${adminConfirmState.price != null ? ` — ${adminConfirmState.price} ₽/чел.` : ''}`
     : 'Подтвердить игру';
   btn.title = on ? 'Нажмите, чтобы снять подтверждение' : 'Отметить игру как подтверждённую';
+  // Пока игра подтверждена — время/длительность/причина зафиксированы.
+  applyConfirmLock(on);
+}
+
+// Блокировка полей времени, пока игра подтверждена: админ не может случайно
+// изменить согласованное время/длительность/причину. Кнопки «Сохранить» и
+// «Сбросить к расписанию» скрываются. Снятие подтверждения возвращает доступ.
+function applyConfirmLock(locked) {
+  ['adminStartTime', 'adminDuration', 'adminNote'].forEach(id => {
+    const el = document.getElementById(id);
+    if (!el) return;
+    el.disabled = locked;
+    el.classList.toggle('locked-field', locked);
+  });
+  const save = document.getElementById('adminSaveBtn');
+  if (save) save.style.display = locked ? 'none' : '';
+  const reset = document.getElementById('adminResetBtn');
+  if (reset) reset.style.display = locked ? 'none' : '';
 }
 
 // Переключить подтверждение игры (админ). Обратимо.

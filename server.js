@@ -2087,6 +2087,13 @@ app.patch('/api/games/:hallId/:date/time', mutationLimiter, requireAdmin, async 
   if (isPastDate(date)) {
     return res.status(400).json({ error: 'Нельзя менять время прошедшей игры' });
   }
+  // Пока игра подтверждена, время зафиксировано — сначала снимите подтверждение.
+  const confirmState = await getGameTime(hallId, date);
+  if (confirmState.confirmed) {
+    return res.status(409).json({
+      error: 'Игра подтверждена. Снимите подтверждение, чтобы изменить время.'
+    });
+  }
   if (!isValidTime(startTime)) {
     return res.status(400).json({ error: 'startTime должен быть в формате HH:MM' });
   }

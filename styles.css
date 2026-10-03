@@ -1359,6 +1359,14 @@ th {
   cursor: default;
 }
 
+/* Поля времени/длительности/причины, заблокированные подтверждённой игрой */
+.locked-field:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+  background: #171717;
+  color: #9e9e9e;
+}
+
 /* ==== Табы админ-панели ==== */
 .admin-tabs {
   display: flex;

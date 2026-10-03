@@ -33,7 +33,7 @@ export function buildSystemPrompt({ playerName = null, halls = {} } = {}) {
 Сегодня: ${date} (${wd}), время ${time} (МСК).
 
 Залы:
-${hallsText || '- hall1 = ЛОКОМОТИВ\n- hall2 = АТЛАНТ'}
+${hallsText || '- (залы не заданы)'}
 
 Пользователь: ${playerName ? `«${playerName}»` : 'профиль не привязан'}.
 Максимум на игру: 18 человек.

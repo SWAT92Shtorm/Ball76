@@ -25,7 +25,7 @@ export const toolDefs = [
       parameters: {
         type: 'object',
         properties: {
-          hall: { type: 'string', enum: ['hall1', 'hall2'], description: 'hall1=ЛОКОМОТИВ, hall2=АТЛАНТ' },
+          hall: { type: 'string', description: 'Системное имя зала (например hall1, hall2). Список залов — в get_schedule.' },
           date: { type: 'string', description: 'Дата YYYY-MM-DD; если не указана — ближайшая игра' }
         },
         required: ['hall']
@@ -40,7 +40,7 @@ export const toolDefs = [
       parameters: {
         type: 'object',
         properties: {
-          hall: { type: 'string', enum: ['hall1', 'hall2'] },
+          hall: { type: 'string', description: 'Системное имя зала (например hall1, hall2)' },
           date: { type: 'string', description: 'Дата YYYY-MM-DD; если не указана — ближайшая игра' }
         },
         required: ['hall']
@@ -55,7 +55,7 @@ export const toolDefs = [
       parameters: {
         type: 'object',
         properties: {
-          hall: { type: 'string', enum: ['hall1', 'hall2'] },
+          hall: { type: 'string', description: 'Системное имя зала (например hall1, hall2)' },
           date: { type: 'string', description: 'Дата YYYY-MM-DD; если не указана — ближайшая игра' }
         },
         required: ['hall']
@@ -65,8 +65,19 @@ export const toolDefs = [
 ];
 
 /** Ответ при неверном зале (аргумент LLM не прошёл проверку). */
-const INVALID_HALL_TEXT =
-  'Неизвестный зал. Доступны: ЛОКОМОТИВ (hall1) и АТЛАНТ (hall2).';
+async function invalidHallText() {
+  try {
+    const cfg = await getConfigCached();
+    const list = Object.entries(cfg.halls || {})
+      .map(([id, h]) => `${h.name} (${id})`)
+      .join(', ');
+    return list
+      ? `Неизвестный зал. Доступны: ${list}.`
+      : 'Неизвестный зал.';
+  } catch (_) {
+    return 'Неизвестный зал.';
+  }
+}
 
 /**
  * Разрешить дату: явную или ближайшую игру зала.
@@ -135,7 +146,7 @@ async function dispatchTool(name, args, ctxUser) {
 
     case 'get_game_info': {
       const r = await resolveDate(a.hall, a.date);
-      if (r.invalidHall) return { text: INVALID_HALL_TEXT };
+      if (r.invalidHall) return { text: await invalidHallText() };
       if (r.noGame) return { text: noGameText(r.hallName, r.requested, r.available) };
       if (!r.date) return { text: 'Не нашёл игру для этого зала.' };
       const g = await describeGame(a.hall, r.date, r.hallName);
@@ -150,7 +161,7 @@ async function dispatchTool(name, args, ctxUser) {
         return { text: 'Не знаю ваше ФИО — сначала привяжите профиль.' };
       }
       const r = await resolveDate(a.hall, a.date);
-      if (r.invalidHall) return { text: INVALID_HALL_TEXT };
+      if (r.invalidHall) return { text: await invalidHallText() };
       if (r.noGame) return { text: noGameText(r.hallName, r.requested, r.available) };
       if (!r.date) return { text: 'Не нашёл игру для этого зала.' };
       // НЕ выполняем сразу — просим подтверждение (см. handlers/ai.js)
@@ -162,7 +173,7 @@ async function dispatchTool(name, args, ctxUser) {
         return { text: 'Не знаю ваше ФИО — сначала привяжите профиль.' };
       }
       const r = await resolveDate(a.hall, a.date);
-      if (r.invalidHall) return { text: INVALID_HALL_TEXT };
+      if (r.invalidHall) return { text: await invalidHallText() };
       if (r.noGame) return { text: noGameText(r.hallName, r.requested, r.available) };
       if (!r.date) return { text: 'Не нашёл игру для этого зала.' };
       return { text: '', pendingAction: { action: 'cancel', hallId: a.hall, date: r.date, hallName: r.hallName } };

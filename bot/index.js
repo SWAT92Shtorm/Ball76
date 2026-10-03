@@ -65,20 +65,21 @@ bot.callbackQuery('act:schedule', async (ctx) => { await ctx.answerCallbackQuery
 bot.callbackQuery('link:create', (ctx) => confirmCreatePlayer(ctx));
 bot.callbackQuery('link:cancel', (ctx) => cancelCreatePlayer(ctx));
 
-// Выбор зала: signup:hall:hall1 | cancel:hall:hall2
-bot.callbackQuery(/^(signup|cancel):hall:(hall\d)$/, async (ctx) => {
+// Выбор зала: signup:hall:<sysName> | cancel:hall:<sysName>
+// sysName — произвольный slug зала из БД (hall1, hall2, hall3, ...).
+bot.callbackQuery(/^(signup|cancel):hall:([a-z0-9_-]+)$/, async (ctx) => {
   await ctx.answerCallbackQuery();
   await chooseHall(ctx, ctx.match[1], ctx.match[2]);
 });
 
-// Выбор даты: signup:date:hall1:2026-10-02
-bot.callbackQuery(/^(signup|cancel):date:(hall\d):(\d{4}-\d{2}-\d{2})$/, async (ctx) => {
+// Выбор даты: signup:date:<sysName>:2026-10-02
+bot.callbackQuery(/^(signup|cancel):date:([a-z0-9_-]+):(\d{4}-\d{2}-\d{2})$/, async (ctx) => {
   await ctx.answerCallbackQuery();
   await chooseDate(ctx, ctx.match[1], ctx.match[2], ctx.match[3]);
 });
 
-// Подтверждение: confirm:signup:hall1:2026-10-02
-bot.callbackQuery(/^confirm:(signup|cancel):(hall\d):(\d{4}-\d{2}-\d{2})$/, async (ctx) => {
+// Подтверждение: confirm:signup:<sysName>:2026-10-02
+bot.callbackQuery(/^confirm:(signup|cancel):([a-z0-9_-]+):(\d{4}-\d{2}-\d{2})$/, async (ctx) => {
   await ctx.answerCallbackQuery();
   await confirmAction(ctx, ctx.match[1], ctx.match[2], ctx.match[3]);
 });

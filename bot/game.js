@@ -180,7 +180,7 @@ export async function scheduleText() {
       .map((s) => ({ Tuesday: 'вт', Thursday: 'чт', Friday: 'пт', Monday: 'пн', Wednesday: 'ср', Saturday: 'сб', Sunday: 'вс' }[s.day]))
       .join('/');
     const from = String(h.schedule?.[0]?.from ?? '').padStart(2, '0');
-    lines.push(`\n${h.name} (${id === 'hall1' ? 'зал 1' : 'зал 2'}): ${days}, ${from}:00–${String(h.schedule?.[0]?.to ?? '').padStart(2, '0')}:00`);
+    lines.push(`\n${h.name} (${id}): ${days}, ${from}:00–${String(h.schedule?.[0]?.to ?? '').padStart(2, '0')}:00`);
   }
   return lines.join('\n');
 }

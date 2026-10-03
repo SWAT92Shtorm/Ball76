@@ -1089,15 +1089,15 @@ function showSchedule() {
     `;
   }).join('');
 
-  const fullPrice = hallPrice(hall, 'full');
-  const shortPrice = hallPrice(hall, 'short');
+  const priceDate = getNearestGameDate(hall) || mskToday();
+  const { price: rentPrice, hours: rentHours } = gamePrice(hall, priceDate);
   const perPersonFixed = h.perPerson;
   let priceText;
   if (perPersonFixed) {
     // Фиксированная цена с человека (АТЛАНТ): аренда не делится
-    priceText = `${perPersonFixed} ₽ с человека (аренда ${fullPrice} ₽)`;
-  } else if (fullPrice > 0) {
-    priceText = `${fullPrice} ₽ / 2 ч${shortPrice > 0 && shortPrice !== fullPrice ? `, ${shortPrice} ₽ / 1,5 ч` : ''} — делится на участников`;
+    priceText = `${perPersonFixed} ₽ с человека (аренда ${rentPrice} ₽)`;
+  } else if (rentPrice > 0) {
+    priceText = `${rentPrice} ₽ / ${durationLabel(rentHours)} — делится на участников`;
   } else {
     priceText = 'бесплатно';
   }
@@ -1182,7 +1182,6 @@ function showList() {
   if (!hall) {
     result.innerHTML = '<p>Выберите зал, чтобы увидеть список участников.</p>';
     priceElem.textContent = 'Стоимость к оплате: не выбран зал.';
-    setDurationVisibility(false);
     return;
   }
 
@@ -1250,11 +1249,33 @@ function showList() {
   showHistoryTable();
 }
 
-// Показывает/скрывает блок «Длительность игры» (select + label).
-// Блок виден только когда записалось >= минимума участников.
-function setDurationVisibility(visible) {
-  const row = document.querySelector('#durationSelect')?.closest('.form-row');
-  if (row) row.style.display = visible ? '' : 'none';
+// Длительность игры в часах по времени начала/конца 'HH:MM' (с переходом
+// через полночь). Если данных нет — 2 часа (как в админке по умолчанию).
+function gameDurationHours(hall, dateStr) {
+  const info = gameTimeCache[`${hall}|${dateStr}`];
+  const start = info && info.startTime;
+  const end = info && info.endTime;
+  if (!start || !end || !/^\d{2}:\d{2}$/.test(start) || !/^\d{2}:\d{2}$/.test(end)) return 2;
+  const [sh, sm] = start.split(':').map(Number);
+  const [eh, em] = end.split(':').map(Number);
+  let diff = (eh * 60 + em) - (sh * 60 + sm);
+  if (diff < 0) diff += 24 * 60;
+  return diff / 60;
+}
+
+// Цена аренды и её ключ ('short' 1,5 ч | 'full' 2 ч) по длительности,
+// заданной администратором в админ-панели. Без данных — 2 часа ('full').
+function gamePrice(hall, dateStr) {
+  const hours = gameDurationHours(hall, dateStr);
+  const durationKey = hours <= 1.25 ? 'hourly' : (hours <= 1.75 ? 'short' : 'full');
+  return { durationKey, price: hallPrice(hall, durationKey), hours };
+}
+
+// Человекочитаемое описание длительности из часов.
+function durationLabel(hours) {
+  if (hours <= 1.25) return '1 час';
+  if (hours <= 1.75) return '1 час 30 мин';
+  return '2 часа';
 }
 
 // Строка «стоимость к оплате».
@@ -1270,7 +1291,6 @@ function renderPricingRow(hall, playersCount) {
   // 0 участников — пустое состояние
   if (playersCount === 0) {
     priceElem.innerHTML = '<span class="pricing-empty">Участников пока нет — запишитесь первым!</span>';
-    setDurationVisibility(false);
     return;
   }
 
@@ -1282,17 +1302,15 @@ function renderPricingRow(hall, playersCount) {
         Записалось: ${playersCount} чел. ⚠️ Меньше минимума (${MIN_PLAYERS}) — игра может не состояться!
       </div>
     `;
-    setDurationVisibility(false);
     return;
   }
 
-  // Минимум достигнут — полный блок: стоимость + телефон
+  // Минимум достигнут — полный блок: стоимость + телефон.
+  // Длительность и цену берём из админ-панели (время игры), не с формы.
   priceElem.classList.remove('pricing-warn');
-  setDurationVisibility(true);
-  const durationSelect = document.getElementById('durationSelect');
-  const durationKey = durationSelect ? durationSelect.value : 'full';
-  const price = hallPrice(hall, durationKey);
-  const durationText = durationKey === 'full' ? '2 часа' : durationKey === 'short' ? '1 час 30 мин' : '';
+  const dateStr = getNearestGameDate(hall) || mskToday();
+  const { price, hours } = gamePrice(hall, dateStr);
+  const durationText = durationLabel(hours);
   const perPersonFixed = CONFIG.halls[hall]?.perPerson;
   const phone = hallPhone(hall);
 
@@ -1645,7 +1663,8 @@ const CHANGELOG = [
     items: [
       '✅ Админ отмечает игру подтверждённой (кнопка красная → зелёная)',
       '💰 В истории у подтверждённой игры — сумма к оплате на человека',
-      '🔄 Подтверждение хранится по дате и переживает перезагрузку страницы'
+      '🔄 Подтверждение хранится по дате и переживает перезагрузку страницы',
+      '🕒 Длительность задаётся только в админ-панели; с главной формы выбор убран'
     ]
   },
   {
@@ -1793,6 +1812,13 @@ async function loadGameTime(hall, date) {
     renderTimeBanner(currentGameTime, hall, date);
     // Обновить тексты, где время берётся из расписания.
     if (typeof showNearestGame === 'function') showNearestGame();
+    // Длительность/цена на главной берутся из времени игры — пересчитываем
+    // список и карточку стоимости в расписании, если это текущий зал.
+    const sel = document.getElementById('hallSelect');
+    if (sel && sel.value === hall) {
+      if (typeof showList === 'function') showList();
+      if (typeof showSchedule === 'function') showSchedule();
+    }
   } catch (_) { /* нет данных о времени — не критично */ }
 }
 
@@ -2494,11 +2520,6 @@ window.addEventListener('DOMContentLoaded', async function () {
   await loadTimeOverrides(hall);
   showSchedule();
 
-  // 5. Длительность по количеству игроков (только при первом открытии)
-  const durationSelect = document.getElementById('durationSelect');
-  const currentPlayers = playersByHall[hall]?.length || 0;
-  durationSelect.value = currentPlayers >= 15 ? 'full' : 'short';
-
   // 6. Автоподстановка последнего ФИО из localStorage
   const lastName = (() => { try { return localStorage.getItem('ball76_lastName'); } catch (_) { return null; } })();
   if (lastName) {
@@ -2596,9 +2617,6 @@ window.addEventListener('DOMContentLoaded', async function () {
       loadTimeOverrides(this.value)
     ]).then(() => showSchedule());
     loadGameTime(this.value, getNearestGameDate(this.value));
-  });
-  document.getElementById('durationSelect').addEventListener('change', function () {
-    showList();
   });
   document.getElementById('hallSelect').addEventListener('change', showNearestGame);
 

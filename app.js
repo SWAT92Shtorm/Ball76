@@ -2132,12 +2132,15 @@ function renderAdminHalls() {
     const days = (h.schedule || []).map(s => `${scheduleDayRu(s.day)} ${s.from}:00–${s.to}:00`).join(', ');
     const inactive = h.active ? '' : ' <span class="hall-badge-inactive">скрыт</span>';
     const perPerson = h.perPerson != null ? ` • ${h.perPerson} ₽/чел` : '';
+    const hourly = h.prices && h.prices.hourly != null ? `${h.prices.hourly} ₽/час` : '';
+    const priceLine = hourly ? `💵 ${escapeHtml(hourly)}${escapeHtml(perPerson)}` : escapeHtml(perPerson.replace(/^ • /, ''));
     return `
       <div class="hall-item${h.active ? '' : ' hall-item-inactive'}">
         <div class="hall-item-main">
           <strong>${escapeHtml(h.name)}</strong>${inactive}
           <span class="hall-item-sys">${escapeHtml(h.sysName)}</span>
-          <div class="hall-item-sched">${days ? escapeHtml(days) : 'график не задан'}${escapeHtml(perPerson)}</div>
+          <div class="hall-item-sched">${days ? escapeHtml(days) : 'график не задан'}</div>
+          ${priceLine ? `<div class="hall-item-price">${priceLine}</div>` : ''}
         </div>
         <div class="hall-item-actions">
           <button class="hall-mini-btn" onclick="openHallForm(${h.id})">✎</button>
@@ -2171,9 +2174,9 @@ function openHallForm(hallId) {
   document.getElementById('hallName').value = hall ? hall.name : '';
   document.getElementById('hallPhone').value = hall ? (hall.phone || '') : '';
   document.getElementById('hallResponsible').value = hall ? (hall.responsible || '') : '';
-  document.getElementById('hallPriceFull').value = hall && hall.prices ? (hall.prices.full ?? '') : '';
-  document.getElementById('hallPriceShort').value = hall && hall.prices ? (hall.prices.short ?? '') : '';
+  document.getElementById('hallPriceHourly').value = hall && hall.prices ? (hall.prices.hourly ?? '') : '';
   document.getElementById('hallPerPerson').value = hall && hall.perPerson != null ? hall.perPerson : '';
+  updateHallPricePreview();
 
   // График
   const rows = document.getElementById('hallScheduleRows');
@@ -2214,6 +2217,17 @@ function addScheduleRow(value) {
   rows.appendChild(row);
 }
 
+// Предпросмотр цен: из цены за час считаем 1,5 ч и 2 ч.
+function updateHallPricePreview() {
+  const box = document.getElementById('hallPricePreview');
+  if (!box) return;
+  const hourly = Number(document.getElementById('hallPriceHourly').value || 0);
+  if (!hourly) { box.textContent = ''; return; }
+  const h15 = Math.round(hourly * 1.5);
+  const h2 = hourly * 2;
+  box.innerHTML = `За 1,5 ч: <strong>${h15} ₽</strong> · за 2 ч: <strong>${h2} ₽</strong>`;
+}
+
 // Собрать график из строк формы.
 function collectSchedule() {
   const rows = document.querySelectorAll('#hallScheduleRows .sched-row');
@@ -2239,8 +2253,7 @@ async function saveHall() {
     phone: document.getElementById('hallPhone').value.trim(),
     responsible: document.getElementById('hallResponsible').value.trim(),
     prices: {
-      full: Number(document.getElementById('hallPriceFull').value || 0),
-      short: Number(document.getElementById('hallPriceShort').value || 0)
+      hourly: Number(document.getElementById('hallPriceHourly').value || 0)
     },
     perPerson: document.getElementById('hallPerPerson').value === ''
       ? null : Number(document.getElementById('hallPerPerson').value),
@@ -2380,6 +2393,9 @@ window.addEventListener('DOMContentLoaded', async function () {
     const el = document.getElementById(id);
     if (el) el.addEventListener('input', updateAdminPreview);
   });
+  // Поле «Цена за час» — живой предпросмотр цен за 1,5 ч и 2 ч.
+  const priceHourlyInp = document.getElementById('hallPriceHourly');
+  if (priceHourlyInp) priceHourlyInp.addEventListener('input', updateHallPricePreview);
 
   // 7. Снимаем флаг первой загрузки
   isInitialLoad = false;

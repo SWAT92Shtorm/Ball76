@@ -228,7 +228,7 @@ const DEFAULT_HALLS = {
     name: 'ЛОКОМОТИВ',
     phone: '+7 (961) 154-44-11',
     responsible: 'Андрей Дубровин',
-    prices: { full: 6000, short: 4500 },
+    prices: { hourly: 3000, full: 6000, short: 4500 },
     schedule: [
       { day: 'Tuesday', from: 21, to: 23 },
       { day: 'Thursday', from: 21, to: 23 }
@@ -238,15 +238,36 @@ const DEFAULT_HALLS = {
     name: 'АТЛАНТ',
     phone: '+7 (910) 979-22-99',
     responsible: 'Ярослав Волков',
-    // Аренда всегда фиксированная 6000 ₽; в отличие от ЛОКОМОТИВ
-    // сумма не делится на участников — каждый платит 300 ₽.
-    prices: { full: 6000, short: 6000 },
+    // Сумма НЕ делится на участников — каждый платит фиксированные 300 ₽.
+    prices: { hourly: 3000, full: 6000, short: 4500 },
     perPerson: 300,
     schedule: [
       { day: 'Friday', from: 21, to: 23 }
     ]
   }
 };
+
+// Цена в админке задаётся ЗА ЧАС; 1,5 ч и 2 ч считаются автоматически.
+// Хранится в prices.hourly, а full (×2) и short (×1.5) — для клиента.
+function pricesFromHourly(hourly) {
+  const h = Math.round(Number(hourly) || 0);
+  return { hourly: h, full: h * 2, short: Math.round(h * 1.5) };
+}
+
+// Привести объект prices к виду { hourly, full, short }.
+// Для старых записей без hourly выводим его из full (÷2).
+function normalizePrices(p) {
+  const src = (p && typeof p === 'object') ? p : {};
+  let hourly;
+  if (src.hourly != null && Number.isFinite(Number(src.hourly))) {
+    hourly = Number(src.hourly);
+  } else if (src.full != null && Number.isFinite(Number(src.full))) {
+    hourly = Number(src.full) / 2;
+  } else {
+    hourly = 0;
+  }
+  return pricesFromHourly(hourly);
+}
 
 const APP_CONFIG = {
   // Резервные адреса туннелей (loca.lt): три поддомена, чтобы при отвале
@@ -289,7 +310,7 @@ async function loadHallsFromDB() {
         name: r.name,
         phone: r.phone || '',
         responsible: r.responsible || '',
-        prices: r.prices || {},
+        prices: normalizePrices(r.prices),
         schedule: Array.isArray(r.schedule) ? r.schedule : []
       };
       if (r.per_person != null) hall.perPerson = r.per_person;
@@ -337,10 +358,10 @@ async function ensureHallsSchema() {
        ON CONFLICT (sys_name) DO NOTHING`,
       [
         'hall1', 'ЛОКОМОТИВ', '+7 (961) 154-44-11', 'Андрей Дубровин',
-        JSON.stringify({ full: 6000, short: 4500 }),
+        JSON.stringify(pricesFromHourly(3000)),
         JSON.stringify([{ day: 'Tuesday', from: 21, to: 23 }, { day: 'Thursday', from: 21, to: 23 }]),
         'hall2', 'АТЛАНТ', '+7 (910) 979-22-99', 'Ярослав Волков',
-        JSON.stringify({ full: 6000, short: 6000 }), 300,
+        JSON.stringify(pricesFromHourly(3000)), 300,
         JSON.stringify([{ day: 'Friday', from: 21, to: 23 }])
       ]
     );
@@ -423,13 +444,16 @@ function validateHallInput(body, { partial } = {}) {
   }
 
   if (b.prices !== undefined || !partial) {
+    // В админке вводится ОДНА цена — за час. Остальные считаются:
+    // 1,5 ч = час × 1.5, 2 ч = час × 2. Храним все три для обратной
+    // совместимости с клиентом, который ожидает prices.full / prices.short.
     const p = b.prices && typeof b.prices === 'object' ? b.prices : {};
-    const full = Number(p.full);
-    const short = Number(p.short);
-    if (!Number.isFinite(full) || full < 0 || !Number.isFinite(short) || short < 0) {
-      return { error: 'Цены должны быть неотрицательными числами' };
+    const hourly = Number(p.hourly);
+    if (!Number.isFinite(hourly) || hourly < 0) {
+      return { error: 'Цена за час должна быть неотрицательным числом' };
     }
-    out.prices = { full: Math.round(full), short: Math.round(short) };
+    const h = Math.round(hourly);
+    out.prices = { hourly: h, full: h * 2, short: Math.round(h * 1.5) };
   }
 
   if (b.perPerson !== undefined) {
@@ -1503,7 +1527,7 @@ async function listHallsForAdmin() {
     name: r.name,
     phone: r.phone || '',
     responsible: r.responsible || '',
-    prices: r.prices || {},
+    prices: normalizePrices(r.prices),
     perPerson: r.per_person,
     schedule: Array.isArray(r.schedule) ? r.schedule : [],
     active: r.active,

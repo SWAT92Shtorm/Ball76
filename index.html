@@ -19,7 +19,7 @@
 
   <title>Запись на баскетбол в Ярославле — ЛОКОМОТИВ и АТЛАНТ</title>
 
-  <link rel="stylesheet" href="styles.css?v=20261003halls1">
+  <link rel="stylesheet" href="styles.css?v=20261003hourly1">
 
 </head>
 <body>
@@ -232,14 +232,11 @@
             <label for="hallResponsible">Ответственный:</label>
             <input type="text" id="hallResponsible" placeholder="Иванов Иван" maxlength="80" />
           </div>
-          <div class="form-row form-row-time">
-            <label for="hallPriceFull">Цена (2 ч), ₽:</label>
-            <input type="number" id="hallPriceFull" min="0" step="100" placeholder="6000" />
+          <div class="form-row">
+            <label for="hallPriceHourly">Цена за час, ₽:</label>
+            <input type="number" id="hallPriceHourly" min="0" step="100" placeholder="3000" />
           </div>
-          <div class="form-row form-row-time">
-            <label for="hallPriceShort">Цена (1.5 ч), ₽:</label>
-            <input type="number" id="hallPriceShort" min="0" step="100" placeholder="4500" />
-          </div>
+          <div id="hallPricePreview" class="hall-price-preview"></div>
           <div class="form-row">
             <label for="hallPerPerson">С человека, ₽:</label>
             <input type="number" id="hallPerPerson" min="0" step="50" placeholder="пусто = делить аренду" />
@@ -301,6 +298,6 @@
     </div>
   </div>
 
-  <script src="app.js?v=20261003halls1"></script>
+  <script src="app.js?v=20261003hourly1"></script>
 </body>
 </html>

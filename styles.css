@@ -1359,12 +1359,22 @@ th {
   cursor: default;
 }
 
-/* Поля времени/длительности/причины, заблокированные подтверждённой игрой */
-.locked-field:disabled {
-  opacity: 0.55;
+/* Поля времени/длительности/причины, заблокированные подтверждённой игрой.
+   Значение должно оставаться читаемым: у :disabled браузеры подменяют цвет
+   текста (WebKit — через -webkit-text-fill-color), из-за чего на тёмной теме
+   время «пропадало». Задаём явно и снимаем прозрачность. */
+.locked-field:disabled,
+.locked-field:disabled option {
+  opacity: 1;
   cursor: not-allowed;
-  background: #171717;
-  color: #9e9e9e;
+  background: #1a1a1a;
+  color: #e0e0e0;
+  -webkit-text-fill-color: #e0e0e0;
+  border-color: #3a3a3a;
+}
+/* Иконки/стрелки нативных date/time, чтобы не выглядели выключенными */
+.locked-field:disabled::-webkit-calendar-picker-indicator {
+  opacity: 0.5;
 }
 
 /* ==== Табы админ-панели ==== */

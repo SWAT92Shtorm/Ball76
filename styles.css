@@ -1343,6 +1343,10 @@ th {
   background: #a02020;
 }
 .confirm-btn.confirmed {
+  /* Подтверждённая игра: кнопка с длинной подписью растягивается на всю
+     ширину строки (flex-basis 100% + wrap переносит её на отдельную строку). */
+  flex: 1 1 100%;
+  width: 100%;
   background: #2e7d32;
   border-color: #66bb6a;
   color: #ffffff;

@@ -1335,13 +1335,14 @@ th {
   transition: background 0.15s ease, border-color 0.15s ease;
 }
 .confirm-btn.unconfirmed {
-  /* Тот же цвет, что у кнопки «Настройки» в верхней панели. */
-  background: #b8860b;
-  border-color: #d4a017;
-  color: #1a1a1a;
+  /* Стиль как у блока предупреждения .admin-preview. */
+  background: rgba(255, 152, 0, 0.12);
+  border: 1px dashed rgba(255, 152, 0, 0.4);
+  color: #ffd699;
 }
 .confirm-btn.unconfirmed:hover {
-  background: #d4a017;
+  background: rgba(255, 152, 0, 0.22);
+  border-color: rgba(255, 152, 0, 0.65);
 }
 .confirm-btn.confirmed {
   /* Подтверждённая игра: кнопка с длинной подписью растягивается на всю

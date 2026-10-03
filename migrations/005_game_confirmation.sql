@@ -15,12 +15,14 @@
 -- ============================================================
 
 ALTER TABLE public.games
-  ADD COLUMN IF NOT EXISTS confirmed        boolean NOT NULL DEFAULT false,
-  ADD COLUMN IF NOT EXISTS confirmed_at     timestamp without time zone,
-  ADD COLUMN IF NOT EXISTS confirmed_price  integer,
-  ADD COLUMN IF NOT EXISTS confirmed_players integer;
+  ADD COLUMN IF NOT EXISTS confirmed          boolean NOT NULL DEFAULT false,
+  ADD COLUMN IF NOT EXISTS confirmed_at       timestamp without time zone,
+  ADD COLUMN IF NOT EXISTS confirmed_price    integer,
+  ADD COLUMN IF NOT EXISTS confirmed_players  integer,
+  ADD COLUMN IF NOT EXISTS confirmed_duration numeric;
 
-COMMENT ON COLUMN public.games.confirmed         IS 'Игра подтверждена администратором (состоится)';
-COMMENT ON COLUMN public.games.confirmed_at      IS 'Когда игра была подтверждена (UTC)';
-COMMENT ON COLUMN public.games.confirmed_price   IS 'Сумма к оплате на одного человека, ₽ (снимок на момент подтверждения)';
-COMMENT ON COLUMN public.games.confirmed_players IS 'Число записавшихся на момент подтверждения';
+COMMENT ON COLUMN public.games.confirmed           IS 'Игра подтверждена администратором (состоится)';
+COMMENT ON COLUMN public.games.confirmed_at        IS 'Когда игра была подтверждена (UTC)';
+COMMENT ON COLUMN public.games.confirmed_price     IS 'Сумма к оплате на одного человека, ₽ (снимок на момент подтверждения)';
+COMMENT ON COLUMN public.games.confirmed_players   IS 'Число записавшихся на момент подтверждения';
+COMMENT ON COLUMN public.games.confirmed_duration  IS 'Длительность игры в часах (снимок на момент подтверждения)';

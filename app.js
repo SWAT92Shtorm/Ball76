@@ -1373,7 +1373,8 @@ function showHistoryTable() {
         date: dateStr,
         players: h.players || [],
         confirmed: !!h.confirmed,
-        price: h.price
+        price: h.price,
+        duration: h.duration
       };
     })
     .filter(e => e.players.length > 0)
@@ -1387,10 +1388,16 @@ function showHistoryTable() {
   const cards = entries.map((entry, i) => {
     const label = i === 0 ? 'предыдущая игра' : 'игра до неё';
     const chips = entry.players.map(p => `<span class="hist-chip">${escapeHtml(shortName(p))}</span>`).join('');
-    // Для подтверждённой игры рядом с числом показываем сумму на человека.
-    const priceMark = (entry.confirmed && entry.price != null)
-      ? `<span class="hist-price" title="Сумма к оплате за одного человека">💰 ${escapeHtml(entry.price)} ₽/чел.</span>`
-      : '';
+    // Мета-маркеры одного размера. Порядок для подтверждённой игры:
+    // Время → Количество → Стоимость. Без иконок, «₽» идёт после суммы.
+    const marks = [];
+    if (entry.confirmed && entry.duration != null) {
+      marks.push(`<span class="hist-meta-item hist-meta-time" title="Длительность игры">${escapeHtml(durationLabel(entry.duration))}</span>`);
+    }
+    marks.push(`<span class="hist-meta-item hist-meta-count" title="Число записавшихся">${entry.players.length} чел.</span>`);
+    if (entry.confirmed && entry.price != null) {
+      marks.push(`<span class="hist-meta-item hist-meta-price" title="Сумма к оплате за одного человека">${escapeHtml(entry.price)} ₽/чел.</span>`);
+    }
     return `
       <div class="hist-card${entry.confirmed ? ' hist-card-confirmed' : ''}">
         <div class="hist-head">
@@ -1398,10 +1405,7 @@ function showHistoryTable() {
             <span class="hist-date-main">${formatShortDate(entry.date)}</span>
             <span class="hist-date-sub">${label}</span>
           </div>
-          <div class="hist-meta">
-            <span class="hist-count">${entry.players.length} чел.</span>
-            ${priceMark}
-          </div>
+          <div class="hist-meta">${marks.join('')}</div>
         </div>
         <div class="hist-chips">${chips}</div>
       </div>

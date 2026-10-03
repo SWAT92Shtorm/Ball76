@@ -38,6 +38,7 @@ pool.query('SELECT 1')
   })
   .then(() => ensureGameConfirmSchema())
   .then(() => loadHallsFromDB())
+  .then(() => backfillConfirmedDuration())
   .catch(err => {
     console.error('❌ Ошибка подключения к PostgreSQL:', err.message);
   });
@@ -376,11 +377,33 @@ async function ensureHallsSchema() {
 async function ensureGameConfirmSchema() {
   await pool.query(`
     ALTER TABLE public.games
-      ADD COLUMN IF NOT EXISTS confirmed         boolean NOT NULL DEFAULT false,
-      ADD COLUMN IF NOT EXISTS confirmed_at      timestamp without time zone,
-      ADD COLUMN IF NOT EXISTS confirmed_price   integer,
-      ADD COLUMN IF NOT EXISTS confirmed_players integer
+      ADD COLUMN IF NOT EXISTS confirmed          boolean NOT NULL DEFAULT false,
+      ADD COLUMN IF NOT EXISTS confirmed_at       timestamp without time zone,
+      ADD COLUMN IF NOT EXISTS confirmed_price    integer,
+      ADD COLUMN IF NOT EXISTS confirmed_players  integer,
+      ADD COLUMN IF NOT EXISTS confirmed_duration numeric
   `);
+}
+
+// Идемпотентно дозаполнить длительность у уже подтверждённых игр, у которых
+// она не была сохранена (записи до появления колонки). Считается по времени.
+async function backfillConfirmedDuration() {
+  const { rows } = await pool.query(
+    `SELECT id, hall_id, date, start_time, end_time FROM games
+      WHERE confirmed = true AND confirmed_duration IS NULL`
+  );
+  for (const row of rows) {
+    let start = row.start_time;
+    let end = row.end_time;
+    // Нет своего времени — берём расписание зала на дату игры.
+    if (!isValidTime(start) || !isValidTime(end)) {
+      const sched = scheduleForDate(row.hall_id, formatDateMSK(row.date));
+      if (sched) { start = formatHour(sched.from); end = formatHour(sched.to); }
+    }
+    if (!isValidTime(start) || !isValidTime(end)) continue;
+    await pool.query('UPDATE games SET confirmed_duration = $2 WHERE id = $1',
+      [row.id, durationHours(start, end)]);
+  }
 }
 
 // Активен ли зал (используется в публичных эндпоинтах).
@@ -1352,6 +1375,7 @@ app.get('/api/history', readLimiter, async (req, res) => {
         g.confirmed,
         g.confirmed_price,
         g.confirmed_players,
+        g.confirmed_duration,
         p.name
         FROM game_players gp
         JOIN players p ON gp.player_id = p.id
@@ -1377,7 +1401,8 @@ app.get('/api/history', readLimiter, async (req, res) => {
           players: [],
           confirmed: false,
           price: null,
-          playersCount: null
+          playersCount: null,
+          duration: null
         };
       }
 
@@ -1390,6 +1415,7 @@ app.get('/api/history', readLimiter, async (req, res) => {
         entry.confirmed = true;
         if (row.confirmed_price != null) entry.price = Number(row.confirmed_price);
         if (row.confirmed_players != null) entry.playersCount = Number(row.confirmed_players);
+        if (row.confirmed_duration != null) entry.duration = Number(row.confirmed_duration);
       }
     });
 
@@ -1857,10 +1883,12 @@ async function refreshConfirmedSnapshot(hallId, dateStr) {
   const playersCount = cnt.rows[0] ? cnt.rows[0].n : 0;
   const price = computeConfirmedPrice(hallId, info.startTime, info.endTime, playersCount);
 
+  const duration = durationHours(info.startTime, info.endTime);
+
   await pool.query(
-    `UPDATE games SET confirmed_price = $3, confirmed_players = $4
+    `UPDATE games SET confirmed_price = $3, confirmed_players = $4, confirmed_duration = $5
       WHERE hall_id = $1 AND date = $2`,
-    [hallId, dateStr, price, playersCount]
+    [hallId, dateStr, price, playersCount, duration]
   );
 }
 
@@ -1881,7 +1909,8 @@ function durationHours(startTime, endTime) {
 async function getGameTime(hallId, dateStr) {
   const result = await pool.query(
     `SELECT start_time, end_time, time_note, time_changed_at,
-            confirmed, confirmed_at, confirmed_price, confirmed_players
+            confirmed, confirmed_at, confirmed_price, confirmed_players,
+            confirmed_duration
        FROM games WHERE hall_id = $1 AND date = $2
        ORDER BY (start_time IS NOT NULL) DESC, id DESC
        LIMIT 1`,
@@ -1899,6 +1928,8 @@ async function getGameTime(hallId, dateStr) {
     ? Number(row.confirmed_price) : null;
   const confirmedPlayers = confirmed && row.confirmed_players != null
     ? Number(row.confirmed_players) : null;
+  const confirmedDuration = confirmed && row.confirmed_duration != null
+    ? Number(row.confirmed_duration) : null;
 
   if (hasOverride) {
     return {
@@ -1911,6 +1942,7 @@ async function getGameTime(hallId, dateStr) {
       confirmed,
       confirmedPrice,
       confirmedPlayers,
+      confirmedDuration,
       scheduledFrom: schedule ? formatHour(schedule.from) : null,
       scheduledTo: schedule ? formatHour(schedule.to) : null
     };
@@ -1926,6 +1958,7 @@ async function getGameTime(hallId, dateStr) {
     confirmed,
     confirmedPrice,
     confirmedPlayers,
+    confirmedDuration,
     scheduledFrom: schedule ? formatHour(schedule.from) : null,
     scheduledTo: schedule ? formatHour(schedule.to) : null
   };
@@ -2197,20 +2230,22 @@ app.patch('/api/games/:hallId/:date/confirm', mutationLimiter, requireAdmin, asy
         price = computeConfirmedPrice(hallId, info.startTime, info.endTime, playersCount);
       }
 
+      const duration = confirmed ? durationHours(info.startTime, info.endTime) : null;
       const upd = await client.query(
         `UPDATE games
             SET confirmed = $3,
                 confirmed_at = CASE WHEN $3 THEN now() ELSE NULL END,
                 confirmed_price = $4,
-                confirmed_players = $5
+                confirmed_players = $5,
+                confirmed_duration = $6
           WHERE hall_id = $1 AND date = $2`,
-        [hallId, date, confirmed, price, confirmed ? playersCount : null]
+        [hallId, date, confirmed, price, confirmed ? playersCount : null, duration]
       );
       if (upd.rowCount === 0) {
         await client.query(
-          `INSERT INTO games (hall_id, date, confirmed, confirmed_at, confirmed_price, confirmed_players)
-            VALUES ($1, $2, $3, CASE WHEN $3 THEN now() ELSE NULL END, $4, $5)`,
-          [hallId, date, confirmed, price, confirmed ? playersCount : null]
+          `INSERT INTO games (hall_id, date, confirmed, confirmed_at, confirmed_price, confirmed_players, confirmed_duration)
+            VALUES ($1, $2, $3, CASE WHEN $3 THEN now() ELSE NULL END, $4, $5, $6)`,
+          [hallId, date, confirmed, price, confirmed ? playersCount : null, duration]
         );
       }
 

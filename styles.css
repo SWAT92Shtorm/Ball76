@@ -447,17 +447,8 @@ th {
   margin-left: 8px;
 }
 
-.hist-count {
-  font-size: 12px;
-  font-weight: 600;
-  color: #a0e0ff;
-  background: rgba(0, 170, 255, 0.1);
-  border: 1px solid rgba(0, 170, 255, 0.25);
-  border-radius: 10px;
-  padding: 2px 10px;
-  white-space: nowrap;
-}
-
+/* Мета-маркеры карточки истории: Время → Количество → Стоимость.
+   Все одного размера, без иконок. */
 .hist-meta {
   display: flex;
   align-items: center;
@@ -466,16 +457,28 @@ th {
   justify-content: flex-end;
 }
 
-/* Сумма на человека у подтверждённой игры в истории */
-.hist-price {
+.hist-meta-item {
   font-size: 12px;
-  font-weight: 700;
+  font-weight: 600;
+  line-height: 1;
+  border-radius: 10px;
+  padding: 4px 10px;
+  white-space: nowrap;
+  color: #a0e0ff;
+  background: rgba(0, 170, 255, 0.1);
+  border: 1px solid rgba(0, 170, 255, 0.25);
+}
+
+.hist-meta-time {
+  color: #d8c7ff;
+  background: rgba(150, 110, 255, 0.12);
+  border-color: rgba(150, 110, 255, 0.32);
+}
+
+.hist-meta-price {
   color: #7ee2a8;
   background: rgba(46, 204, 113, 0.12);
-  border: 1px solid rgba(46, 204, 113, 0.35);
-  border-radius: 10px;
-  padding: 2px 10px;
-  white-space: nowrap;
+  border-color: rgba(46, 204, 113, 0.35);
 }
 
 /* Подтверждённая игра — лёгкая зелёная рамка карточки */

@@ -19,7 +19,7 @@
 
   <title>Запись на баскетбол в Ярославле — ЛОКОМОТИВ и АТЛАНТ</title>
 
-  <link rel="stylesheet" href="styles.css?v=20261003adminbar2">
+  <link rel="stylesheet" href="styles.css?v=20261003duration1">
 
 </head>
 <body>
@@ -191,9 +191,13 @@
             <label for="adminStartTime">Начало:</label>
             <input type="time" id="adminStartTime" />
           </div>
-          <div class="form-row form-row-time">
-            <label for="adminEndTime">Конец:</label>
-            <input type="time" id="adminEndTime" />
+          <div class="form-row">
+            <label for="adminDuration">Длительность:</label>
+            <select id="adminDuration">
+              <option value="1">1 час</option>
+              <option value="1.5">1,5 часа</option>
+              <option value="2" selected>2 часа</option>
+            </select>
           </div>
           <div class="form-row">
             <label for="adminNote">Причина:</label>
@@ -300,6 +304,6 @@
     </div>
   </div>
 
-  <script src="app.js?v=20261003adminbar1"></script>
+  <script src="app.js?v=20261003duration1"></script>
 </body>
 </html>

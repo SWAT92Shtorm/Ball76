@@ -1965,6 +1965,30 @@ function adminLogout() {
   showList();
 }
 
+// Прибавить часы (может быть дробным: 1, 1.5, 2) к времени 'HH:MM'.
+// Возвращает 'HH:MM' в пределах суток.
+function addHoursToTime(time, hours) {
+  if (!time || !/^\d{2}:\d{2}$/.test(time)) return '';
+  const [h, m] = time.split(':').map(Number);
+  const total = (h * 60 + m + Math.round(hours * 60)) % (24 * 60);
+  const hh = String(Math.floor(total / 60)).padStart(2, '0');
+  const mm = String(total % 60).padStart(2, '0');
+  return `${hh}:${mm}`;
+}
+
+// Определить длительность (1 | 1.5 | 2) по началу и концу. По умолчанию 2.
+function durationFromTimes(start, end) {
+  if (!start || !end || !/^\d{2}:\d{2}$/.test(start) || !/^\d{2}:\d{2}$/.test(end)) return '2';
+  const [sh, sm] = start.split(':').map(Number);
+  const [eh, em] = end.split(':').map(Number);
+  let diff = (eh * 60 + em) - (sh * 60 + sm);
+  if (diff < 0) diff += 24 * 60;
+  const hours = diff / 60;
+  if (hours <= 1.25) return '1';
+  if (hours <= 1.75) return '1.5';
+  return '2';
+}
+
 // Подтянуть текущее время игры в поля формы.
 async function loadAdminGameTime() {
   const hall = document.getElementById('adminHallSelect').value;
@@ -1978,7 +2002,8 @@ async function loadAdminGameTime() {
     const info = await resp.json();
 
     document.getElementById('adminStartTime').value = info.startTime || '';
-    document.getElementById('adminEndTime').value = info.endTime || '';
+    // Длительность определяем по разнице начала и конца; если данных нет — 2 ч.
+    document.getElementById('adminDuration').value = durationFromTimes(info.startTime, info.endTime);
     document.getElementById('adminNote').value = info.note || '';
 
     if (hint) {
@@ -2008,14 +2033,16 @@ function updateAdminPreview() {
   const hall = document.getElementById('adminHallSelect').value;
   const date = document.getElementById('adminDateInput').value;
   const start = document.getElementById('adminStartTime').value;
+  const duration = Number(document.getElementById('adminDuration').value || 2);
   const note = document.getElementById('adminNote').value.trim();
   const preview = document.getElementById('adminPreview');
   if (!preview) return;
 
   if (!start) { preview.textContent = 'Укажите время начала'; return; }
 
+  const end = addHoursToTime(start, duration);
   preview.innerHTML = `Предпросмотр для игроков: <br>⚠️ <strong>Время игры:</strong> `
-    + `начало в ${escapeHtml(start)}`
+    + `начало в ${escapeHtml(start)}${end ? `, конец в ${escapeHtml(end)}` : ''}`
     + (note ? `<br>Причина: ${escapeHtml(note)}` : '');
 }
 
@@ -2023,18 +2050,21 @@ async function saveGameTime() {
   const hall = document.getElementById('adminHallSelect').value;
   const date = document.getElementById('adminDateInput').value;
   const startTime = document.getElementById('adminStartTime').value;
-  const endTime = document.getElementById('adminEndTime').value;
+  const duration = Number(document.getElementById('adminDuration').value || 2);
   const note = document.getElementById('adminNote').value.trim();
 
   if (!date) { showToast('Укажите дату', 'error'); return; }
   if (!startTime) { showToast('Укажите время начала', 'error'); return; }
   if (!note) { showToast('Укажите причину изменения', 'error'); return; }
 
+  // Конец вычисляем из начала + выбранной длительности (1 / 1,5 / 2 ч).
+  const endTime = addHoursToTime(startTime, duration) || null;
+
   try {
     const resp = await fetch(`${API_BASE_URL}/api/games/${hall}/${date}/time`, {
       method: 'PATCH',
       headers: adminHeaders(),
-      body: JSON.stringify({ startTime, endTime: endTime || null, note })
+      body: JSON.stringify({ startTime, endTime, note })
     });
     if (resp.status === 403) { adminLogout(); return; }
     if (!resp.ok) {
@@ -2397,10 +2427,12 @@ window.addEventListener('DOMContentLoaded', async function () {
   const adminDateInp = document.getElementById('adminDateInput');
   if (adminHallSel) adminHallSel.addEventListener('change', loadAdminGameTime);
   if (adminDateInp) adminDateInp.addEventListener('change', loadAdminGameTime);
-  ['adminStartTime', 'adminEndTime', 'adminNote'].forEach(id => {
+  ['adminStartTime', 'adminNote'].forEach(id => {
     const el = document.getElementById(id);
     if (el) el.addEventListener('input', updateAdminPreview);
   });
+  const adminDurationSel = document.getElementById('adminDuration');
+  if (adminDurationSel) adminDurationSel.addEventListener('change', updateAdminPreview);
   // Поле «Цена за час» — живой предпросмотр цен за 1,5 ч и 2 ч.
   const priceHourlyInp = document.getElementById('hallPriceHourly');
   if (priceHourlyInp) priceHourlyInp.addEventListener('input', updateHallPricePreview);

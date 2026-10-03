@@ -33,7 +33,10 @@ pool.on('error', err => {
 pool.query('SELECT 1')
   .then(() => {
     console.log('✅ Подключено к PostgreSQL');
+    // Идемпотентно создаём таблицу залов (миграция 003) и загружаем кэш.
+    return ensureHallsSchema();
   })
+  .then(() => loadHallsFromDB())
   .catch(err => {
     console.error('❌ Ошибка подключения к PostgreSQL:', err.message);
   });
@@ -216,6 +219,35 @@ app.get('/api/status', async (req, res) => {
 // ==== Единый конфиг приложения ====
 // Единственный источник правды: клиент получает его через GET /api/config,
 // дублировать эти значения в index.html/app.js больше не нужно.
+//
+// Залы (halls) теперь живут в БД (public.halls) и подставляются динамически
+// через loadHallsFromDB(). DEFAULT_HALLS — резервный набор, используемый,
+// если таблица пуста или БД временно недоступна, чтобы сайт не «падал».
+const DEFAULT_HALLS = {
+  hall1: {
+    name: 'ЛОКОМОТИВ',
+    phone: '+7 (961) 154-44-11',
+    responsible: 'Андрей Дубровин',
+    prices: { full: 6000, short: 4500 },
+    schedule: [
+      { day: 'Tuesday', from: 21, to: 23 },
+      { day: 'Thursday', from: 21, to: 23 }
+    ]
+  },
+  hall2: {
+    name: 'АТЛАНТ',
+    phone: '+7 (910) 979-22-99',
+    responsible: 'Ярослав Волков',
+    // Аренда всегда фиксированная 6000 ₽; в отличие от ЛОКОМОТИВ
+    // сумма не делится на участников — каждый платит 300 ₽.
+    prices: { full: 6000, short: 6000 },
+    perPerson: 300,
+    schedule: [
+      { day: 'Friday', from: 21, to: 23 }
+    ]
+  }
+};
+
 const APP_CONFIG = {
   // Резервные адреса туннелей (loca.lt): три поддомена, чтобы при отвале
   // одного можно было переключиться на другой. Запускаются ./tunnel.sh.
@@ -225,31 +257,207 @@ const APP_CONFIG = {
     'https://ball76api-3.loca.lt'
   ],
   maxPlayers: 18,
-  halls: {
-    hall1: {
-      name: 'ЛОКОМОТИВ',
-      phone: '+7 (961) 154-44-11',
-      responsible: 'Андрей Дубровин',
-      prices: { full: 6000, short: 4500 },
-      schedule: [
-        { day: 'Tuesday', from: 21, to: 23 },
-        { day: 'Thursday', from: 21, to: 23 }
-      ]
-    },
-    hall2: {
-      name: 'АТЛАНТ',
-      phone: '+7 (910) 979-22-99',
-      responsible: 'Ярослав Волков',
-      // Аренда всегда фиксированная 6000 ₽; в отличие от ЛОКОМОТИВ
-      // сумма не делится на участников — каждый платит 300 ₽.
-      prices: { full: 6000, short: 6000 },
-      perPerson: 300,
-      schedule: [
-        { day: 'Friday', from: 21, to: 23 }
-      ]
-    }
-  }
+  // Залы подставляются из БД (см. loadHallsFromDB()).
+  halls: DEFAULT_HALLS
 };
+
+// ============================================================
+// Залы: кэш в памяти, синхронизируемый с таблицей public.halls
+// ============================================================
+// Публичные эндпоинты (расписание, /api/config) читают залы синхронно,
+// поэтому держим копию в памяти. После любой админ-операции кэш перечитывается.
+let hallsCache = { ...DEFAULT_HALLS };
+let hallIdsCache = Object.keys(DEFAULT_HALLS);
+
+// Дни недели в том же формате, что и в расписании (английские названия).
+const HALL_DAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
+
+// Загрузить активные залы из БД в кэш. При пустой таблице или ошибке
+// остаётся резервный набор DEFAULT_HALLS.
+async function loadHallsFromDB() {
+  try {
+    const result = await pool.query(
+      `SELECT sys_name, name, phone, responsible, prices, per_person, schedule, active
+         FROM public.halls
+        ORDER BY id`
+    );
+    const map = {};
+    const ids = [];
+    for (const r of result.rows) {
+      if (!r.active) continue; // деактивированные залы скрыты от публичных эндпоинтов
+      const hall = {
+        name: r.name,
+        phone: r.phone || '',
+        responsible: r.responsible || '',
+        prices: r.prices || {},
+        schedule: Array.isArray(r.schedule) ? r.schedule : []
+      };
+      if (r.per_person != null) hall.perPerson = r.per_person;
+      map[r.sys_name] = hall;
+      ids.push(r.sys_name);
+    }
+    if (ids.length > 0) {
+      hallsCache = map;
+      hallIdsCache = ids;
+      APP_CONFIG.halls = map;
+      console.log('✅ Залы загружены из БД:', ids.join(', '));
+    }
+  } catch (err) {
+    console.error('⚠️ Не удалось загрузить залы из БД, использую резервные:', err.message);
+  }
+}
+
+// Идемпотентно создать таблицу залов и засеять её резервным набором.
+// Дублирует migrations/003_halls.sql, чтобы сервер был самодостаточен
+// (миграция применяется автоматически при старте).
+async function ensureHallsSchema() {
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS public.halls (
+      id           serial PRIMARY KEY,
+      sys_name     text UNIQUE NOT NULL,
+      name         text NOT NULL,
+      phone        text,
+      responsible  text,
+      prices       jsonb NOT NULL DEFAULT '{}'::jsonb,
+      per_person   integer,
+      schedule     jsonb NOT NULL DEFAULT '[]'::jsonb,
+      active       boolean NOT NULL DEFAULT true,
+      created_at   timestamp without time zone NOT NULL DEFAULT now(),
+      updated_at   timestamp without time zone NOT NULL DEFAULT now()
+    )
+  `);
+  // Начальное наполнение — только если таблица пуста.
+  const cnt = await pool.query('SELECT COUNT(*)::int AS n FROM public.halls');
+  if (cnt.rows[0].n === 0) {
+    await pool.query(
+      `INSERT INTO public.halls (sys_name, name, phone, responsible, prices, per_person, schedule)
+       VALUES
+         ($1,$2,$3,$4,$5::jsonb,NULL,$6::jsonb),
+         ($7,$8,$9,$10,$11::jsonb,$12,$13::jsonb)
+       ON CONFLICT (sys_name) DO NOTHING`,
+      [
+        'hall1', 'ЛОКОМОТИВ', '+7 (961) 154-44-11', 'Андрей Дубровин',
+        JSON.stringify({ full: 6000, short: 4500 }),
+        JSON.stringify([{ day: 'Tuesday', from: 21, to: 23 }, { day: 'Thursday', from: 21, to: 23 }]),
+        'hall2', 'АТЛАНТ', '+7 (910) 979-22-99', 'Ярослав Волков',
+        JSON.stringify({ full: 6000, short: 6000 }), 300,
+        JSON.stringify([{ day: 'Friday', from: 21, to: 23 }])
+      ]
+    );
+    console.log('✅ Таблица halls создана и заполнена залами по умолчанию');
+  }
+}
+
+// Активен ли зал (используется в публичных эндпоинтах).
+function isKnownHall(hallId) {
+  return hallIdsCache.includes(hallId);
+}
+
+// Пустой объект «зал → список игроков» по всем активным залам.
+function emptyPlayersByHall() {
+  const obj = {};
+  for (const id of hallIdsCache) obj[id] = [];
+  return obj;
+}
+
+// ============================================================
+// Валидация данных зала (для админ-CRUD)
+// ============================================================
+
+// Системное имя зала: латиница, цифры, дефис, подчёркивание; 2–32 символа.
+const HALL_SYSNAME_REGEX = /^[a-z0-9][a-z0-9_-]{1,31}$/;
+
+// Проверить и нормализовать график зала.
+// Ожидает массив [{day, from, to}], возвращает {schedule} либо {error}.
+function validateSchedule(raw) {
+  if (raw == null) return { schedule: [] };
+  if (!Array.isArray(raw)) return { error: 'График должен быть массивом' };
+  const schedule = [];
+  for (const item of raw) {
+    if (!item || typeof item !== 'object') return { error: 'Неверный элемент графика' };
+    const day = String(item.day || '');
+    if (!HALL_DAYS.includes(day)) return { error: `Неверный день недели: ${day}` };
+    const from = Number(item.from);
+    const to = Number(item.to);
+    if (!Number.isInteger(from) || from < 0 || from > 23) {
+      return { error: 'Час начала должен быть целым от 0 до 23' };
+    }
+    if (!Number.isInteger(to) || to < 1 || to > 24) {
+      return { error: 'Час окончания должен быть целым от 1 до 24' };
+    }
+    if (to <= from) return { error: 'Окончание должно быть позже начала' };
+    // Защита от дублей одного дня в графике.
+    if (schedule.some(s => s.day === day)) return { error: `День ${day} указан дважды` };
+    schedule.push({ day, from, to });
+  }
+  return { schedule };
+}
+
+// Проверить и нормализовать тело запроса на создание/редактирование зала.
+// partial = true для PATCH (обновляются только переданные поля).
+function validateHallInput(body, { partial } = {}) {
+  const b = body || {};
+  const out = {};
+
+  if (b.sysName !== undefined || !partial) {
+    const sysName = String(b.sysName || '').trim().toLowerCase();
+    if (!HALL_SYSNAME_REGEX.test(sysName)) {
+      return { error: 'Системное имя: латиница/цифры/дефис, 2–32 символа (например hall3)' };
+    }
+    out.sysName = sysName;
+  }
+
+  if (b.name !== undefined || !partial) {
+    const name = String(b.name || '').trim();
+    if (!name) return { error: 'Укажите название зала' };
+    if (name.length > 60) return { error: 'Название слишком длинное (максимум 60 символов)' };
+    out.name = name;
+  }
+
+  if (b.phone !== undefined || !partial) {
+    out.phone = String(b.phone || '').trim().slice(0, 40);
+  }
+
+  if (b.responsible !== undefined || !partial) {
+    out.responsible = String(b.responsible || '').trim().slice(0, 80);
+  }
+
+  if (b.prices !== undefined || !partial) {
+    const p = b.prices && typeof b.prices === 'object' ? b.prices : {};
+    const full = Number(p.full);
+    const short = Number(p.short);
+    if (!Number.isFinite(full) || full < 0 || !Number.isFinite(short) || short < 0) {
+      return { error: 'Цены должны быть неотрицательными числами' };
+    }
+    out.prices = { full: Math.round(full), short: Math.round(short) };
+  }
+
+  if (b.perPerson !== undefined) {
+    if (b.perPerson === null || b.perPerson === '' ) {
+      out.perPerson = null;
+    } else {
+      const pp = Number(b.perPerson);
+      if (!Number.isFinite(pp) || pp < 0) {
+        return { error: 'Сумма с человека должна быть неотрицательным числом' };
+      }
+      out.perPerson = Math.round(pp);
+    }
+  } else if (!partial) {
+    out.perPerson = null;
+  }
+
+  if (b.schedule !== undefined || !partial) {
+    const res = validateSchedule(b.schedule);
+    if (res.error) return { error: res.error };
+    out.schedule = res.schedule;
+  }
+
+  if (b.active !== undefined) {
+    out.active = !!b.active;
+  }
+
+  return { data: out };
+}
 
 // Лимит игроков на одну игру
 const MAX_PLAYERS = APP_CONFIG.maxPlayers;
@@ -338,7 +546,7 @@ app.get('/api/players', readLimiter, async (req, res) => {
        ORDER BY first_signup_time ASC, p.name;`
     );
 
-    const playersByHall = { hall1: [], hall2: [] };
+    const playersByHall = emptyPlayersByHall();
 
     result.rows.forEach(row => {
       const hallId = row.hall_id;
@@ -562,7 +770,7 @@ app.post('/api/players/:hallId', mutationLimiter, async (req, res) => {
 
   console.log('1️⃣ addPlayer: name=' + name + ', date=' + date + ', hallId=' + hallId);
 
-  if (!name || !date || !hallId || !['hall1', 'hall2'].includes(hallId)) {
+  if (!name || !date || !hallId || !isKnownHall(hallId)) {
     console.log('⚠️ Валидация не прошла');
     return res.status(400).json({
       error: 'Bad request: name, date, and hallId required'
@@ -899,7 +1107,7 @@ app.patch('/api/player/name', mutationLimiter, requireAdmin, async (req, res) =>
        JOIN games g ON gp.game_id = g.id;`
     );
 
-    const playersByHall = { hall1: [], hall2: [] };
+    const playersByHall = emptyPlayersByHall();
 
     result.rows.forEach(row => {
       const hallId = row.hall_id;
@@ -1149,7 +1357,7 @@ app.get('/api/history', readLimiter, async (req, res) => {
  */
 app.get('/api/signup-stats/:hallId', readLimiter, async (req, res) => {
   const { hallId } = req.params;
-  if (!['hall1', 'hall2'].includes(hallId)) {
+  if (!isKnownHall(hallId)) {
     return res.status(400).json({ error: 'Invalid hallId' });
   }
 
@@ -1277,6 +1485,228 @@ app.post('/api/admin/login', mutationLimiter, (req, res) => {
 });
 
 // ============================================================
+// Админ: управление залами и их графиком
+// ============================================================
+// Возвращает ВСЕ залы (включая деактивированные) в виде плоского массива
+// для админ-панели, с флагом hasGames (есть ли по залу игры в БД).
+async function listHallsForAdmin() {
+  const result = await pool.query(
+    `SELECT h.id, h.sys_name, h.name, h.phone, h.responsible, h.prices,
+            h.per_person, h.schedule, h.active, h.created_at, h.updated_at,
+            EXISTS (SELECT 1 FROM games g WHERE g.hall_id = h.sys_name) AS has_games
+       FROM public.halls h
+      ORDER BY h.id`
+  );
+  return result.rows.map(r => ({
+    id: r.id,
+    sysName: r.sys_name,
+    name: r.name,
+    phone: r.phone || '',
+    responsible: r.responsible || '',
+    prices: r.prices || {},
+    perPerson: r.per_person,
+    schedule: Array.isArray(r.schedule) ? r.schedule : [],
+    active: r.active,
+    hasGames: r.has_games,
+    createdAt: r.created_at,
+    updatedAt: r.updated_at
+  }));
+}
+
+/**
+ * @swagger
+ * /api/admin/halls:
+ *   get:
+ *     summary: Список всех залов (админ)
+ *     tags: [Admin]
+ *     responses:
+ *       200:
+ *         description: Массив залов
+ *       403:
+ *         description: Требуется вход администратора
+ */
+app.get('/api/admin/halls', requireAdmin, async (req, res) => {
+  try {
+    res.json({ halls: await listHallsForAdmin() });
+  } catch (err) {
+    console.error('Ошибка чтения залов:', err);
+    res.status(500).json({ error: 'Не удалось получить список залов' });
+  }
+});
+
+/**
+ * @swagger
+ * /api/admin/halls:
+ *   post:
+ *     summary: Создать зал
+ *     tags: [Admin]
+ *     responses:
+ *       200:
+ *         description: Зал создан
+ *       400:
+ *         description: Ошибка валидации / имя занято
+ *       403:
+ *         description: Требуется вход администратора
+ */
+app.post('/api/admin/halls', mutationLimiter, requireAdmin, async (req, res) => {
+  const v = validateHallInput(req.body, { partial: false });
+  if (v.error) return res.status(400).json({ error: v.error });
+  const d = v.data;
+
+  try {
+    const result = await pool.query(
+      `INSERT INTO public.halls (sys_name, name, phone, responsible, prices, per_person, schedule, active)
+       VALUES ($1,$2,$3,$4,$5::jsonb,$6,$7::jsonb,$8)
+       ON CONFLICT (sys_name) DO NOTHING
+       RETURNING id`,
+      [
+        d.sysName, d.name, d.phone, d.responsible,
+        JSON.stringify(d.prices), d.perPerson,
+        JSON.stringify(d.schedule), d.active !== false
+      ]
+    );
+    if (result.rowCount === 0) {
+      return res.status(400).json({ error: `Зал с именем «${d.sysName}» уже существует` });
+    }
+    await loadHallsFromDB();
+    res.json({ ok: true, halls: await listHallsForAdmin() });
+  } catch (err) {
+    console.error('Ошибка создания зала:', err);
+    res.status(500).json({ error: 'Не удалось создать зал' });
+  }
+});
+
+/**
+ * @swagger
+ * /api/admin/halls/{hallId}:
+ *   patch:
+ *     summary: Изменить зал (в т.ч. график)
+ *     tags: [Admin]
+ *     responses:
+ *       200:
+ *         description: Зал изменён
+ *       400:
+ *         description: Ошибка валидации
+ *       403:
+ *         description: Требуется вход администратора
+ *       404:
+ *         description: Зал не найден
+ */
+app.patch('/api/admin/halls/:hallId', mutationLimiter, requireAdmin, async (req, res) => {
+  const { hallId } = req.params;
+  const v = validateHallInput(req.body, { partial: true });
+  if (v.error) return res.status(400).json({ error: v.error });
+  const d = v.data;
+
+  // Собираем SET-часть только из переданных полей.
+  const sets = [];
+  const vals = [];
+  let i = 1;
+  const map = {
+    sysName: 'sys_name', name: 'name', phone: 'phone', responsible: 'responsible',
+    perPerson: 'per_person', active: 'active'
+  };
+  for (const [key, col] of Object.entries(map)) {
+    if (d[key] !== undefined) {
+      sets.push(`${col} = $${i++}`);
+      vals.push(d[key]);
+    }
+  }
+  if (d.prices !== undefined) { sets.push(`prices = $${i++}::jsonb`); vals.push(JSON.stringify(d.prices)); }
+  if (d.schedule !== undefined) { sets.push(`schedule = $${i++}::jsonb`); vals.push(JSON.stringify(d.schedule)); }
+
+  if (sets.length === 0) {
+    return res.status(400).json({ error: 'Нет полей для обновления' });
+  }
+  sets.push('updated_at = now()');
+  vals.push(hallId);
+
+  try {
+    // Смена sys_name недопустима, если по залу уже есть игры: сломает связь.
+    if (d.sysName !== undefined && d.sysName !== hallId) {
+      const g = await pool.query('SELECT 1 FROM games WHERE hall_id = $1 LIMIT 1', [hallId]);
+      if (g.rowCount > 0) {
+        return res.status(400).json({
+          error: 'Нельзя менять системное имя зала, по которому уже есть игры. Деактивируйте зал вместо этого.'
+        });
+      }
+    }
+
+    const result = await pool.query(
+      `UPDATE public.halls SET ${sets.join(', ')} WHERE sys_name = $${i} RETURNING id`,
+      vals
+    );
+    if (result.rowCount === 0) {
+      return res.status(404).json({ error: 'Зал не найден' });
+    }
+    await loadHallsFromDB();
+    res.json({ ok: true, halls: await listHallsForAdmin() });
+  } catch (err) {
+    if (err.code === '23505') {
+      return res.status(400).json({ error: 'Системное имя уже занято другим залом' });
+    }
+    console.error('Ошибка изменения зала:', err);
+    res.status(500).json({ error: 'Не удалось изменить зал' });
+  }
+});
+
+/**
+ * @swagger
+ * /api/admin/halls/{hallId}:
+ *   delete:
+ *     summary: Удалить зал (или деактивировать, если есть игры)
+ *     tags: [Admin]
+ *     responses:
+ *       200:
+ *         description: Зал удалён или деактивирован
+ *       403:
+ *         description: Требуется вход администратора
+ *       404:
+ *         description: Зал не найден
+ */
+app.delete('/api/admin/halls/:hallId', mutationLimiter, requireAdmin, async (req, res) => {
+  const { hallId } = req.params;
+  try {
+    // Защита: нельзя оставить систему без залов.
+    const total = await pool.query('SELECT COUNT(*)::int AS n FROM public.halls');
+    if (total.rows[0].n <= 1) {
+      return res.status(400).json({ error: 'Нельзя удалить последний зал' });
+    }
+    const g = await pool.query('SELECT 1 FROM games WHERE hall_id = $1 LIMIT 1', [hallId]);
+    const hasGames = g.rowCount > 0;
+
+    if (hasGames) {
+      // Есть игры — не удаляем, а деактивируем, чтобы сохранить историю.
+      const upd = await pool.query(
+        'UPDATE public.halls SET active = false, updated_at = now() WHERE sys_name = $1 RETURNING id',
+        [hallId]
+      );
+      if (upd.rowCount === 0) return res.status(404).json({ error: 'Зал не найден' });
+      await loadHallsFromDB();
+      return res.json({
+        ok: true, deactivated: true,
+        message: 'По залу есть игры — зал деактивирован (скрыт), история сохранена.',
+        halls: await listHallsForAdmin()
+      });
+    }
+
+    const del = await pool.query('DELETE FROM public.halls WHERE sys_name = $1 RETURNING id', [hallId]);
+    if (del.rowCount === 0) return res.status(404).json({ error: 'Зал не найден' });
+    await loadHallsFromDB();
+    res.json({ ok: true, deleted: true, halls: await listHallsForAdmin() });
+  } catch (err) {
+    console.error('Ошибка удаления зала:', err);
+    res.status(500).json({ error: 'Не удалось удалить зал' });
+  }
+});
+
+// Повторная загрузка кэша залов из БД (на случай ручных изменений).
+app.post('/api/admin/halls/reload', mutationLimiter, requireAdmin, async (req, res) => {
+  await loadHallsFromDB();
+  res.json({ ok: true, hallIds: hallIdsCache });
+});
+
+// ============================================================
 // Время игры: отклонение от расписания (override)
 // ============================================================
 
@@ -1291,12 +1721,10 @@ function isValidDateStr(str) {
     && !Number.isNaN(Date.parse(str + 'T12:00:00Z'));
 }
 
-const HALLS = ['hall1', 'hall2'];
-
 // Расписание зала на конкретную дату: { from, to } или null.
-// from/to — целые часы (как в APP_CONFIG).
+// from/to — целые часы (как в APP_CONFIG). Читает залы из кэша (БД).
 function scheduleForDate(hallId, dateStr) {
-  const hall = APP_CONFIG.halls[hallId];
+  const hall = hallsCache[hallId];
   if (!hall) return null;
   const d = new Date(dateStr + 'T12:00:00Z'); // полдень UTC — не сдвигаем день
   const dayName = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'][d.getUTCDay()];
@@ -1380,7 +1808,7 @@ function isPastDate(dateStr) {
  */
 app.get('/api/games/:hallId/:date/time', readLimiter, async (req, res) => {
   const { hallId, date } = req.params;
-  if (!HALLS.includes(hallId) || !isValidDateStr(date)) {
+  if (!isKnownHall(hallId) || !isValidDateStr(date)) {
     return res.status(400).json({ error: 'Неверный зал или дата' });
   }
   try {
@@ -1412,7 +1840,7 @@ app.get('/api/games/:hallId/:date/time', readLimiter, async (req, res) => {
  */
 app.get('/api/games/:hallId/time-overrides', readLimiter, async (req, res) => {
   const { hallId } = req.params;
-  if (!HALLS.includes(hallId)) {
+  if (!isKnownHall(hallId)) {
     return res.status(400).json({ error: 'Неверный зал' });
   }
   try {
@@ -1468,7 +1896,7 @@ app.patch('/api/games/:hallId/:date/time', mutationLimiter, requireAdmin, async 
   const { hallId, date } = req.params;
   let { startTime, endTime, note } = req.body || {};
 
-  if (!HALLS.includes(hallId) || !isValidDateStr(date)) {
+  if (!isKnownHall(hallId) || !isValidDateStr(date)) {
     return res.status(400).json({ error: 'Неверный зал или дата' });
   }
   if (isPastDate(date)) {
@@ -1544,7 +1972,7 @@ app.patch('/api/games/:hallId/:date/time', mutationLimiter, requireAdmin, async 
  */
 app.delete('/api/games/:hallId/:date/time', mutationLimiter, requireAdmin, async (req, res) => {
   const { hallId, date } = req.params;
-  if (!HALLS.includes(hallId) || !isValidDateStr(date)) {
+  if (!isKnownHall(hallId) || !isValidDateStr(date)) {
     return res.status(400).json({ error: 'Неверный зал или дата' });
   }
   try {

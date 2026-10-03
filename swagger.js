@@ -31,7 +31,9 @@ API для управления записью на баскетбол в зал
       { name: 'Config', description: 'Конфигурация приложения' },
       { name: 'Status', description: 'Статус сервиса' },
       { name: 'Players', description: 'Управление игроками и записями' },
-      { name: 'History', description: 'История записей' }
+      { name: 'History', description: 'История записей' },
+      { name: 'Games', description: 'Время игр и отклонения от расписания' },
+      { name: 'Admin', description: 'Администрирование: вход, залы и график' }
     ]
   },
   apis: ['./server.js']

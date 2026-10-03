@@ -2141,7 +2141,6 @@ function renderAdminHalls() {
       <div class="hall-item${h.active ? '' : ' hall-item-inactive'}">
         <div class="hall-item-main">
           <strong>${escapeHtml(h.name)}</strong>${inactive}
-          <span class="hall-item-sys">${escapeHtml(h.sysName)}</span>
           <div class="hall-item-sched">${days ? escapeHtml(days) : 'график не задан'}</div>
           ${priceLine ? `<div class="hall-item-price">${priceLine}</div>` : ''}
         </div>
@@ -2172,8 +2171,6 @@ function openHallForm(hallId) {
   if (err) err.textContent = '';
 
   document.getElementById('hallFormTitle').textContent = hall ? 'Редактирование зала' : 'Новый зал';
-  document.getElementById('hallSysName').value = hall ? hall.sysName : '';
-  document.getElementById('hallSysName').disabled = !!(hall && hall.hasGames);
   document.getElementById('hallName').value = hall ? hall.name : '';
   document.getElementById('hallPhone').value = hall ? (hall.phone || '') : '';
   document.getElementById('hallResponsible').value = hall ? (hall.responsible || '') : '';
@@ -2251,7 +2248,6 @@ async function saveHall() {
   if (err) err.textContent = '';
 
   const body = {
-    sysName: document.getElementById('hallSysName').value.trim(),
     name: document.getElementById('hallName').value.trim(),
     phone: document.getElementById('hallPhone').value.trim(),
     responsible: document.getElementById('hallResponsible').value.trim(),

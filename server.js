@@ -414,13 +414,29 @@ function validateSchedule(raw) {
   return { schedule };
 }
 
+// Сгенерировать системное имя зала по подобию существующих: hall1, hall2, …
+// Берём максимальный суффикс среди имён вида hallN и прибавляем единицу.
+async function generateHallSysName() {
+  const result = await pool.query(
+    `SELECT sys_name FROM public.halls WHERE sys_name ~ '^hall[0-9]+$'`
+  );
+  let max = 0;
+  for (const r of result.rows) {
+    const n = parseInt(r.sys_name.slice(4), 10);
+    if (Number.isInteger(n) && n > max) max = n;
+  }
+  return `hall${max + 1}`;
+}
+
 // Проверить и нормализовать тело запроса на создание/редактирование зала.
 // partial = true для PATCH (обновляются только переданные поля).
 function validateHallInput(body, { partial } = {}) {
   const b = body || {};
   const out = {};
 
-  if (b.sysName !== undefined || !partial) {
+  // Системное имя в админке не вводится — сервер генерирует его сам
+  // (см. generateHallSysName). Принимаем только если передано явно (API).
+  if (b.sysName !== undefined) {
     const sysName = String(b.sysName || '').trim().toLowerCase();
     if (!HALL_SYSNAME_REGEX.test(sysName)) {
       return { error: 'Системное имя: латиница/цифры/дефис, 2–32 символа (например hall3)' };
@@ -1578,6 +1594,10 @@ app.post('/api/admin/halls', mutationLimiter, requireAdmin, async (req, res) => 
   const d = v.data;
 
   try {
+    // Имя не задано (обычная работа из админки) — генерируем сами.
+    if (!d.sysName) {
+      d.sysName = await generateHallSysName();
+    }
     const result = await pool.query(
       `INSERT INTO public.halls (sys_name, name, phone, responsible, prices, per_person, schedule, active)
        VALUES ($1,$2,$3,$4,$5::jsonb,$6,$7::jsonb,$8)

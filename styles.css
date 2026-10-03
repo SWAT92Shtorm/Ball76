@@ -110,15 +110,12 @@ th {
   font-weight: 600;
   cursor: pointer;
 }
-.admin-status-btn {
-  background: #2b6cb0;
-  color: #ffffff;
-}
-.admin-status-btn:hover { background: #3182ce; }
+.admin-status-btn,
 .admin-status-exit {
   background: #b8860b;
   color: #1a1a1a;
 }
+.admin-status-btn:hover,
 .admin-status-exit:hover { background: #d4a017; }
 
 #currentDateTime {

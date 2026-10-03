@@ -2162,8 +2162,8 @@ function updateConfirmButton() {
   btn.classList.toggle('confirmed', on);
   btn.classList.toggle('unconfirmed', !on);
   btn.textContent = on
-    ? `✅ Игра подтверждена${adminConfirmState.price != null ? ` — ${adminConfirmState.price} ₽/чел.` : ''}`
-    : '⛔ Подтвердить игру';
+    ? `Игра подтверждена${adminConfirmState.price != null ? ` — ${adminConfirmState.price} ₽/чел.` : ''}`
+    : 'Подтвердить игру';
   btn.title = on ? 'Нажмите, чтобы снять подтверждение' : 'Отметить игру как подтверждённую';
 }
 

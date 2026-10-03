@@ -92,18 +92,32 @@ th {
   color: #ffd76e;
   font-size: 14px;
 }
+.admin-status-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 0 0 auto;
+}
+.admin-status-btn,
 .admin-status-exit {
   flex: 0 0 auto;
   width: auto;
   margin: 0;
   padding: 4px 12px;
-  background: #b8860b;
-  color: #1a1a1a;
   border: none;
   border-radius: 4px;
   font-size: 13px;
   font-weight: 600;
   cursor: pointer;
+}
+.admin-status-btn {
+  background: #2b6cb0;
+  color: #ffffff;
+}
+.admin-status-btn:hover { background: #3182ce; }
+.admin-status-exit {
+  background: #b8860b;
+  color: #1a1a1a;
 }
 .admin-status-exit:hover { background: #d4a017; }
 

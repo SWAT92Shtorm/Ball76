@@ -19,7 +19,7 @@
 
   <title>Запись на баскетбол в Ярославле — ЛОКОМОТИВ и АТЛАНТ</title>
 
-  <link rel="stylesheet" href="styles.css?v=20261003histmeta1">
+  <link rel="stylesheet" href="styles.css?v=20261003cabinet1">
 
 </head>
 <body>
@@ -28,7 +28,10 @@
   <!-- Баннер режима администратора (показывается только админу) -->
   <div id="adminStatusBar" class="admin-status-bar" style="display:none">
     <span class="admin-status-text">🔑 Режим администратора</span>
-    <button class="admin-status-exit" onclick="adminLogout()">Выйти</button>
+    <span class="admin-status-actions">
+      <button class="admin-status-btn" onclick="openAdminPanel()">Настройки</button>
+      <button class="admin-status-exit" onclick="adminLogout()">Выйти</button>
+    </span>
   </div>
 
   <!-- Время вверху -->
@@ -152,7 +155,7 @@
   <div id="adminModal" class="modal-overlay">
     <div class="modal-content admin-modal-content">
       <div class="modal-header">
-        <strong>⚙️ Админ-панель</strong>
+        <strong>⚙️ Кабинет ответственного</strong>
         <span class="modal-close-btn" onclick="closeAdminPanel()">×</span>
       </div>
 
@@ -190,7 +193,7 @@
               <option value="2" selected>2 часа</option>
             </select>
             <button type="button" id="adminConfirmBtn" class="confirm-btn unconfirmed"
-                    onclick="toggleGameConfirm()">⛔ Подтвердить игру</button>
+                    onclick="toggleGameConfirm()">Подтвердить игру</button>
           </div>
           <div class="form-row">
             <label for="adminNote">Причина:</label>
@@ -281,7 +284,7 @@
     <p>Для записи на баскетбол включите JavaScript в браузере.</p>
   </noscript>
 
-  <footer class="app-version" id="appVersion" onclick="onVersionClick()" title="Нажмите для просмотра изменений">v2026.10.03-histmeta1</footer>
+  <footer class="app-version" id="appVersion" onclick="onVersionClick()" title="Нажмите для просмотра изменений">v2026.10.03-cabinet1</footer>
 
   <!-- Модалка changelog -->
   <div id="changelogModal" class="modal-overlay">
@@ -297,6 +300,6 @@
     </div>
   </div>
 
-  <script src="app.js?v=20261003histmeta1"></script>
+  <script src="app.js?v=20261003cabinet1"></script>
 </body>
 </html>

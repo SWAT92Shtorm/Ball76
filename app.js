@@ -2065,6 +2065,262 @@ async function resetGameTime() {
   }
 }
 
+// ==================== 7.8. ADMIN: ЗАЛЫ ====================
+
+// Перестроить селекты залов (основной и админский) из CONFIG.halls.
+// Вызывается после загрузки конфига и после изменения списка залов.
+function populateHallSelects() {
+  const halls = (CONFIG && CONFIG.halls) || {};
+  const ids = Object.keys(halls);
+  if (ids.length === 0) return;
+
+  const mainSel = document.getElementById('hallSelect');
+  const adminSel = document.getElementById('adminHallSelect');
+  const prevMain = mainSel?.value;
+  const prevAdmin = adminSel?.value;
+
+  const optionsHtml = ids.map(id =>
+    `<option value="${escapeHtml(id)}">${escapeHtml(halls[id].name || id)}</option>`
+  ).join('');
+
+  if (mainSel) {
+    mainSel.innerHTML = optionsHtml;
+    mainSel.value = ids.includes(prevMain) ? prevMain : ids[0];
+  }
+  if (adminSel) {
+    adminSel.innerHTML = optionsHtml;
+    adminSel.value = ids.includes(prevAdmin) ? prevAdmin : ids[0];
+  }
+}
+
+// Переключение табов админ-панели.
+function switchAdminTab(tab) {
+  document.querySelectorAll('.admin-tab').forEach(btn => {
+    btn.classList.toggle('active', btn.dataset.tab === tab);
+  });
+  document.getElementById('adminTabTime').classList.toggle('active', tab === 'time');
+  document.getElementById('adminTabHalls').classList.toggle('active', tab === 'halls');
+  if (tab === 'halls') loadAdminHalls();
+}
+
+// Список залов в админке.
+let adminHalls = [];
+
+async function loadAdminHalls() {
+  const box = document.getElementById('adminHallsList');
+  if (!box) return;
+  try {
+    const resp = await fetch(`${API_BASE_URL}/api/admin/halls`, { headers: adminHeaders() });
+    if (resp.status === 403) { adminLogout(); return; }
+    if (!resp.ok) throw new Error('HTTP ' + resp.status);
+    const data = await resp.json();
+    adminHalls = data.halls || [];
+    renderAdminHalls();
+  } catch (e) {
+    box.innerHTML = `<div class="admin-error">Не удалось загрузить залы: ${escapeHtml(e.message)}</div>`;
+  }
+}
+
+function renderAdminHalls() {
+  const box = document.getElementById('adminHallsList');
+  if (!box) return;
+  if (adminHalls.length === 0) {
+    box.innerHTML = '<div class="halls-empty">Залов пока нет</div>';
+    return;
+  }
+  box.innerHTML = adminHalls.map(h => {
+    const days = (h.schedule || []).map(s => `${scheduleDayRu(s.day)} ${s.from}:00–${s.to}:00`).join(', ');
+    const inactive = h.active ? '' : ' <span class="hall-badge-inactive">скрыт</span>';
+    const perPerson = h.perPerson != null ? ` • ${h.perPerson} ₽/чел` : '';
+    return `
+      <div class="hall-item${h.active ? '' : ' hall-item-inactive'}">
+        <div class="hall-item-main">
+          <strong>${escapeHtml(h.name)}</strong>${inactive}
+          <span class="hall-item-sys">${escapeHtml(h.sysName)}</span>
+          <div class="hall-item-sched">${days ? escapeHtml(days) : 'график не задан'}${escapeHtml(perPerson)}</div>
+        </div>
+        <div class="hall-item-actions">
+          <button class="hall-mini-btn" onclick="openHallForm(${h.id})">✎</button>
+        </div>
+      </div>`;
+  }).join('');
+}
+
+// Русское название дня недели по английскому коду из расписания.
+function scheduleDayRu(day) {
+  const map = {
+    Monday: 'Пн', Tuesday: 'Вт', Wednesday: 'Ср', Thursday: 'Чт',
+    Friday: 'Пт', Saturday: 'Сб', Sunday: 'Вс'
+  };
+  return map[day] || day;
+}
+
+let editingHallId = null; // null = создание нового зала
+
+// Открыть форму зала. hallId = null → новый зал.
+function openHallForm(hallId) {
+  editingHallId = hallId;
+  const hall = hallId == null ? null : adminHalls.find(h => h.id === hallId);
+  const wrap = document.getElementById('hallFormWrap');
+  const err = document.getElementById('hallFormError');
+  if (err) err.textContent = '';
+
+  document.getElementById('hallFormTitle').textContent = hall ? 'Редактирование зала' : 'Новый зал';
+  document.getElementById('hallSysName').value = hall ? hall.sysName : '';
+  document.getElementById('hallSysName').disabled = !!(hall && hall.hasGames);
+  document.getElementById('hallName').value = hall ? hall.name : '';
+  document.getElementById('hallPhone').value = hall ? (hall.phone || '') : '';
+  document.getElementById('hallResponsible').value = hall ? (hall.responsible || '') : '';
+  document.getElementById('hallPriceFull').value = hall && hall.prices ? (hall.prices.full ?? '') : '';
+  document.getElementById('hallPriceShort').value = hall && hall.prices ? (hall.prices.short ?? '') : '';
+  document.getElementById('hallPerPerson').value = hall && hall.perPerson != null ? hall.perPerson : '';
+
+  // График
+  const rows = document.getElementById('hallScheduleRows');
+  rows.innerHTML = '';
+  const sched = hall && Array.isArray(hall.schedule) ? hall.schedule : [];
+  if (sched.length === 0) addScheduleRow();
+  else sched.forEach(s => addScheduleRow(s));
+
+  // Кнопка удаления — только для существующего зала.
+  document.getElementById('hallDeleteBtn').style.display = hall ? '' : 'none';
+
+  wrap.style.display = '';
+  wrap.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+}
+
+function closeHallForm() {
+  document.getElementById('hallFormWrap').style.display = 'none';
+  editingHallId = null;
+}
+
+// Добавить строку графика: день недели + часы начала/конца.
+function addScheduleRow(value) {
+  const rows = document.getElementById('hallScheduleRows');
+  const v = value || {};
+  const days = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
+  const dayOpts = days.map(d =>
+    `<option value="${d}"${v.day === d ? ' selected' : ''}>${scheduleDayRu(d)}</option>`
+  ).join('');
+  const row = document.createElement('div');
+  row.className = 'sched-row';
+  row.innerHTML = `
+    <select class="sched-day">${dayOpts}</select>
+    <input type="number" class="sched-from" min="0" max="23" placeholder="21" value="${v.from ?? ''}" />
+    <span class="sched-dash">–</span>
+    <input type="number" class="sched-to" min="1" max="24" placeholder="23" value="${v.to ?? ''}" />
+    <button class="hall-mini-btn sched-del" title="Удалить день">✕</button>`;
+  row.querySelector('.sched-del').addEventListener('click', () => row.remove());
+  rows.appendChild(row);
+}
+
+// Собрать график из строк формы.
+function collectSchedule() {
+  const rows = document.querySelectorAll('#hallScheduleRows .sched-row');
+  const out = [];
+  for (const row of rows) {
+    const day = row.querySelector('.sched-day').value;
+    const from = Number(row.querySelector('.sched-from').value);
+    const to = Number(row.querySelector('.sched-to').value);
+    // Пропускаем полностью пустые строки.
+    if (!row.querySelector('.sched-from').value && !row.querySelector('.sched-to').value) continue;
+    out.push({ day, from, to });
+  }
+  return out;
+}
+
+async function saveHall() {
+  const err = document.getElementById('hallFormError');
+  if (err) err.textContent = '';
+
+  const body = {
+    sysName: document.getElementById('hallSysName').value.trim(),
+    name: document.getElementById('hallName').value.trim(),
+    phone: document.getElementById('hallPhone').value.trim(),
+    responsible: document.getElementById('hallResponsible').value.trim(),
+    prices: {
+      full: Number(document.getElementById('hallPriceFull').value || 0),
+      short: Number(document.getElementById('hallPriceShort').value || 0)
+    },
+    perPerson: document.getElementById('hallPerPerson').value === ''
+      ? null : Number(document.getElementById('hallPerPerson').value),
+    schedule: collectSchedule()
+  };
+
+  const isNew = editingHallId == null;
+  const url = isNew
+    ? `${API_BASE_URL}/api/admin/halls`
+    : `${API_BASE_URL}/api/admin/halls/${encodeURIComponent(
+        adminHalls.find(h => h.id === editingHallId)?.sysName || '')}`;
+
+  try {
+    const resp = await fetch(url, {
+      method: isNew ? 'POST' : 'PATCH',
+      headers: adminHeaders(),
+      body: JSON.stringify(body)
+    });
+    if (resp.status === 403) { adminLogout(); return; }
+    const data = await resp.json().catch(() => ({}));
+    if (!resp.ok) {
+      if (err) err.textContent = data.error || 'Не удалось сохранить зал';
+      else showToast(data.error || 'Не удалось сохранить зал', 'error');
+      return;
+    }
+    adminHalls = data.halls || adminHalls;
+    showToast(isNew ? 'Зал создан' : 'Зал обновлён', 'success');
+    closeHallForm();
+    renderAdminHalls();
+    await refreshPublicConfig();
+  } catch (_) {
+    if (err) err.textContent = 'Ошибка соединения с сервером';
+  }
+}
+
+async function deleteHall() {
+  if (editingHallId == null) return;
+  const hall = adminHalls.find(h => h.id === editingHallId);
+  if (!hall) return;
+
+  const msg = hall.hasGames
+    ? `По залу «${hall.name}» уже есть игры. Он будет скрыт (деактивирован), история сохранится. Продолжить?`
+    : `Удалить зал «${hall.name}» безвозвратно?`;
+  if (!window.confirm(msg)) return;
+
+  try {
+    const resp = await fetch(
+      `${API_BASE_URL}/api/admin/halls/${encodeURIComponent(hall.sysName)}`,
+      { method: 'DELETE', headers: adminHeaders() }
+    );
+    if (resp.status === 403) { adminLogout(); return; }
+    const data = await resp.json().catch(() => ({}));
+    if (!resp.ok) {
+      showToast(data.error || 'Не удалось удалить зал', 'error');
+      return;
+    }
+    adminHalls = data.halls || adminHalls;
+    showToast(data.deactivated ? 'Зал деактивирован (скрыт)' : 'Зал удалён', 'info');
+    closeHallForm();
+    renderAdminHalls();
+    await refreshPublicConfig();
+  } catch (_) {
+    showToast('Ошибка соединения с сервером', 'error');
+  }
+}
+
+// Перечитать публичный конфиг (залы/цены) и перестроить селекты.
+async function refreshPublicConfig() {
+  const ok = await loadConfig();
+  if (ok) {
+    populateHallSelects();
+    const hall = document.getElementById('hallSelect').value;
+    if (hall) {
+      await loadTimeOverrides(hall);
+      showSchedule();
+      showList();
+    }
+  }
+}
+
 // ==================== 8. INIT ====================
 
 window.addEventListener('DOMContentLoaded', async function () {
@@ -2074,6 +2330,9 @@ window.addEventListener('DOMContentLoaded', async function () {
 
   // 0.5. Проверяем соединение сервера с БД (показываем предупреждение при недоступности)
   await checkDbStatus();
+
+  // 0.6. Строим селекты залов из конфига (залы теперь динамические — из БД)
+  populateHallSelects();
 
   // 1. Выбираем ближайший зал (showNearestGame сработает, но isInitialLoad=true → только текст)
   selectNearestHall();

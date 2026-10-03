@@ -19,7 +19,7 @@
 
   <title>Запись на баскетбол в Ярославле — ЛОКОМОТИВ и АТЛАНТ</title>
 
-  <link rel="stylesheet" href="styles.css?v=20261001fix13">
+  <link rel="stylesheet" href="styles.css?v=20261003halls1">
 
 </head>
 <body>
@@ -151,45 +151,117 @@
     </div>
   </div>
 
-  <!-- Модалка админ-панели: управление временем игры -->
+  <!-- Модалка админ-панели: вкладки «Время игры» и «Залы» -->
   <div id="adminModal" class="modal-overlay">
     <div class="modal-content admin-modal-content">
       <div class="modal-header">
         <strong>⚙️ Админ-панель</strong>
         <span class="modal-close-btn" onclick="closeAdminPanel()">×</span>
       </div>
-      <div class="admin-form">
-        <h3 class="admin-section-title">Изменение времени игры</h3>
-        <div class="form-row">
-          <label>Зал:</label>
-          <select id="adminHallSelect">
-            <option value="hall1">ЛОКОМОТИВ</option>
-            <option value="hall2">АТЛАНТ</option>
-          </select>
-        </div>
-        <div class="form-row">
-          <label for="adminDateInput">Дата:</label>
-          <input type="date" id="adminDateInput" />
-        </div>
-        <div id="adminScheduleHint" class="admin-hint"></div>
-        <div class="form-row form-row-time">
-          <label for="adminStartTime">Начало:</label>
-          <input type="time" id="adminStartTime" />
-        </div>
-        <div class="form-row form-row-time">
-          <label for="adminEndTime">Конец:</label>
-          <input type="time" id="adminEndTime" />
-        </div>
-        <div class="form-row">
-          <label for="adminNote">Причина:</label>
-          <input type="text" id="adminNote" maxlength="200" placeholder="Например: турнир в зале" />
-        </div>
-        <div class="admin-preview" id="adminPreview"></div>
+
+      <!-- Табы админ-панели -->
+      <div class="admin-tabs">
+        <button class="admin-tab active" data-tab="time" onclick="switchAdminTab('time')">🕒 Время игры</button>
+        <button class="admin-tab" data-tab="halls" onclick="switchAdminTab('halls')">🏢 Залы</button>
       </div>
-      <div class="modal-footer">
-        <button class="modal-btn modal-btn-danger" onclick="resetGameTime()">Сбросить к расписанию</button>
-        <button class="modal-btn modal-btn-primary" onclick="saveGameTime()">Сохранить</button>
-        <button class="modal-btn modal-btn-cancel" onclick="adminLogout()">Выйти</button>
+
+      <!-- Вкладка: время игры -->
+      <div id="adminTabTime" class="admin-tab-panel active">
+        <div class="admin-form">
+          <h3 class="admin-section-title">Изменение времени игры</h3>
+          <div class="form-row">
+            <label>Зал:</label>
+            <select id="adminHallSelect">
+              <option value="hall1">ЛОКОМОТИВ</option>
+              <option value="hall2">АТЛАНТ</option>
+            </select>
+          </div>
+          <div class="form-row">
+            <label for="adminDateInput">Дата:</label>
+            <input type="date" id="adminDateInput" />
+          </div>
+          <div id="adminScheduleHint" class="admin-hint"></div>
+          <div class="form-row form-row-time">
+            <label for="adminStartTime">Начало:</label>
+            <input type="time" id="adminStartTime" />
+          </div>
+          <div class="form-row form-row-time">
+            <label for="adminEndTime">Конец:</label>
+            <input type="time" id="adminEndTime" />
+          </div>
+          <div class="form-row">
+            <label for="adminNote">Причина:</label>
+            <input type="text" id="adminNote" maxlength="200" placeholder="Например: турнир в зале" />
+          </div>
+          <div class="admin-preview" id="adminPreview"></div>
+        </div>
+        <div class="modal-footer">
+          <button class="modal-btn modal-btn-danger" onclick="resetGameTime()">Сбросить к расписанию</button>
+          <button class="modal-btn modal-btn-primary" onclick="saveGameTime()">Сохранить</button>
+          <button class="modal-btn modal-btn-cancel" onclick="adminLogout()">Выйти</button>
+        </div>
+      </div>
+
+      <!-- Вкладка: залы -->
+      <div id="adminTabHalls" class="admin-tab-panel">
+        <!-- Список залов -->
+        <div class="admin-form">
+          <h3 class="admin-section-title">Залы и график</h3>
+          <div id="adminHallsList" class="halls-list">Загрузка…</div>
+          <button class="modal-btn modal-btn-primary halls-add-btn" onclick="openHallForm(null)">
+            ➕ Добавить зал
+          </button>
+        </div>
+
+        <!-- Форма создания/редактирования зала (скрыта, пока не открыта) -->
+        <div id="hallFormWrap" class="admin-form hall-form-wrap" style="display:none">
+          <h3 class="admin-section-title" id="hallFormTitle">Новый зал</h3>
+          <div class="form-row">
+            <label for="hallSysName">Системное имя:</label>
+            <input type="text" id="hallSysName" placeholder="hall3" maxlength="32" />
+          </div>
+          <div class="form-row">
+            <label for="hallName">Название:</label>
+            <input type="text" id="hallName" placeholder="ЛОКОМОТИВ" maxlength="60" />
+          </div>
+          <div class="form-row">
+            <label for="hallPhone">Телефон:</label>
+            <input type="text" id="hallPhone" placeholder="+7 (999) 000-00-00" maxlength="40" />
+          </div>
+          <div class="form-row">
+            <label for="hallResponsible">Ответственный:</label>
+            <input type="text" id="hallResponsible" placeholder="Иванов Иван" maxlength="80" />
+          </div>
+          <div class="form-row form-row-time">
+            <label for="hallPriceFull">Цена (2 ч), ₽:</label>
+            <input type="number" id="hallPriceFull" min="0" step="100" placeholder="6000" />
+          </div>
+          <div class="form-row form-row-time">
+            <label for="hallPriceShort">Цена (1.5 ч), ₽:</label>
+            <input type="number" id="hallPriceShort" min="0" step="100" placeholder="4500" />
+          </div>
+          <div class="form-row">
+            <label for="hallPerPerson">С человека, ₽:</label>
+            <input type="number" id="hallPerPerson" min="0" step="50" placeholder="пусто = делить аренду" />
+          </div>
+
+          <h4 class="admin-subtitle">График игр</h4>
+          <div id="hallScheduleRows"></div>
+          <button class="modal-btn modal-btn-cancel hall-sched-add" onclick="addScheduleRow()">
+            ➕ Добавить день
+          </button>
+
+          <div id="hallFormError" class="admin-error"></div>
+          <div class="modal-footer hall-form-footer">
+            <button class="modal-btn modal-btn-danger" id="hallDeleteBtn" style="display:none" onclick="deleteHall()">Удалить</button>
+            <button class="modal-btn modal-btn-cancel" onclick="closeHallForm()">Отмена</button>
+            <button class="modal-btn modal-btn-primary" onclick="saveHall()">Сохранить</button>
+          </div>
+        </div>
+
+        <div class="modal-footer">
+          <button class="modal-btn modal-btn-cancel" onclick="adminLogout()">Выйти</button>
+        </div>
       </div>
     </div>
   </div>
@@ -229,6 +301,6 @@
     </div>
   </div>
 
-  <script src="app.js?v=20261001fix14"></script>
+  <script src="app.js?v=20261003halls1"></script>
 </body>
 </html>

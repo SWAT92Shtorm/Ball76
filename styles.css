@@ -93,7 +93,9 @@ th {
   font-size: 14px;
 }
 .admin-status-exit {
-  flex-shrink: 0;
+  flex: 0 0 auto;
+  width: auto;
+  margin: 0;
   padding: 4px 12px;
   background: #b8860b;
   color: #1a1a1a;

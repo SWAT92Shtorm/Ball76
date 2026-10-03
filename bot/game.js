@@ -171,16 +171,22 @@ export async function nearestGame(hallId) {
   return describeGame(hallId, date, cfg.halls[hallId].name);
 }
 
-/** Расписание залов текстом. */
+/** Расписание залов текстом (без системных имён — только названия). */
 export async function scheduleText() {
   const cfg = await getConfigCached();
   const lines = ['📅 Расписание игр:'];
-  for (const [id, h] of Object.entries(cfg.halls)) {
-    const days = (h.schedule || [])
+  for (const h of Object.values(cfg.halls)) {
+    const schedule = h.schedule || [];
+    if (schedule.length === 0) {
+      lines.push(`\n${h.name}: график не задан`);
+      continue;
+    }
+    const days = schedule
       .map((s) => ({ Tuesday: 'вт', Thursday: 'чт', Friday: 'пт', Monday: 'пн', Wednesday: 'ср', Saturday: 'сб', Sunday: 'вс' }[s.day]))
       .join('/');
-    const from = String(h.schedule?.[0]?.from ?? '').padStart(2, '0');
-    lines.push(`\n${h.name} (${id}): ${days}, ${from}:00–${String(h.schedule?.[0]?.to ?? '').padStart(2, '0')}:00`);
+    const from = String(schedule[0].from).padStart(2, '0');
+    const to = String(schedule[0].to).padStart(2, '0');
+    lines.push(`\n${h.name}: ${days}, ${from}:00–${to}:00`);
   }
   return lines.join('\n');
 }

@@ -68,8 +68,8 @@ export const toolDefs = [
 async function invalidHallText() {
   try {
     const cfg = await getConfigCached();
-    const list = Object.entries(cfg.halls || {})
-      .map(([id, h]) => `${h.name} (${id})`)
+    const list = Object.values(cfg.halls || {})
+      .map((h) => h.name)
       .join(', ');
     return list
       ? `Неизвестный зал. Доступны: ${list}.`

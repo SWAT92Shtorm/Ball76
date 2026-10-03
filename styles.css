@@ -1335,12 +1335,13 @@ th {
   transition: background 0.15s ease, border-color 0.15s ease;
 }
 .confirm-btn.unconfirmed {
-  background: #c62828;
-  border-color: #e57373;
-  color: #ffffff;
+  /* Тот же цвет, что у кнопки «Настройки» в верхней панели. */
+  background: #b8860b;
+  border-color: #d4a017;
+  color: #1a1a1a;
 }
 .confirm-btn.unconfirmed:hover {
-  background: #a02020;
+  background: #d4a017;
 }
 .confirm-btn.confirmed {
   /* Подтверждённая игра: кнопка с длинной подписью растягивается на всю
@@ -1368,8 +1369,10 @@ th {
   opacity: 1;
   cursor: not-allowed;
   background: #1a1a1a;
-  color: #e0e0e0;
-  -webkit-text-fill-color: #e0e0e0;
+  /* Текст чуть темнее активного поля — видно, что поле заблокировано,
+     но значение остаётся читаемым. */
+  color: #9a9a9a;
+  -webkit-text-fill-color: #9a9a9a;
   border-color: #3a3a3a;
 }
 /* Иконки/стрелки нативных date/time, чтобы не выглядели выключенными */

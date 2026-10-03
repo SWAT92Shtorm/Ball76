@@ -1059,25 +1059,24 @@ function showSchedule() {
     if (isToday) classes.push('today');
     if (isNearest) classes.push('nearest');
 
+    // «+N» — активность записи в этот день (по дате подписи), а не число
+    // игроков на игру. Запись в субботу на игру во вторник даёт +1 в субботу.
+    const dayCnt = (signupStats && signupStats.byDate && signupStats.byDate[dateStr]) || 0;
+    const cntHtml = dayCnt > 0 ? `<div class="sched-stats">+${dayCnt}</div>` : '';
+
     let slotHtml;
     if (ov) {
       // Игра с заданным временем: изменение расписания либо игра вне графика.
       const cls = ov.isExtra ? 'sched-slot sched-slot-extra' : 'sched-slot sched-slot-changed';
       const mark = ov.isExtra ? ' ⭐' : ' ⚠️';
-      slotHtml = `<div class="${cls}">${escapeHtml(ov.startTime)}${mark}</div>`;
+      slotHtml = `<div class="${cls}">${escapeHtml(ov.startTime)}${mark}</div>${cntHtml}`;
     } else if (slots.length) {
       // Показываем только время начала: длительность игры выбирается отдельно.
       slotHtml = slots
         .map(s => `<div class="sched-slot">${String(s.from).padStart(2, '0')}:00</div>`)
-        .join('');
-    } else if (signupStats) {
-      const dayCnt = (signupStats.byDate && signupStats.byDate[dateStr]) || 0;
-      const showCnt = dayCnt > 0 ? dayCnt : (isToday ? signupStats.total : 0);
-      slotHtml = showCnt > 0
-        ? `<div class="sched-stats">+${showCnt}</div>`
-        : '<div class="sched-off">—</div>';
+        .join('') + cntHtml;
     } else {
-      slotHtml = '<div class="sched-off">—</div>';
+      slotHtml = cntHtml || '<div class="sched-off">—</div>';
     }
 
     return `
@@ -2176,7 +2175,7 @@ function updateConfirmButton() {
 // изменить согласованное время/длительность/причину. Кнопки «Сохранить» и
 // «Сбросить к расписанию» скрываются. Снятие подтверждения возвращает доступ.
 function applyConfirmLock(locked) {
-  ['adminStartTime', 'adminDuration', 'adminNote'].forEach(id => {
+  ['adminDateInput', 'adminStartTime', 'adminDuration', 'adminNote'].forEach(id => {
     const el = document.getElementById(id);
     if (!el) return;
     el.disabled = locked;

@@ -1329,6 +1329,12 @@ function formatShortDate(dateStr) {
   return text.replace('.', '');
 }
 
+// «Фамилия Имя» из полного ФИО (отчество опускаем).
+function shortName(fullName) {
+  const parts = String(fullName || '').trim().split(/\s+/).filter(Boolean);
+  return parts.slice(0, 2).join(' ');
+}
+
 // История записей в виде карточек-таймлайна под списком участников
 function showHistoryTable() {
   const hall = document.getElementById('hallSelect').value;
@@ -1354,7 +1360,7 @@ function showHistoryTable() {
 
   const cards = entries.map((entry, i) => {
     const label = i === 0 ? 'предыдущая игра' : 'игра до неё';
-    const chips = entry.players.map(p => `<span class="hist-chip">${escapeHtml(p)}</span>`).join('');
+    const chips = entry.players.map(p => `<span class="hist-chip">${escapeHtml(shortName(p))}</span>`).join('');
     return `
       <div class="hist-card">
         <div class="hist-head">

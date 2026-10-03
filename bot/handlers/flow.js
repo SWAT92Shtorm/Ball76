@@ -6,7 +6,7 @@
 import { InlineKeyboard } from 'grammy';
 import { getConfigCached, upcomingDates, describeGame, doSignup, doCancel, scheduleText, nearestGame } from '../game.js';
 import { api, todayMSK } from '../api.js';
-import { mainMenu, hallPicker, confirm, menuHint, siteUrl } from '../keyboards.js';
+import { mainMenu, hallPicker, confirm } from '../keyboards.js';
 import { getLink, upsertLink } from '../db.js';
 import { log } from '../logger.js';
 
@@ -47,7 +47,7 @@ function rememberPendingName(id, name) {
 
 /** Переслать главное меню. */
 export async function sendMenu(ctx, text = '🏀 Главное меню') {
-  await ctx.reply(`${text}\n${menuHint}`, { reply_markup: mainMenu() });
+  await ctx.reply(text, { reply_markup: mainMenu() });
 }
 
 /** Нормализация ФИО для сравнения. */
@@ -233,7 +233,7 @@ export async function handleStart(ctx, payload) {
   const link = await getLink(from.id);
   if (link && link.player_name) {
     await ctx.reply(
-      `🏀 С возвращением, ${link.player_name}!\n${menuHint}`,
+      `🏀 С возвращением, ${link.player_name}!`,
       { reply_markup: mainMenu() }
     );
     return;
@@ -243,8 +243,7 @@ export async function handleStart(ctx, payload) {
     '🏀 Привет! Я бот записи на баскетбол Ball76.\n\n' +
     'ЛОКОМОТИВ — вт/чт 21:00\nАТЛАНТ — пт 21:00\n\n' +
     'Чтобы записываться, отправьте ваше ФИО (Фамилия Имя Отчество).\n' +
-    'Если вас ещё нет в базе — я предложу добавить вас как нового участника.\n\n' +
-    `🌐 Все записи можно посмотреть на сайте: ${siteUrl}`,
+    'Если вас ещё нет в базе — я предложу добавить вас как нового участника.',
     { reply_markup: mainMenu() }
   );
 }

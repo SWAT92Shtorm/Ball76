@@ -51,6 +51,3 @@ export function subscribeHint(botUsername) {
     `https://t.me/${botUsername}?start=subscribe`
   );
 }
-
-export const menuHint =
-  'Выберите действие 👇\n🌐 Все записи смотрите на сайте: ' + siteUrl;

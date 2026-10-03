@@ -89,8 +89,13 @@ REST API — ИИ **никогда не пишет в БД напрямую**.
 
 ### База данных
 
-- Таблицы: `players`, `games`, `game_players` (PK `(game_id, player_id)`)
+- Таблицы: `players`, `games`, `game_players` (PK `(game_id, player_id)`), `halls`, `telegram_links`, `telegram_chats`
+- `games` хранит время игры (`start_time`/`end_time`/`time_note`) и подтверждение
+  (`confirmed`, `confirmed_at`, `confirmed_price`, `confirmed_players`) — миграция
+  [`005_game_confirmation.sql`](migrations/005_game_confirmation.sql:1)
 - Миграции: [`migrations/`](migrations) (например [`001_game_time_override.sql`](migrations/001_game_time_override.sql))
+- Схема залов и поля подтверждения создаются идемпотентно при старте сервера
+  ([`ensureHallsSchema()`](server.js:335), [`ensureGameConfirmSchema()`](server.js:376))
 - Бот **добавляет свою таблицу**, существующие не трогает
 
 ---

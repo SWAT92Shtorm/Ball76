@@ -36,6 +36,7 @@ pool.query('SELECT 1')
     // Идемпотентно создаём таблицу залов (миграция 003) и загружаем кэш.
     return ensureHallsSchema();
   })
+  .then(() => ensureGameConfirmSchema())
   .then(() => loadHallsFromDB())
   .catch(err => {
     console.error('❌ Ошибка подключения к PostgreSQL:', err.message);
@@ -367,6 +368,19 @@ async function ensureHallsSchema() {
     );
     console.log('✅ Таблица halls создана и заполнена залами по умолчанию');
   }
+}
+
+// Идемпотентно добавить поля подтверждения игры (миграция 005).
+// Дублирует migrations/005_game_confirmation.sql, чтобы сервер был
+// самодостаточен (миграция применяется автоматически при старте).
+async function ensureGameConfirmSchema() {
+  await pool.query(`
+    ALTER TABLE public.games
+      ADD COLUMN IF NOT EXISTS confirmed         boolean NOT NULL DEFAULT false,
+      ADD COLUMN IF NOT EXISTS confirmed_at      timestamp without time zone,
+      ADD COLUMN IF NOT EXISTS confirmed_price   integer,
+      ADD COLUMN IF NOT EXISTS confirmed_players integer
+  `);
 }
 
 // Активен ли зал (используется в публичных эндпоинтах).
@@ -928,6 +942,9 @@ app.post('/api/players/:hallId', mutationLimiter, async (req, res) => {
 
     await client.query('COMMIT');
 
+    // Состав изменился — пересчитываем снимок, если игра подтверждена.
+    await refreshConfirmedSnapshot(hallId, date).catch(() => {});
+
     const players = gamePlayers.rows.map(r => r.name);
 
     res.json({
@@ -1274,6 +1291,9 @@ app.delete('/api/players/:hallId/:date/:name', mutationLimiter, async (req, res)
       [hallId, date]
     );
 
+    // Состав изменился — пересчитываем снимок, если игра подтверждена.
+    await refreshConfirmedSnapshot(hallId, date).catch(() => {});
+
     const playerNames = updatedResult.rows.map(row => row.name);
 
     res.json({
@@ -1329,6 +1349,9 @@ app.get('/api/history', readLimiter, async (req, res) => {
         `SELECT
         g.hall_id,
         g.date,
+        g.confirmed,
+        g.confirmed_price,
+        g.confirmed_players,
         p.name
         FROM game_players gp
         JOIN players p ON gp.player_id = p.id
@@ -1336,7 +1359,9 @@ app.get('/api/history', readLimiter, async (req, res) => {
         ORDER BY g.date DESC, gp.created_at ASC, p.name;`
     );
 
-    // собрать в структуру вида historyByDate[date][hallId] = [names...]
+    // Структура: historyByDate[date][hallId] = { players: [names...],
+    //                                            confirmed, price, playersCount }
+    // Подтверждение берём из строки, где оно установлено.
     const historyByDate = {};
 
     result.rows.forEach(row => {
@@ -1348,11 +1373,23 @@ app.get('/api/history', readLimiter, async (req, res) => {
         historyByDate[date] = {};
       }
       if (!historyByDate[date][hallId]) {
-        historyByDate[date][hallId] = [];
+        historyByDate[date][hallId] = {
+          players: [],
+          confirmed: false,
+          price: null,
+          playersCount: null
+        };
       }
 
-      if (!historyByDate[date][hallId].includes(name)) {
-        historyByDate[date][hallId].push(name);
+      const entry = historyByDate[date][hallId];
+      if (!entry.players.includes(name)) {
+        entry.players.push(name);
+      }
+      // Подтверждение могло стоять на любой из строк игры этой даты.
+      if (row.confirmed) {
+        entry.confirmed = true;
+        if (row.confirmed_price != null) entry.price = Number(row.confirmed_price);
+        if (row.confirmed_players != null) entry.playersCount = Number(row.confirmed_players);
       }
     });
 
@@ -1780,12 +1817,71 @@ function formatHour(h) {
   return String(h).padStart(2, '0') + ':00';
 }
 
+// Снимок суммы на одного человека для подтверждённой игры.
+// Если у зала задана фиксированная сумма (perPerson) — берём её.
+// Иначе делим цену аренды за подтверждённую длительность на число
+// записавшихся (в пределах лимита maxPlayers). Возвращает целое число ₽.
+function computeConfirmedPrice(hallId, startTime, endTime, playersCount) {
+  const hall = hallsCache[hallId] || {};
+  if (hall.perPerson != null && Number(hall.perPerson) > 0) {
+    return Math.round(Number(hall.perPerson));
+  }
+  const prices = normalizePrices(hall.prices);
+  const duration = durationHours(startTime, endTime);
+  let total;
+  if (duration <= 1.25) total = prices.hourly;
+  else if (duration <= 1.75) total = prices.short;
+  else total = prices.full;
+  const count = Math.min(Math.max(Number(playersCount) || 0, 1), APP_CONFIG.maxPlayers);
+  return Math.round(total / count);
+}
+
+// Пересчитать снимок подтверждённой игры (вызывается после смены времени
+// или состава участников). Если игра не подтверждена — ничего не делает.
+async function refreshConfirmedSnapshot(hallId, dateStr) {
+  const row = await pool.query(
+    `SELECT confirmed, start_time, end_time FROM games
+      WHERE hall_id = $1 AND date = $2
+      ORDER BY (start_time IS NOT NULL) DESC, id DESC LIMIT 1`,
+    [hallId, dateStr]
+  );
+  if (!row.rows[0] || !row.rows[0].confirmed) return;
+
+  const info = await getGameTime(hallId, dateStr);
+  const cnt = await pool.query(
+    `SELECT COUNT(*)::int AS n FROM game_players gp
+       JOIN games g ON gp.game_id = g.id
+      WHERE g.hall_id = $1 AND g.date = $2`,
+    [hallId, dateStr]
+  );
+  const playersCount = cnt.rows[0] ? cnt.rows[0].n : 0;
+  const price = computeConfirmedPrice(hallId, info.startTime, info.endTime, playersCount);
+
+  await pool.query(
+    `UPDATE games SET confirmed_price = $3, confirmed_players = $4
+      WHERE hall_id = $1 AND date = $2`,
+    [hallId, dateStr, price, playersCount]
+  );
+}
+
+// Длительность игры в часах по началу и концу 'HH:MM' (с переходом через
+// полночь). Если конец не задан — считаем 2 часа (как в админке по умолчанию).
+function durationHours(startTime, endTime) {
+  if (!isValidTime(startTime) || !isValidTime(endTime)) return 2;
+  const [sh, sm] = startTime.split(':').map(Number);
+  const [eh, em] = endTime.split(':').map(Number);
+  let diff = (eh * 60 + em) - (sh * 60 + sm);
+  if (diff < 0) diff += 24 * 60;
+  return diff / 60;
+}
+
 // Эффективное время игры: override из БД, если задан, иначе расписание.
 // На таблице games уникальность (hall_id, date) не гарантирована, поэтому
 // строку с заданным override выбираем приоритетно.
 async function getGameTime(hallId, dateStr) {
   const result = await pool.query(
-    `SELECT start_time, end_time, time_note, time_changed_at
+    `SELECT start_time, end_time, time_note, time_changed_at,
+            confirmed, confirmed_at, confirmed_price, confirmed_players
        FROM games WHERE hall_id = $1 AND date = $2
        ORDER BY (start_time IS NOT NULL) DESC, id DESC
        LIMIT 1`,
@@ -1798,6 +1894,12 @@ async function getGameTime(hallId, dateStr) {
   // расписании), время для которой задал админ.
   const isExtra = hasOverride && !schedule;
 
+  const confirmed = !!(row && row.confirmed);
+  const confirmedPrice = confirmed && row.confirmed_price != null
+    ? Number(row.confirmed_price) : null;
+  const confirmedPlayers = confirmed && row.confirmed_players != null
+    ? Number(row.confirmed_players) : null;
+
   if (hasOverride) {
     return {
       startTime: row.start_time,
@@ -1806,6 +1908,9 @@ async function getGameTime(hallId, dateStr) {
       changedAt: row.time_changed_at || null,
       isOverride: true,
       isExtra,
+      confirmed,
+      confirmedPrice,
+      confirmedPlayers,
       scheduledFrom: schedule ? formatHour(schedule.from) : null,
       scheduledTo: schedule ? formatHour(schedule.to) : null
     };
@@ -1818,6 +1923,9 @@ async function getGameTime(hallId, dateStr) {
     changedAt: null,
     isOverride: false,
     isExtra: false,
+    confirmed,
+    confirmedPrice,
+    confirmedPlayers,
     scheduledFrom: schedule ? formatHour(schedule.from) : null,
     scheduledTo: schedule ? formatHour(schedule.to) : null
   };
@@ -1984,6 +2092,8 @@ app.patch('/api/games/:hallId/:date/time', mutationLimiter, requireAdmin, async 
     } finally {
       client.release();
     }
+    // Если игра была подтверждена — пересчитываем снимок под новое время.
+    await refreshConfirmedSnapshot(hallId, date);
     const info = await getGameTime(hallId, date);
     res.json(info);
   } catch (err) {
@@ -2031,6 +2141,92 @@ app.delete('/api/games/:hallId/:date/time', mutationLimiter, requireAdmin, async
   } catch (err) {
     console.error('Ошибка сброса времени игры:', err);
     res.status(500).json({ error: 'Failed to reset game time' });
+  }
+});
+
+/**
+ * @swagger
+ * /api/games/{hallId}/{date}/confirm:
+ *   patch:
+ *     summary: Подтвердить/снять подтверждение игры
+ *     description: Только для администратора. Фиксирует снимок суммы на человека.
+ *     tags: [Games]
+ *     parameters:
+ *       - in: path
+ *         name: hallId
+ *         required: true
+ *         schema: { type: string }
+ *       - in: path
+ *         name: date
+ *         required: true
+ *         schema: { type: string, format: date }
+ *     responses:
+ *       200:
+ *         description: Состояние подтверждения
+ *       403:
+ *         description: Требуется вход администратора
+ */
+app.patch('/api/games/:hallId/:date/confirm', mutationLimiter, requireAdmin, async (req, res) => {
+  const { hallId, date } = req.params;
+  const confirmed = !!(req.body && req.body.confirmed);
+
+  if (!isKnownHall(hallId) || !isValidDateStr(date)) {
+    return res.status(400).json({ error: 'Неверный зал или дата' });
+  }
+
+  try {
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+
+      // Текущее время игры (override или расписание) — для расчёта длительности.
+      const info = await getGameTime(hallId, date);
+
+      // Число записавшихся на эту игру.
+      const cnt = await client.query(
+        `SELECT COUNT(*)::int AS n
+           FROM game_players gp
+           JOIN games g ON gp.game_id = g.id
+          WHERE g.hall_id = $1 AND g.date = $2`,
+        [hallId, date]
+      );
+      const playersCount = cnt.rows[0] ? cnt.rows[0].n : 0;
+
+      let price = null;
+      if (confirmed) {
+        price = computeConfirmedPrice(hallId, info.startTime, info.endTime, playersCount);
+      }
+
+      const upd = await client.query(
+        `UPDATE games
+            SET confirmed = $3,
+                confirmed_at = CASE WHEN $3 THEN now() ELSE NULL END,
+                confirmed_price = $4,
+                confirmed_players = $5
+          WHERE hall_id = $1 AND date = $2`,
+        [hallId, date, confirmed, price, confirmed ? playersCount : null]
+      );
+      if (upd.rowCount === 0) {
+        await client.query(
+          `INSERT INTO games (hall_id, date, confirmed, confirmed_at, confirmed_price, confirmed_players)
+            VALUES ($1, $2, $3, CASE WHEN $3 THEN now() ELSE NULL END, $4, $5)`,
+          [hallId, date, confirmed, price, confirmed ? playersCount : null]
+        );
+      }
+
+      await client.query('COMMIT');
+    } catch (txErr) {
+      try { await client.query('ROLLBACK'); } catch (_) {}
+      throw txErr;
+    } finally {
+      client.release();
+    }
+
+    const info = await getGameTime(hallId, date);
+    res.json(info);
+  } catch (err) {
+    console.error('Ошибка подтверждения игры:', err);
+    res.status(500).json({ error: 'Failed to confirm game' });
   }
 });
 

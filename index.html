@@ -19,7 +19,7 @@
 
   <title>Запись на баскетбол в Ярославле — ЛОКОМОТИВ и АТЛАНТ</title>
 
-  <link rel="stylesheet" href="styles.css?v=20261003duration1">
+  <link rel="stylesheet" href="styles.css?v=20261003confirm1">
 
 </head>
 <body>
@@ -198,6 +198,8 @@
               <option value="1.5">1,5 часа</option>
               <option value="2" selected>2 часа</option>
             </select>
+            <button type="button" id="adminConfirmBtn" class="confirm-btn unconfirmed"
+                    onclick="toggleGameConfirm()">⛔ Подтвердить игру</button>
           </div>
           <div class="form-row">
             <label for="adminNote">Причина:</label>
@@ -288,7 +290,7 @@
     <p>Для записи на баскетбол включите JavaScript в браузере.</p>
   </noscript>
 
-  <footer class="app-version" id="appVersion" onclick="onVersionClick()" title="Нажмите для просмотра изменений">v2026.10.01-fix13</footer>
+  <footer class="app-version" id="appVersion" onclick="onVersionClick()" title="Нажмите для просмотра изменений">v2026.10.03-confirm1</footer>
 
   <!-- Модалка changelog -->
   <div id="changelogModal" class="modal-overlay">
@@ -304,6 +306,6 @@
     </div>
   </div>
 
-  <script src="app.js?v=20261003shortname1"></script>
+  <script src="app.js?v=20261003confirm1"></script>
 </body>
 </html>

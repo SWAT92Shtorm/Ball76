@@ -458,6 +458,31 @@ th {
   white-space: nowrap;
 }
 
+.hist-meta {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+/* Сумма на человека у подтверждённой игры в истории */
+.hist-price {
+  font-size: 12px;
+  font-weight: 700;
+  color: #7ee2a8;
+  background: rgba(46, 204, 113, 0.12);
+  border: 1px solid rgba(46, 204, 113, 0.35);
+  border-radius: 10px;
+  padding: 2px 10px;
+  white-space: nowrap;
+}
+
+/* Подтверждённая игра — лёгкая зелёная рамка карточки */
+.hist-card-confirmed {
+  border-color: rgba(46, 204, 113, 0.45);
+}
+
 .hist-chips {
   display: flex;
   flex-wrap: wrap;
@@ -1277,6 +1302,43 @@ th {
   border: 1px dashed rgba(255, 152, 0, 0.4);
   color: #ffd699;
   font-size: 13px;
+}
+
+/* Кнопка подтверждения игры: красная (нет) → зелёная (да). Обратимая.
+   width/flex переопределяем: глобальный button как flex-item иначе
+   растягивается на всю строку. */
+.confirm-btn {
+  flex: 0 0 auto;
+  width: auto;
+  margin: 0;
+  padding: 8px 12px;
+  border-radius: 5px;
+  border: 1px solid transparent;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background 0.15s ease, border-color 0.15s ease;
+}
+.confirm-btn.unconfirmed {
+  background: #c62828;
+  border-color: #e57373;
+  color: #ffffff;
+}
+.confirm-btn.unconfirmed:hover {
+  background: #a02020;
+}
+.confirm-btn.confirmed {
+  background: #2e7d32;
+  border-color: #66bb6a;
+  color: #ffffff;
+}
+.confirm-btn.confirmed:hover {
+  background: #256428;
+}
+.confirm-btn:disabled {
+  opacity: 0.6;
+  cursor: default;
 }
 
 /* ==== Табы админ-панели ==== */

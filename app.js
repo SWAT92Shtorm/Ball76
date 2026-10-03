@@ -571,7 +571,7 @@ async function loadFromAPI({ silent = false, refreshHall = true } = {}) {
     Object.keys(historyByDate).forEach(dateStr => {
       const dateData = historyByDate[dateStr];
       for (const hallId in dateData) {
-        (dateData[hallId] || []).forEach(name => {
+        (dateData[hallId]?.players || []).forEach(name => {
           if (name) allNames.add(name.trim());
         });
       }
@@ -1156,7 +1156,7 @@ function rebuildVisitCounts(hall) {
   const counts = {};
   const now = getMSKNow();
   for (const dateStr in historyByDate) {
-    const players = historyByDate[dateStr][hall];
+    const players = historyByDate[dateStr][hall]?.players;
     if (!players) continue;
     const sessionDate = new Date(dateStr + 'T21:00:00');
     if (sessionDate >= now) continue; // только прошедшие
@@ -1349,7 +1349,15 @@ function showHistoryTable() {
   const today = mskToday();
   const entries = Object.keys(historyByDate)
     .filter(dateStr => dateStr < today)
-    .map(dateStr => ({ date: dateStr, players: historyByDate[dateStr][hall] || [] }))
+    .map(dateStr => {
+      const h = historyByDate[dateStr][hall] || {};
+      return {
+        date: dateStr,
+        players: h.players || [],
+        confirmed: !!h.confirmed,
+        price: h.price
+      };
+    })
     .filter(e => e.players.length > 0)
     .sort((a, b) => (a.date < b.date ? 1 : a.date > b.date ? -1 : 0))
     .slice(0, 2);
@@ -1361,14 +1369,21 @@ function showHistoryTable() {
   const cards = entries.map((entry, i) => {
     const label = i === 0 ? 'предыдущая игра' : 'игра до неё';
     const chips = entry.players.map(p => `<span class="hist-chip">${escapeHtml(shortName(p))}</span>`).join('');
+    // Для подтверждённой игры рядом с числом показываем сумму на человека.
+    const priceMark = (entry.confirmed && entry.price != null)
+      ? `<span class="hist-price" title="Сумма к оплате за одного человека">💰 ${escapeHtml(entry.price)} ₽/чел.</span>`
+      : '';
     return `
-      <div class="hist-card">
+      <div class="hist-card${entry.confirmed ? ' hist-card-confirmed' : ''}">
         <div class="hist-head">
           <div class="hist-date">
             <span class="hist-date-main">${formatShortDate(entry.date)}</span>
             <span class="hist-date-sub">${label}</span>
           </div>
-          <div class="hist-count">${entry.players.length} чел.</div>
+          <div class="hist-meta">
+            <span class="hist-count">${entry.players.length} чел.</span>
+            ${priceMark}
+          </div>
         </div>
         <div class="hist-chips">${chips}</div>
       </div>
@@ -1415,7 +1430,7 @@ function collectAllNamesFromHistory() {
   for (const dateStr in historyByDate) {
     const dateData = historyByDate[dateStr];
     for (const hallId in dateData) {
-      (dateData[hallId] || []).forEach(name => {
+      (dateData[hallId]?.players || []).forEach(name => {
         if (name) allNames.add(name.trim());
       });
     }
@@ -1625,6 +1640,14 @@ function closeTeamsModal() {
 // ==================== 7.5. CHANGELOG (модалка истории версий) ====================
 
 const CHANGELOG = [
+  {
+    label: 'v2026.10.03 — подтверждение игры',
+    items: [
+      '✅ Админ отмечает игру подтверждённой (кнопка красная → зелёная)',
+      '💰 В истории у подтверждённой игры — сумма к оплате на человека',
+      '🔄 Подтверждение хранится по дате и переживает перезагрузку страницы'
+    ]
+  },
   {
     label: 'v2026.10.01 — Telegram-аккаунты в списке',
     items: [
@@ -1855,6 +1878,9 @@ const ADMIN_TOKEN_KEY = 'ball76_admin_token';
 let adminToken = null;
 try { adminToken = localStorage.getItem(ADMIN_TOKEN_KEY); } catch (_) {}
 
+// Состояние подтверждения текущей игры (зал+дата), загружается из API.
+let adminConfirmState = { confirmed: false, price: null, players: null };
+
 function isAdmin() { return !!adminToken; }
 
 // Показать/скрыть баннер «Режим администратора» над строкой даты.
@@ -2012,6 +2038,14 @@ async function loadAdminGameTime() {
     document.getElementById('adminDuration').value = durationFromTimes(info.startTime, info.endTime);
     document.getElementById('adminNote').value = info.note || '';
 
+    // Состояние подтверждения (обратимое) — кнопка красная/зелёная.
+    adminConfirmState = {
+      confirmed: !!info.confirmed,
+      price: info.confirmedPrice != null ? info.confirmedPrice : null,
+      players: info.confirmedPlayers != null ? info.confirmedPlayers : null
+    };
+    updateConfirmButton();
+
     if (hint) {
       if (info.scheduledFrom) {
         // Обычный день расписания.
@@ -2086,6 +2120,58 @@ async function saveGameTime() {
     showSchedule();
   } catch (_) {
     showToast('Ошибка соединения с сервером', 'error');
+  }
+}
+
+// Отрисовать кнопку подтверждения: красная (не подтверждена) /
+// зелёная (подтверждена). Текст подсказывает, что произойдёт по клику.
+function updateConfirmButton() {
+  const btn = document.getElementById('adminConfirmBtn');
+  if (!btn) return;
+  const on = adminConfirmState.confirmed;
+  btn.classList.toggle('confirmed', on);
+  btn.classList.toggle('unconfirmed', !on);
+  btn.textContent = on
+    ? `✅ Игра подтверждена${adminConfirmState.price != null ? ` — ${adminConfirmState.price} ₽/чел.` : ''}`
+    : '⛔ Подтвердить игру';
+  btn.title = on ? 'Нажмите, чтобы снять подтверждение' : 'Отметить игру как подтверждённую';
+}
+
+// Переключить подтверждение игры (админ). Обратимо.
+async function toggleGameConfirm() {
+  const hall = document.getElementById('adminHallSelect').value;
+  const date = document.getElementById('adminDateInput').value;
+  if (!date) { showToast('Укажите дату', 'error'); return; }
+
+  const btn = document.getElementById('adminConfirmBtn');
+  if (btn) btn.disabled = true;
+  try {
+    const resp = await fetch(`${API_BASE_URL}/api/games/${hall}/${date}/confirm`, {
+      method: 'PATCH',
+      headers: adminHeaders(),
+      body: JSON.stringify({ confirmed: !adminConfirmState.confirmed })
+    });
+    if (resp.status === 403) { adminLogout(); return; }
+    if (!resp.ok) {
+      const e = await resp.json().catch(() => ({}));
+      showToast(e.error || 'Не удалось изменить подтверждение', 'error');
+      return;
+    }
+    const info = await resp.json();
+    adminConfirmState = {
+      confirmed: !!info.confirmed,
+      price: info.confirmedPrice != null ? info.confirmedPrice : null,
+      players: info.confirmedPlayers != null ? info.confirmedPlayers : null
+    };
+    updateConfirmButton();
+    showToast(adminConfirmState.confirmed ? 'Игра подтверждена' : 'Подтверждение снято', 'success');
+    // Обновляем историю и данные для игроков (сумма/маркер).
+    await loadFromAPI({ silent: true, refreshHall: false });
+    showHistoryTable();
+  } catch (_) {
+    showToast('Ошибка соединения с сервером', 'error');
+  } finally {
+    if (btn) btn.disabled = false;
   }
 }
 

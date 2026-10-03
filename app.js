@@ -1338,8 +1338,11 @@ function showHistoryTable() {
 
   if (!hall) return;
 
-  // Записи только для этого зала, последние 2 по дате
+  // Записи только для этого зала, последние 2 по дате СРЕДИ ПРОШЕДШИХ,
+  // чтобы будущая запланированная игра не показывалась как «предыдущая».
+  const today = mskToday();
   const entries = Object.keys(historyByDate)
+    .filter(dateStr => dateStr < today)
     .map(dateStr => ({ date: dateStr, players: historyByDate[dateStr][hall] || [] }))
     .filter(e => e.players.length > 0)
     .sort((a, b) => (a.date < b.date ? 1 : a.date > b.date ? -1 : 0))

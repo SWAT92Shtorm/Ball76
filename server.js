@@ -37,6 +37,7 @@ pool.query('SELECT 1')
     return ensureHallsSchema();
   })
   .then(() => ensureGameConfirmSchema())
+  .then(() => ensureGameTeamsSchema())
   .then(() => loadHallsFromDB())
   .then(() => backfillConfirmedDuration())
   .catch(err => {
@@ -382,6 +383,21 @@ async function ensureGameConfirmSchema() {
       ADD COLUMN IF NOT EXISTS confirmed_price    integer,
       ADD COLUMN IF NOT EXISTS confirmed_players  integer,
       ADD COLUMN IF NOT EXISTS confirmed_duration numeric
+  `);
+}
+
+// Дублирует migrations/006_game_teams.sql: таблица сохранённого состава
+// команд (зал + дата) — чтобы сервер был самодостаточен.
+async function ensureGameTeamsSchema() {
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS public.game_teams (
+      id          serial PRIMARY KEY,
+      hall_id     text NOT NULL,
+      date        date NOT NULL,
+      teams       jsonb NOT NULL DEFAULT '[]'::jsonb,
+      updated_at  timestamp without time zone NOT NULL DEFAULT now(),
+      UNIQUE (hall_id, date)
+    )
   `);
 }
 
@@ -2257,6 +2273,113 @@ app.patch('/api/games/:hallId/:date/confirm', mutationLimiter, requireAdmin, asy
   } catch (err) {
     console.error('Ошибка подтверждения игры:', err);
     res.status(500).json({ error: 'Failed to confirm game' });
+  }
+});
+
+/**
+ * @swagger
+ * /api/games/{hallId}/{date}/teams:
+ *   get:
+ *     summary: Сохранённый состав команд
+ *     description: Возвращает сохранённые команды для игры (зал + дата) или null, если состав ещё не формировался.
+ *     tags: [Games]
+ *     parameters:
+ *       - in: path
+ *         name: hallId
+ *         required: true
+ *         schema: { type: string }
+ *       - in: path
+ *         name: date
+ *         required: true
+ *         schema: { type: string, format: date }
+ *     responses:
+ *       200:
+ *         description: Состав команд (teams = null, если не сохранён)
+ *       400:
+ *         description: Неверный зал или дата
+ */
+app.get('/api/games/:hallId/:date/teams', readLimiter, async (req, res) => {
+  const { hallId, date } = req.params;
+  if (!isKnownHall(hallId) || !isValidDateStr(date)) {
+    return res.status(400).json({ error: 'Неверный зал или дата' });
+  }
+  try {
+    const result = await pool.query(
+      'SELECT teams, updated_at FROM public.game_teams WHERE hall_id = $1 AND date = $2',
+      [hallId, date]
+    );
+    if (result.rows.length === 0) {
+      return res.json({ teams: null, updatedAt: null });
+    }
+    res.json({ teams: result.rows[0].teams, updatedAt: result.rows[0].updated_at });
+  } catch (err) {
+    console.error('Ошибка чтения состава команд:', err);
+    res.status(500).json({ error: 'Failed to read teams' });
+  }
+});
+
+/**
+ * @swagger
+ * /api/games/{hallId}/{date}/teams:
+ *   put:
+ *     summary: Сохранить состав команд
+ *     description: Записывает состав команд для игры (зал + дата). Вызывается автоматически при перемешивании/рокировке.
+ *     tags: [Games]
+ *     parameters:
+ *       - in: path
+ *         name: hallId
+ *         required: true
+ *         schema: { type: string }
+ *       - in: path
+ *         name: date
+ *         required: true
+ *         schema: { type: string, format: date }
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               teams:
+ *                 type: array
+ *                 items:
+ *                   type: array
+ *                   items: { type: string }
+ *     responses:
+ *       200:
+ *         description: Сохранено
+ *       400:
+ *         description: Неверные параметры
+ */
+app.put('/api/games/:hallId/:date/teams', mutationLimiter, async (req, res) => {
+  const { hallId, date } = req.params;
+  if (!isKnownHall(hallId) || !isValidDateStr(date)) {
+    return res.status(400).json({ error: 'Неверный зал или дата' });
+  }
+  const teams = req.body && req.body.teams;
+  if (!Array.isArray(teams)) {
+    return res.status(400).json({ error: 'Поле teams должно быть массивом' });
+  }
+  // Нормализация: массив массивов строк. Ограничиваем общий размер.
+  const normalized = teams.map((t) => (Array.isArray(t) ? t : []).map(String));
+  const totalPlayers = normalized.reduce((sum, t) => sum + t.length, 0);
+  if (totalPlayers > 100) {
+    return res.status(400).json({ error: 'Слишком много игроков' });
+  }
+  try {
+    await pool.query(
+      `INSERT INTO public.game_teams (hall_id, date, teams, updated_at)
+         VALUES ($1, $2, $3::jsonb, now())
+       ON CONFLICT (hall_id, date) DO UPDATE SET
+         teams = EXCLUDED.teams,
+         updated_at = now()`,
+      [hallId, date, JSON.stringify(normalized)]
+    );
+    res.json({ ok: true, teams: normalized });
+  } catch (err) {
+    console.error('Ошибка сохранения состава команд:', err);
+    res.status(500).json({ error: 'Failed to save teams' });
   }
 });
 

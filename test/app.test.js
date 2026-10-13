@@ -106,3 +106,50 @@ test('dayNameFromCode: некорректный код даёт пустую с�
   assert.equal(dayNameFromCode(null), '');
   assert.equal(dayNameFromCode(undefined), '');
 });
+
+// --- reconcileTeams: согласование сохранённого состава с текущим списком ---
+// Гарантирует, что при загрузке сохранённых команд:
+//   * отменившие запись игроки исчезают из состава;
+//   * новые игроки добавляются в самые маленькие команды;
+//   * без сохранённого/валидного состава возвращается null (повод перемешать заново).
+
+const reconcileTeams = extractFunction('app.js', 'reconcileTeams');
+
+test('reconcileTeams: сохраняет состав, когда список участников не менялся', () => {
+  const saved = [['А', 'Б'], ['В', 'Г']];
+  const players = ['А', 'Б', 'В', 'Г'];
+  const out = reconcileTeams(saved, players);
+  assert.deepEqual(out, [['А', 'Б'], ['В', 'Г']]);
+});
+
+test('reconcileTeams: удаляет игроков, отменивших запись', () => {
+  const saved = [['А', 'Б'], ['В', 'Г']];
+  const players = ['А', 'В', 'Г']; // «Б» отменил запись
+  const out = reconcileTeams(saved, players);
+  assert.deepEqual(out, [['А'], ['В', 'Г']]);
+});
+
+test('reconcileTeams: новых игроков добавляет в самые маленькие команды', () => {
+  const saved = [['А', 'Б'], ['В', 'Г', 'Д']];
+  const players = ['А', 'Б', 'В', 'Г', 'Д', 'Е', 'Ж']; // Е, Ж — новые
+  const out = reconcileTeams(saved, players);
+  const flat = out.flat();
+  assert.equal(flat.length, 7);
+  assert.deepEqual(flat.slice().sort(), ['А', 'Б', 'В', 'Г', 'Д', 'Е', 'Ж'].sort());
+  // «Е» и «Ж» ушли в первую (самую маленькую) команду.
+  assert.ok(out[0].includes('Е'));
+  assert.ok(out[0].includes('Ж'));
+});
+
+test('reconcileTeams: пустой/невалидный сохранённый состав → null', () => {
+  assert.equal(reconcileTeams(null, ['А']), null);
+  assert.equal(reconcileTeams([], ['А']), null);
+  assert.equal(reconcileTeams([['X']], ['А']), null); // никого из сохранённых нет в списке
+});
+
+test('reconcileTeams: отбрасывает дубликаты игрока', () => {
+  const saved = [['А', 'А'], ['Б']];
+  const players = ['А', 'Б'];
+  const out = reconcileTeams(saved, players);
+  assert.deepEqual(out.flat().sort(), ['А', 'Б']);
+});

@@ -1606,9 +1606,63 @@ function cancelEdit(index) {
 let teamsState = [];
 // Выбранный игрок для рокировки: { teamIdx, playerIdx } или null.
 let selectedTeamPlayer = null;
+// Отложенное сохранение состава: серия рокировок не спамит API.
+let teamsSaveTimer = null;
+const TEAMS_SAVE_DELAY_MS = 700;
 
-function openTeamsModal() {
+// Контекст игры для сохранения/чтения состава: зал + ближайшая дата игры.
+function getTeamsGameContext() {
   const hall = document.getElementById('hallSelect').value;
+  const date = getNearestGameDate(hall) || mskToday();
+  return { hall, date };
+}
+
+// Разложить игроков поровну на numTeams команд (случайно).
+function buildShuffledTeams(players, numTeams) {
+  const shuffled = shuffleArray(players);
+  const teams = Array.from({ length: numTeams }, () => []);
+  for (let i = 0; i < shuffled.length; i++) {
+    teams[i % numTeams].push(shuffled[i]);
+  }
+  return teams;
+}
+
+// Согласовать сохранённый состав с текущим списком участников:
+// убрать тех, кто отменил запись, и досеять новых в самые маленькие команды.
+// Возвращает null, если валидного сохранённого состава нет.
+function reconcileTeams(savedTeams, players) {
+  const current = new Set(players);
+  const seen = new Set();
+  const teams = [];
+  for (const t of (Array.isArray(savedTeams) ? savedTeams : [])) {
+    if (!Array.isArray(t)) continue;
+    const clean = [];
+    for (const n of t) {
+      if (current.has(n) && !seen.has(n)) { clean.push(n); seen.add(n); }
+    }
+    teams.push(clean);
+  }
+  // Если ни один сохранённый игрок не найден в текущем списке — состав
+  // устарел (другая игра/полностью сменился ростер): повод перемешать заново.
+  if (teams.length === 0 || seen.size === 0) return null;
+
+  // Новые игроки (кого нет в сохранённом составе) — в самые маленькие команды.
+  for (const n of players) {
+    if (seen.has(n)) continue;
+    let minIdx = 0;
+    for (let i = 1; i < teams.length; i++) {
+      if (teams[i].length < teams[minIdx].length) minIdx = i;
+    }
+    teams[minIdx].push(n);
+  }
+
+  const result = teams.filter((t) => t.length > 0);
+  const total = result.reduce((sum, t) => sum + t.length, 0);
+  return total > 0 ? result : null;
+}
+
+async function openTeamsModal() {
+  const { hall, date } = getTeamsGameContext();
   const players = playersByHall[hall] || [];
 
   if (players.length === 0) {
@@ -1617,16 +1671,58 @@ function openTeamsModal() {
   }
 
   const numTeams = players.length >= 15 ? 3 : 2;
-  const shuffled = shuffleArray(players);
-
-  teamsState = Array.from({ length: numTeams }, () => []);
-  for (let i = 0; i < shuffled.length; i++) {
-    teamsState[i % numTeams].push(shuffled[i]);
-  }
   selectedTeamPlayer = null;
 
-  renderTeams();
-  document.getElementById('teamsModal').style.display = 'flex';
+  // Пытаемся загрузить ранее сохранённый состав (тот же зал + дата).
+  let saved = null;
+  try {
+    const resp = await fetch(
+      `${API_BASE_URL}/api/games/${hall}/${date}/teams`,
+      { headers: getTunnelHeaders() }
+    );
+    if (resp.ok) {
+      const data = await resp.json();
+      saved = data.teams;
+    }
+  } catch (e) {
+    console.warn('Не удалось загрузить состав команд:', e);
+  }
+
+  const reconciled = saved ? reconcileTeams(saved, players) : null;
+
+  if (reconciled) {
+    // Показываем сохранённый состав (с учётом изменений в списке участников).
+    teamsState = reconciled;
+    renderTeams();
+    document.getElementById('teamsModal').style.display = 'flex';
+    // Если состав изменился (кто-то добавился/отменил) — обновляем сохранённый.
+    if (JSON.stringify(reconciled) !== JSON.stringify(saved)) {
+      saveTeamsNow(hall, date);
+    }
+  } else {
+    // Сохранённого состава нет — перемешиваем и сразу сохраняем.
+    teamsState = buildShuffledTeams(players, numTeams);
+    renderTeams();
+    document.getElementById('teamsModal').style.display = 'flex';
+    saveTeamsNow(hall, date);
+  }
+}
+
+/** Сохранить состав команд на сервере (немедленно). */
+function saveTeamsNow(hall, date) {
+  if (teamsSaveTimer) { clearTimeout(teamsSaveTimer); teamsSaveTimer = null; }
+  const ctx = (hall && date) ? { hall, date } : getTeamsGameContext();
+  fetch(`${API_BASE_URL}/api/games/${ctx.hall}/${ctx.date}/teams`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', ...getTunnelHeaders() },
+    body: JSON.stringify({ teams: teamsState })
+  }).catch((e) => console.warn('Не удалось сохранить состав команд:', e));
+}
+
+/** Отложить сохранение (для серии быстрых рокировок). */
+function queueSaveTeams() {
+  if (teamsSaveTimer) clearTimeout(teamsSaveTimer);
+  teamsSaveTimer = setTimeout(() => { teamsSaveTimer = null; saveTeamsNow(); }, TEAMS_SAVE_DELAY_MS);
 }
 
 /** Отрисовать команды: каждый игрок — отдельная карточка-панелька. */
@@ -1673,6 +1769,7 @@ function renderTeams() {
 
 /** Клик по карточке игрока: выбор → рокировка. */
 function onTeamPlayerClick(teamIdx, playerIdx) {
+  let swapped = false;
   if (!selectedTeamPlayer) {
     // Первый клик — выбираем игрока.
     selectedTeamPlayer = { teamIdx, playerIdx };
@@ -1689,12 +1786,25 @@ function onTeamPlayerClick(teamIdx, playerIdx) {
     teamsState[fromTeam][fromPlayer] = teamsState[teamIdx][playerIdx];
     teamsState[teamIdx][playerIdx] = tmp;
     selectedTeamPlayer = null;
+    swapped = true;
   }
   renderTeams();
+  if (swapped) queueSaveTeams(); // автосохранение после рокировки
 }
 
+// «Перемешать»: заново случайно распределить игроков и сохранить результат.
 function rerollTeams() {
-  openTeamsModal();
+  const hall = document.getElementById('hallSelect').value;
+  const players = playersByHall[hall] || [];
+  if (players.length === 0) {
+    openTeamsModal();
+    return;
+  }
+  const numTeams = players.length >= 15 ? 3 : 2;
+  teamsState = buildShuffledTeams(players, numTeams);
+  selectedTeamPlayer = null;
+  renderTeams();
+  saveTeamsNow(); // сразу сохраняем новый состав
 }
 
 function closeTeamsModal() {
@@ -1704,6 +1814,14 @@ function closeTeamsModal() {
 // ==================== 7.5. CHANGELOG (модалка истории версий) ====================
 
 const CHANGELOG = [
+  {
+    label: 'v2026.10.13 — состав команд сохраняется',
+    items: [
+      '💾 Сформированный состав команд сохраняется автоматически',
+      '🔁 При повторном открытии показывается тот же состав, а не новое перемешивание',
+      '♻️ Если кто-то записался или отменил запись — состав обновляется сам'
+    ]
+  },
   {
     label: 'v2026.10.13 — рокировка в командах',
     items: [

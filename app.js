@@ -1919,20 +1919,22 @@ function renderScore() {
     `;
   }
 
+  // Пара '2-3' → команды 2 и 3, но в scoreState они хранятся как score1/score2
+  // (первая и вторая команда выбранной пары).
   const [t1, t2] = scorePair.split('-').map(Number);
   const saved = scoreUpdatedBy
     ? `<p class="score-updated">👤 Последний раз менял: ${escapeHtml(scoreUpdatedBy)}</p>`
     : '';
 
-  const teamBlock = (teamNum) => `
+  const teamBlock = (teamNum, scoreKey) => `
     <div class="score-team">
       <div class="score-team-name">Команда ${teamNum}</div>
-      <div class="score-value" id="scoreValue${teamNum}">${scoreState['score' + teamNum]}</div>
+      <div class="score-value" id="scoreValue${teamNum}">${scoreState[scoreKey]}</div>
       <div class="score-buttons">
-        <button class="score-btn score-btn-add" onclick="changeScore(${teamNum}, 2)">+2</button>
-        <button class="score-btn score-btn-add" onclick="changeScore(${teamNum}, 3)">+3</button>
-        <button class="score-btn score-btn-sub" onclick="changeScore(${teamNum}, -2)">−2</button>
-        <button class="score-btn score-btn-sub" onclick="changeScore(${teamNum}, -3)">−3</button>
+        <button class="score-btn score-btn-add" onclick="changeScore('${scoreKey}', 2)">+2</button>
+        <button class="score-btn score-btn-add" onclick="changeScore('${scoreKey}', 3)">+3</button>
+        <button class="score-btn score-btn-sub" onclick="changeScore('${scoreKey}', -2)">−2</button>
+        <button class="score-btn score-btn-sub" onclick="changeScore('${scoreKey}', -3)">−3</button>
       </div>
     </div>
   `;
@@ -1941,21 +1943,20 @@ function renderScore() {
     <p class="score-hint">💡 Вести счёт может каждый: +2/+3 — добавить очки, −2/−3 — убрать при ошибке. Счёт сохраняется на игру автоматически.</p>
     ${pairSelector}
     <div class="score-board">
-      ${teamBlock(t1)}
+      ${teamBlock(t1, 'score1')}
       <div class="score-divider">:</div>
-      ${teamBlock(t2)}
+      ${teamBlock(t2, 'score2')}
     </div>
     ${saved}
   `;
 }
 
-/** Изменить счёт команды teamNum (1..3) на delta (+2/+3/−2/−3). */
-function changeScore(teamNum, delta) {
-  const key = 'score' + teamNum;
+/** Изменить счёт команды пары (scoreKey: 'score1'|'score2') на delta (+2/+3/−2/−3). */
+function changeScore(scoreKey, delta) {
   // Не даём уйти в минус: от 0 убирать нечего.
-  const next = Math.max(0, scoreState[key] + delta);
-  if (next === scoreState[key]) return;
-  scoreState[key] = next;
+  const next = Math.max(0, scoreState[scoreKey] + delta);
+  if (next === scoreState[scoreKey]) return;
+  scoreState[scoreKey] = next;
   scoreUpdatedBy = getLastPlayerName();
   renderScore();
   queueSaveScore();

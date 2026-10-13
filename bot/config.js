@@ -17,6 +17,25 @@ function optional(name, def = '') {
   return v && v.trim() ? v.trim() : def;
 }
 
+// Парсинг HALL_KEYWORDS: "ЗАЛ:слово1,слово2;ЗАЛ2:слово3" → { зал: [слова] }.
+// Ключи и слова нормализуются в нижний регистр (регистр в .env не важен).
+function parseHallKeywords(raw) {
+  const map = {};
+  if (!raw) return map;
+  for (const part of String(raw).split(';')) {
+    const idx = part.indexOf(':');
+    if (idx <= 0) continue;
+    const hall = part.slice(0, idx).trim().toLowerCase();
+    const words = part
+      .slice(idx + 1)
+      .split(',')
+      .map((w) => w.trim().toLowerCase())
+      .filter(Boolean);
+    if (hall && words.length) map[hall] = words;
+  }
+  return map;
+}
+
 export const config = {
   // --- Telegram ---
   botToken: required('TELEGRAM_BOT_TOKEN'),
@@ -54,6 +73,12 @@ export const config = {
     .split(',')
     .map((s) => s.trim())
     .filter(Boolean),
+
+  // Сопоставление залов с группами по названию группы.
+  // Формат: "ЗАЛ:слово1,слово2;ЗАЛ2:слово3" (регистр не важен).
+  // Группа получает уведомления о зале, если её название содержит
+  // название зала ИЛИ одно из ключевых слов.
+  hallKeywords: parseHallKeywords(optional('HALL_KEYWORDS')),
 
   // За сколько часов до игры слать напоминание
   reminderHoursBefore: Number(optional('REMINDER_HOURS_BEFORE', '3')),

@@ -7,7 +7,7 @@ import cron from 'node-cron';
 import { config } from './config.js';
 import { api, todayMSK, humanDate } from './api.js';
 import { getConfigCached, describeGame, upcomingDates } from './game.js';
-import { getNotifyChats, getTelegramIdsByPlayerIds } from './db.js';
+import { getNotifyChats, getAllGroups, getTelegramIdsByPlayerIds } from './db.js';
 import { log } from './logger.js';
 
 // Отметки отправленного, чтобы не дублировать (в пределах суток).
@@ -43,6 +43,62 @@ async function broadcast(bot, text) {
   return n;
 }
 
+/**
+ * Подходит ли группа для уведомлений о конкретном зале.
+ * Группа подходит, если её название содержит название зала ИЛИ одно из
+ * ключевых слов, заданных в HALL_KEYWORDS для этого зала.
+ */
+function hallMatchesGroup(hallId, hallName, groupTitle) {
+  if (!groupTitle) return false;
+  const t = String(groupTitle).toLowerCase();
+  if (hallName && t.includes(String(hallName).toLowerCase())) return true;
+  const words =
+    config.hallKeywords[String(hallId).toLowerCase()] ||
+    config.hallKeywords[String(hallName || '').toLowerCase()] ||
+    [];
+  return words.some((w) => t.includes(w));
+}
+
+/**
+ * Отправить текст в группы, подходящие под зал (по названию группы и
+ * HALL_KEYWORDS), плюс явно заданные NOTIFY_GROUP_IDS.
+ * Если HALL_KEYWORDS не задан — поведение прежнее: все подписанные чаты.
+ */
+async function broadcastForHall(bot, text, hallId, hallName) {
+  const hasKeywords = Object.keys(config.hallKeywords).length > 0;
+
+  // Явные группы из .env получают всегда (админ сам указал их для зала).
+  const targetIds = new Set(config.notifyGroupIds.map((id) => String(id)));
+
+  if (hasKeywords) {
+    // Режим «по названию группы»: только подходящие группы.
+    const groups = await getAllGroups();
+    for (const g of groups) {
+      if (g.notify === false) continue;
+      if (hallMatchesGroup(hallId, hallName, g.title)) {
+        targetIds.add(String(g.chat_id));
+      }
+    }
+  } else {
+    // Обратная совместимость: все подписанные чаты.
+    const chats = await getNotifyChats();
+    for (const c of chats) targetIds.add(String(c.chat_id));
+  }
+
+  let n = 0;
+  for (const chatId of targetIds) {
+    try {
+      await bot.api.sendMessage(chatId, text);
+      n++;
+    } catch (e) {
+      log.warn(`Рассылка в ${chatId} не удалась: ${e.message}`);
+    }
+    await new Promise((r) => setTimeout(r, 120)); // ~8 msg/сек — ниже лимитов
+  }
+  log.info(`Рассылка о зале «${hallName}» отправлена в ${n} чат(ов)`);
+  return n;
+}
+
 /** Сформировать сводку по игре. */
 function gameSummary(g) {
   const lines = [`🏀 ${g.hallName} — ${g.humanDate}, ${g.startTime}`];
@@ -70,7 +126,7 @@ async function checkReminders(bot) {
       const key = `remind:${hallId}:${date}`;
       if (alreadySent(key)) continue;
 
-      await broadcast(bot, `⏰ Напоминание!\n${gameSummary(g)}`);
+      await broadcastForHall(bot, `⏰ Напоминание!\n${gameSummary(g)}`, hallId, hall.name);
       markSent(key);
     }
   }
@@ -99,7 +155,7 @@ async function checkGather(bot) {
       if (g.count < 7 || g.count > 9) continue;
 
       const free = 18 - g.count;
-      await broadcast(bot, `📣 Недобор!\n${gameSummary(g)}\nСвободно мест: ${free}`);
+      await broadcastForHall(bot, `📣 Недобор!\n${gameSummary(g)}\nСвободно мест: ${free}`, hallId, hall.name);
       markSent(key);
     }
   }

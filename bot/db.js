@@ -69,3 +69,14 @@ export async function getNotifyChats() {
   const res = await pool.query('SELECT * FROM telegram_chats WHERE notify = true');
   return res.rows;
 }
+
+/** Все группы, где состоит бот (для рассылок по названию группы). */
+export async function getAllGroups() {
+  const res = await pool.query(
+    `SELECT chat_id, title, chat_type, is_group, notify
+       FROM telegram_chats
+      WHERE is_group = true
+      ORDER BY title NULLS LAST, chat_id`
+  );
+  return res.rows;
+}

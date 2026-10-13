@@ -24,6 +24,7 @@ const NAME_REGEX = extractConst('server.js', 'NAME_REGEX');
 const validateFullName = extractFunction('server.js', 'validateFullName', { NAME_REGEX });
 const formatDateMSK = extractFunction('server.js', 'formatDateMSK');
 const normalizeScoreValue = extractFunction('server.js', 'normalizeScoreValue');
+const normalizePair = extractFunction('server.js', 'normalizePair');
 
 test('validateFullName: корректные ФИО из 3–5 слов', () => {
   assert.equal(validateFullName('Иванов Иван Иванович'), null);
@@ -133,4 +134,21 @@ test('normalizeScoreValue: нечисловые значения отверга�
   assert.equal(normalizeScoreValue(null), null);
   assert.equal(normalizeScoreValue(undefined), null);
   assert.equal(normalizeScoreValue({}), null);
+});
+
+test('normalizePair: допустимые пары команд', () => {
+  assert.equal(normalizePair('1-2'), '1-2');
+  assert.equal(normalizePair('1-3'), '1-3');
+  assert.equal(normalizePair('2-3'), '2-3');
+});
+
+test('normalizePair: недопустимые пары отвергаются', () => {
+  assert.equal(normalizePair('2-1'), null);   // только по возрастанию
+  assert.equal(normalizePair('3-4'), null);
+  assert.equal(normalizePair('1'), null);
+  assert.equal(normalizePair('1-2-3'), null);
+  assert.equal(normalizePair(''), null);
+  assert.equal(normalizePair(null), null);
+  assert.equal(normalizePair(undefined), null);
+  assert.equal(normalizePair(12), null);
 });

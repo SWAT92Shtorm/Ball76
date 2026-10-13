@@ -402,20 +402,34 @@ async function ensureGameTeamsSchema() {
   `);
 }
 
-// Дублирует migrations/007_game_score.sql: таблица счёта игры
-// (зал + дата) — чтобы сервер был самодостаточен.
+// Дублирует migrations/007_game_score.sql + 008_game_score_pairs.sql:
+// таблица счёта игры (зал + дата + пара команд) — чтобы сервер был
+// самодостаточен.
 async function ensureGameScoreSchema() {
   await pool.query(`
     CREATE TABLE IF NOT EXISTS public.game_score (
       id          serial PRIMARY KEY,
       hall_id     text NOT NULL,
       date        date NOT NULL,
+      pair        text NOT NULL DEFAULT '1-2',
       score1      integer NOT NULL DEFAULT 0,
       score2      integer NOT NULL DEFAULT 0,
       updated_at  timestamp without time zone NOT NULL DEFAULT now(),
-      updated_by  text,
-      UNIQUE (hall_id, date)
+      updated_by  text
     )
+  `);
+  // Миграция 008: колонка pair и уникальность по трём полям.
+  await pool.query(`
+    ALTER TABLE public.game_score
+      ADD COLUMN IF NOT EXISTS pair text NOT NULL DEFAULT '1-2'
+  `);
+  await pool.query(`
+    ALTER TABLE public.game_score
+      DROP CONSTRAINT IF EXISTS game_score_hall_id_date_key
+  `);
+  await pool.query(`
+    CREATE UNIQUE INDEX IF NOT EXISTS game_score_hall_date_pair_key
+      ON public.game_score (hall_id, date, pair)
   `);
 }
 
@@ -428,6 +442,12 @@ function normalizeScoreValue(value) {
   const int = Math.trunc(n);
   if (int < 0 || int > 999) return null;
   return int;
+}
+
+// Нормализовать пару команд: '1-2', '1-3' или '2-3'. Иначе null.
+function normalizePair(pair) {
+  if (typeof pair !== 'string') return null;
+  return ['1-2', '1-3', '2-3'].includes(pair) ? pair : null;
 }
 
 // Идемпотентно дозаполнить длительность у уже подтверждённых игр, у которых
@@ -2439,16 +2459,18 @@ app.get('/api/games/:hallId/:date/score', readLimiter, async (req, res) => {
   if (!isKnownHall(hallId) || !isValidDateStr(date)) {
     return res.status(400).json({ error: 'Неверный зал или дата' });
   }
+  const pair = normalizePair(req.query.pair) || '1-2';
   try {
     const result = await pool.query(
-      'SELECT score1, score2, updated_at, updated_by FROM public.game_score WHERE hall_id = $1 AND date = $2',
-      [hallId, date]
+      'SELECT score1, score2, updated_at, updated_by FROM public.game_score WHERE hall_id = $1 AND date = $2 AND pair = $3',
+      [hallId, date, pair]
     );
     if (result.rows.length === 0) {
-      return res.json({ score: null, updatedAt: null, updatedBy: null });
+      return res.json({ pair, score: null, updatedAt: null, updatedBy: null });
     }
     const row = result.rows[0];
     res.json({
+      pair,
       score: { score1: row.score1, score2: row.score2 },
       updatedAt: row.updated_at,
       updatedBy: row.updated_by
@@ -2500,6 +2522,7 @@ app.put('/api/games/:hallId/:date/score', mutationLimiter, async (req, res) => {
     return res.status(400).json({ error: 'Неверный зал или дата' });
   }
   const body = req.body || {};
+  const pair = normalizePair(body.pair) || '1-2';
   const score1 = normalizeScoreValue(body.score1);
   const score2 = normalizeScoreValue(body.score2);
   if (score1 === null || score2 === null) {
@@ -2509,16 +2532,16 @@ app.put('/api/games/:hallId/:date/score', mutationLimiter, async (req, res) => {
     typeof body.updatedBy === 'string' ? body.updatedBy.slice(0, 120) : null;
   try {
     await pool.query(
-      `INSERT INTO public.game_score (hall_id, date, score1, score2, updated_at, updated_by)
-         VALUES ($1, $2, $3, $4, now(), $5)
-       ON CONFLICT (hall_id, date) DO UPDATE SET
+      `INSERT INTO public.game_score (hall_id, date, pair, score1, score2, updated_at, updated_by)
+         VALUES ($1, $2, $3, $4, $5, now(), $6)
+       ON CONFLICT (hall_id, date, pair) DO UPDATE SET
          score1 = EXCLUDED.score1,
          score2 = EXCLUDED.score2,
          updated_at = now(),
          updated_by = EXCLUDED.updated_by`,
-      [hallId, date, score1, score2, updatedBy]
+      [hallId, date, pair, score1, score2, updatedBy]
     );
-    res.json({ ok: true, score: { score1, score2 } });
+    res.json({ ok: true, pair, score: { score1, score2 } });
   } catch (err) {
     console.error('Ошибка сохранения счёта игры:', err);
     res.status(500).json({ error: 'Failed to save score' });

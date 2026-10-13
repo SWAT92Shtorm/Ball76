@@ -1819,7 +1819,9 @@ function closeTeamsModal() {
 
 // Активная вкладка модалки: 'teams' или 'score'.
 let teamsActiveTab = 'teams';
-// Текущий счёт: { score1, score2 }. Начинается с 0:0.
+// Текущая пара команд: '1-2', '1-3' или '2-3' (при 3 командах).
+let scorePair = '1-2';
+// Текущий счёт выбранной пары: { score1, score2 }. Начинается с 0:0.
 let scoreState = { score1: 0, score2: 0 };
 // Кто последним менял счёт (для подписи «обновлено …»).
 let scoreUpdatedBy = null;
@@ -1851,38 +1853,66 @@ function switchTeamsTab(tab) {
   }
 }
 
-/** Отрисовать панель счёта: две команды, крупные цифры, кнопки +2/+3 и −2/−3. */
+/** Выбрать пару команд на вкладке счёта и загрузить её счёт. */
+function selectScorePair(pair) {
+  if (pair === scorePair) return;
+  scorePair = pair;
+  if (scoreSaveTimer) { clearTimeout(scoreSaveTimer); scoreSaveTimer = null; }
+  loadGameScore();
+}
+
+/** Отрисовать панель счёта: выбор пары (при 3 командах) и табло. */
 function renderScore() {
   const el = document.getElementById('scoreContent');
+  const numTeams = teamsState.length;
+
+  // Выбор пары нужен только при 3 командах: матчи 1-2, 1-3, 2-3.
+  let pairSelector = '';
+  if (numTeams >= 3) {
+    const pairs = [['1-2', '1 ⚔ 2'], ['1-3', '1 ⚔ 3'], ['2-3', '2 ⚔ 3']];
+    const chips = pairs.map(([p, label]) => `
+      <button class="score-pair-chip ${p === scorePair ? 'active' : ''}"
+              onclick="selectScorePair('${p}')">${label}</button>
+    `).join('');
+    pairSelector = `
+      <div class="score-pair-selector">
+        <span class="score-pair-label">Кто играет:</span>
+        ${chips}
+      </div>
+    `;
+  }
+
+  const [t1, t2] = scorePair.split('-').map(Number);
   const saved = scoreUpdatedBy
     ? `<p class="score-updated">👤 Последний раз менял: ${escapeHtml(scoreUpdatedBy)}</p>`
     : '';
 
-  const teamBlock = (teamIdx) => `
+  const teamBlock = (teamNum) => `
     <div class="score-team">
-      <div class="score-team-name">Команда ${teamIdx + 1}</div>
-      <div class="score-value" id="scoreValue${teamIdx + 1}">${scoreState['score' + (teamIdx + 1)]}</div>
+      <div class="score-team-name">Команда ${teamNum}</div>
+      <div class="score-value" id="scoreValue${teamNum}">${scoreState['score' + teamNum]}</div>
       <div class="score-buttons">
-        <button class="score-btn score-btn-add" onclick="changeScore(${teamIdx + 1}, 2)">+2</button>
-        <button class="score-btn score-btn-add" onclick="changeScore(${teamIdx + 1}, 3)">+3</button>
-        <button class="score-btn score-btn-sub" onclick="changeScore(${teamIdx + 1}, -2)">−2</button>
-        <button class="score-btn score-btn-sub" onclick="changeScore(${teamIdx + 1}, -3)">−3</button>
+        <button class="score-btn score-btn-add" onclick="changeScore(${teamNum}, 2)">+2</button>
+        <button class="score-btn score-btn-add" onclick="changeScore(${teamNum}, 3)">+3</button>
+        <button class="score-btn score-btn-sub" onclick="changeScore(${teamNum}, -2)">−2</button>
+        <button class="score-btn score-btn-sub" onclick="changeScore(${teamNum}, -3)">−3</button>
       </div>
     </div>
   `;
 
   el.innerHTML = `
     <p class="score-hint">💡 Вести счёт может каждый: +2/+3 — добавить очки, −2/−3 — убрать при ошибке. Счёт сохраняется на игру автоматически.</p>
+    ${pairSelector}
     <div class="score-board">
-      ${teamBlock(0)}
+      ${teamBlock(t1)}
       <div class="score-divider">:</div>
-      ${teamBlock(1)}
+      ${teamBlock(t2)}
     </div>
     ${saved}
   `;
 }
 
-/** Изменить счёт команды teamNum (1 или 2) на delta (+2/+3/−2/−3). */
+/** Изменить счёт команды teamNum (1..3) на delta (+2/+3/−2/−3). */
 function changeScore(teamNum, delta) {
   const key = 'score' + teamNum;
   // Не даём уйти в минус: от 0 убирать нечего.
@@ -1894,7 +1924,7 @@ function changeScore(teamNum, delta) {
   queueSaveScore();
 }
 
-/** Сбросить счёт на 0:0 и сохранить. */
+/** Сбросить счёт выбранной пары на 0:0 и сохранить. */
 function resetScore() {
   if (scoreState.score1 === 0 && scoreState.score2 === 0) return;
   scoreState = { score1: 0, score2: 0 };
@@ -1911,6 +1941,7 @@ function saveScoreNow(hall, date) {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json', ...getTunnelHeaders() },
     body: JSON.stringify({
+      pair: scorePair,
       score1: scoreState.score1,
       score2: scoreState.score2,
       updatedBy: scoreUpdatedBy
@@ -1924,12 +1955,12 @@ function queueSaveScore() {
   scoreSaveTimer = setTimeout(() => { scoreSaveTimer = null; saveScoreNow(); }, SCORE_SAVE_DELAY_MS);
 }
 
-/** Загрузить сохранённый счёт игры (или 0:0, если счёт ещё не вели). */
+/** Загрузить сохранённый счёт выбранной пары (или 0:0, если счёт ещё не вели). */
 async function loadGameScore() {
   const { hall, date } = getTeamsGameContext();
   try {
     const resp = await fetch(
-      `${API_BASE_URL}/api/games/${hall}/${date}/score`,
+      `${API_BASE_URL}/api/games/${hall}/${date}/score?pair=${encodeURIComponent(scorePair)}`,
       { headers: getTunnelHeaders() }
     );
     if (resp.ok) {
@@ -1961,6 +1992,7 @@ const CHANGELOG = [
     items: [
       '🗂️ Окно команд разделено на вкладки: «Команды» и «Счёт»',
       '🏀 Счёт игры: начинается с 0:0, кнопки +2/+3 добавляют очки, −2/−3 убирают при ошибке',
+      '⚔️ При 3 командах выбирается, кто играет: 1⚔2, 1⚔3 или 2⚔3 — счёт по каждой паре свой',
       '👤 Вести счёт может каждый — счёт сохраняется на игру автоматически',
       '♻️ Кнопка «Сбросить счёт» возвращает 0:0'
     ]

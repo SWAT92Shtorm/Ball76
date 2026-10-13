@@ -1273,6 +1273,46 @@ th {
   text-align: center;
 }
 
+/* Выбор пары команд (при 3 командах) */
+.score-pair-selector {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  margin-bottom: 12px;
+  flex-wrap: wrap;
+}
+
+.score-pair-label {
+  font-size: 12.5px;
+  color: #999;
+}
+
+.score-pair-chip {
+  width: auto;
+  margin: 0;
+  padding: 5px 12px;
+  border: 1px solid #404040;
+  border-radius: 14px;
+  background: #242424;
+  color: #aaa;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s, border-color 0.15s;
+}
+
+.score-pair-chip:hover {
+  background: #2e2e2e;
+  color: #e0e0e0;
+}
+
+.score-pair-chip.active {
+  background: rgba(0, 170, 255, 0.12);
+  border-color: rgba(79, 195, 247, 0.5);
+  color: #4fc3f7;
+}
+
 /* Общий footer модалок: кнопки в ряд, по правому краю */
 .modal-footer {
   margin-top: 16px;

@@ -1081,29 +1081,59 @@ th {
   color: #fff;
 }
 
-/* Пункт списка команды */
-.team-player-item {
-  margin: 3px 0;
+/* Карточки игроков команды: каждый игрок — отдельная панелька */
+#teamsModal .team-players {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+#teamsModal .team-player-card {
+  padding: 8px 12px;
+  border: 1px solid rgba(79, 195, 247, 0.25);
+  border-radius: 8px;
+  background: rgba(79, 195, 247, 0.06);
   font-size: 14px;
-  color: #d0d0d0;
+  color: #e0e0e0;
+  cursor: pointer;
+  user-select: none;
+  transition: border-color 0.15s, background 0.15s, transform 0.1s, box-shadow 0.15s;
 }
 
-/* Отступ перед шестым игроком (либеро) */
-.team-player-gap {
-  margin-top: 10px;
-  padding-top: 8px;
-  border-top: 1px dashed rgba(255, 255, 255, 0.1);
+#teamsModal .team-player-card:hover {
+  border-color: rgba(79, 195, 247, 0.6);
+  background: rgba(79, 195, 247, 0.12);
 }
 
-/* Нумерованный список игроков команды */
-.team-main-ol {
-  margin: 0;
-  padding-left: 20px;
-  list-style-type: decimal;
+#teamsModal .team-player-card:active {
+  transform: scale(0.98);
 }
-.team-main-ol li::marker {
-  color: #4fc3f7;
-  font-weight: 600;
+
+/* Выбранный игрок (для рокировки) */
+#teamsModal .team-player-selected {
+  border-color: #ffd54f;
+  background: rgba(255, 213, 79, 0.15);
+  color: #fff;
+  box-shadow: 0 0 0 2px rgba(255, 213, 79, 0.35);
+}
+
+/* Игроки из других команд — доступны как цель рокировки */
+#teamsModal .team-player-swap-target {
+  border-style: dashed;
+  border-color: rgba(79, 195, 247, 0.5);
+}
+
+#teamsModal .team-player-swap-target:hover {
+  border-color: #4fc3f7;
+  background: rgba(79, 195, 247, 0.18);
+}
+
+/* Подсказка над командами */
+.teams-hint {
+  margin-bottom: 10px;
+  font-size: 12.5px;
+  color: #999;
+  line-height: 1.4;
 }
 
 /* Общий footer модалок: кнопки в ряд, по правому краю */

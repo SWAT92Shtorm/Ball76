@@ -1602,6 +1602,11 @@ function cancelEdit(index) {
 
 // ==================== 7. TEAMS (модалка с командами) ====================
 
+// Текущее состояние команд: массив команд, каждая — массив ФИО.
+let teamsState = [];
+// Выбранный игрок для рокировки: { teamIdx, playerIdx } или null.
+let selectedTeamPlayer = null;
+
 function openTeamsModal() {
   const hall = document.getElementById('hallSelect').value;
   const players = playersByHall[hall] || [];
@@ -1611,43 +1616,81 @@ function openTeamsModal() {
     return;
   }
 
-  const modal = document.getElementById('teamsModal');
-  const content = document.getElementById('teamsContent');
-  content.innerHTML = '';
-
   const numTeams = players.length >= 15 ? 3 : 2;
   const shuffled = shuffleArray(players);
 
-  const teams = Array.from({ length: numTeams }, () => []);
+  teamsState = Array.from({ length: numTeams }, () => []);
   for (let i = 0; i < shuffled.length; i++) {
-    teams[i % numTeams].push(shuffled[i]);
+    teamsState[i % numTeams].push(shuffled[i]);
   }
+  selectedTeamPlayer = null;
+
+  renderTeams();
+  document.getElementById('teamsModal').style.display = 'flex';
+}
+
+/** Отрисовать команды: каждый игрок — отдельная карточка-панелька. */
+function renderTeams() {
+  const content = document.getElementById('teamsContent');
+  const total = teamsState.reduce((sum, t) => sum + t.length, 0);
 
   let inner = `
-    <p class="teams-summary">Всего игроков: <strong>${players.length}</strong></p>
-    <p class="teams-summary">Сформировано команд: <strong>${numTeams}</strong></p>
+    <p class="teams-summary">Всего игроков: <strong>${total}</strong></p>
+    <p class="teams-summary">Сформировано команд: <strong>${teamsState.length}</strong></p>
+    <p class="teams-hint">${
+      selectedTeamPlayer
+        ? '👆 Теперь выберите игрока из другой команды — произойдёт рокировка (или нажмите на выбранного, чтобы отменить)'
+        : '💡 Нажмите на игрока, чтобы выбрать его для рокировки'
+    }</p>
   `;
 
-  teams.forEach((team, idx) => {
-    const items = team.map((name, i) => {
-      const cls = i === 5 ? 'team-player-item team-player-gap' : 'team-player-item';
-      return `<li class="${cls}">${escapeHtml(name)}</li>`;
+  teamsState.forEach((team, teamIdx) => {
+    const items = team.map((name, playerIdx) => {
+      const isSelected =
+        selectedTeamPlayer &&
+        selectedTeamPlayer.teamIdx === teamIdx &&
+        selectedTeamPlayer.playerIdx === playerIdx;
+      // Доступны для рокировки: игроки из ДРУГИХ команд (и сам выбранный).
+      const isSwapTarget = selectedTeamPlayer && selectedTeamPlayer.teamIdx !== teamIdx;
+      const cls = [
+        'team-player-card',
+        isSelected ? 'team-player-selected' : '',
+        isSwapTarget ? 'team-player-swap-target' : ''
+      ].filter(Boolean).join(' ');
+      return `<div class="${cls}" onclick="onTeamPlayerClick(${teamIdx}, ${playerIdx})">${escapeHtml(name)}</div>`;
     }).join('');
 
     inner += `
       <div class="team-card">
-        <div class="team-title">Команда ${idx + 1} (${team.length} человек)</div>
-        <div class="team-main">
-          <ol class="team-main-ol">
-            ${items}
-          </ol>
-        </div>
+        <div class="team-title">Команда ${teamIdx + 1} (${team.length} человек)</div>
+        <div class="team-players">${items}</div>
       </div>
     `;
   });
 
   content.innerHTML = inner;
-  modal.style.display = 'flex';
+}
+
+/** Клик по карточке игрока: выбор → рокировка. */
+function onTeamPlayerClick(teamIdx, playerIdx) {
+  if (!selectedTeamPlayer) {
+    // Первый клик — выбираем игрока.
+    selectedTeamPlayer = { teamIdx, playerIdx };
+  } else if (
+    selectedTeamPlayer.teamIdx === teamIdx &&
+    selectedTeamPlayer.playerIdx === playerIdx
+  ) {
+    // Клик по тому же игроку — снимаем выбор.
+    selectedTeamPlayer = null;
+  } else if (selectedTeamPlayer.teamIdx !== teamIdx) {
+    // Рокировка между командами: обмен местами.
+    const { teamIdx: fromTeam, playerIdx: fromPlayer } = selectedTeamPlayer;
+    const tmp = teamsState[fromTeam][fromPlayer];
+    teamsState[fromTeam][fromPlayer] = teamsState[teamIdx][playerIdx];
+    teamsState[teamIdx][playerIdx] = tmp;
+    selectedTeamPlayer = null;
+  }
+  renderTeams();
 }
 
 function rerollTeams() {

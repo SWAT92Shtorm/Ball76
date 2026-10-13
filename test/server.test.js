@@ -23,6 +23,7 @@ const { extractFunction, extractConst } = require('./helpers/extract-function');
 const NAME_REGEX = extractConst('server.js', 'NAME_REGEX');
 const validateFullName = extractFunction('server.js', 'validateFullName', { NAME_REGEX });
 const formatDateMSK = extractFunction('server.js', 'formatDateMSK');
+const normalizeScoreValue = extractFunction('server.js', 'normalizeScoreValue');
 
 test('validateFullName: корректные ФИО из 3–5 слов', () => {
   assert.equal(validateFullName('Иванов Иван Иванович'), null);
@@ -96,4 +97,40 @@ test('formatDateMSK: корректно переводит UTC в МСК (UTC+3)
 test('formatDateMSK: корректно на границе года', () => {
   // 23:30 UTC 31 декабря → 02:30 МСК 1 января
   assert.equal(formatDateMSK(new Date('2026-12-31T23:30:00Z')), '2027-01-01');
+});
+
+test('normalizeScoreValue: корректные значения счёта', () => {
+  assert.equal(normalizeScoreValue(0), 0);
+  assert.equal(normalizeScoreValue(2), 2);
+  assert.equal(normalizeScoreValue(3), 3);
+  assert.equal(normalizeScoreValue(999), 999);
+});
+
+test('normalizeScoreValue: строки-числа приводятся к целому', () => {
+  assert.equal(normalizeScoreValue('5'), 5);
+  assert.equal(normalizeScoreValue('0'), 0);
+});
+
+test('normalizeScoreValue: дробные обрезаются до целого', () => {
+  assert.equal(normalizeScoreValue(2.9), 2);
+  assert.equal(normalizeScoreValue(-1.5), null); // отрицательное после trunc — отвергается
+});
+
+test('normalizeScoreValue: отрицательные значения отвергаются', () => {
+  assert.equal(normalizeScoreValue(-1), null);
+  assert.equal(normalizeScoreValue(-100), null);
+});
+
+test('normalizeScoreValue: слишком большие значения отвергаются', () => {
+  assert.equal(normalizeScoreValue(1000), null);
+  assert.equal(normalizeScoreValue(1e9), null);
+});
+
+test('normalizeScoreValue: нечисловые значения отвергаются', () => {
+  assert.equal(normalizeScoreValue('abc'), null);
+  assert.equal(normalizeScoreValue(NaN), null);
+  assert.equal(normalizeScoreValue(Infinity), null);
+  assert.equal(normalizeScoreValue(null), null);
+  assert.equal(normalizeScoreValue(undefined), null);
+  assert.equal(normalizeScoreValue({}), null);
 });

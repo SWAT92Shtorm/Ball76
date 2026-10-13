@@ -1673,6 +1673,10 @@ async function openTeamsModal() {
   const numTeams = players.length >= 15 ? 3 : 2;
   selectedTeamPlayer = null;
 
+  // Вкладка «Команды» активна по умолчанию; счёт игры загружаем параллельно.
+  switchTeamsTab('teams');
+  loadGameScore();
+
   // Пытаемся загрузить ранее сохранённый состав (тот же зал + дата).
   let saved = null;
   try {
@@ -1811,9 +1815,156 @@ function closeTeamsModal() {
   document.getElementById('teamsModal').style.display = 'none';
 }
 
+// ==================== 7.2. SCORE (вкладка «Счёт») ====================
+
+// Активная вкладка модалки: 'teams' или 'score'.
+let teamsActiveTab = 'teams';
+// Текущий счёт: { score1, score2 }. Начинается с 0:0.
+let scoreState = { score1: 0, score2: 0 };
+// Кто последним менял счёт (для подписи «обновлено …»).
+let scoreUpdatedBy = null;
+// Отложенное сохранение счёта: серия быстрых нажатий не спамит API.
+let scoreSaveTimer = null;
+const SCORE_SAVE_DELAY_MS = 500;
+
+/** Переключить вкладку модалки: 'teams' или 'score'. */
+function switchTeamsTab(tab) {
+  teamsActiveTab = tab === 'score' ? 'score' : 'teams';
+  const teamsEl = document.getElementById('teamsContent');
+  const scoreEl = document.getElementById('scoreContent');
+  const teamsBtn = document.getElementById('tabBtnTeams');
+  const scoreBtn = document.getElementById('tabBtnScore');
+  const footerBtn = document.getElementById('teamsFooterBtn');
+
+  teamsEl.style.display = teamsActiveTab === 'teams' ? '' : 'none';
+  scoreEl.style.display = teamsActiveTab === 'score' ? '' : 'none';
+  teamsBtn.classList.toggle('active', teamsActiveTab === 'teams');
+  scoreBtn.classList.toggle('active', teamsActiveTab === 'score');
+
+  // В подвале на вкладке команд — «Перемешать», на вкладке счёта — «Сбросить».
+  if (teamsActiveTab === 'score') {
+    footerBtn.textContent = '♻️ Сбросить счёт';
+    footerBtn.onclick = resetScore;
+  } else {
+    footerBtn.textContent = '🎲 Перемешать';
+    footerBtn.onclick = rerollTeams;
+  }
+}
+
+/** Отрисовать панель счёта: две команды, крупные цифры, кнопки +2/+3 и −2/−3. */
+function renderScore() {
+  const el = document.getElementById('scoreContent');
+  const saved = scoreUpdatedBy
+    ? `<p class="score-updated">👤 Последний раз менял: ${escapeHtml(scoreUpdatedBy)}</p>`
+    : '';
+
+  const teamBlock = (teamIdx) => `
+    <div class="score-team">
+      <div class="score-team-name">Команда ${teamIdx + 1}</div>
+      <div class="score-value" id="scoreValue${teamIdx + 1}">${scoreState['score' + (teamIdx + 1)]}</div>
+      <div class="score-buttons">
+        <button class="score-btn score-btn-add" onclick="changeScore(${teamIdx + 1}, 2)">+2</button>
+        <button class="score-btn score-btn-add" onclick="changeScore(${teamIdx + 1}, 3)">+3</button>
+        <button class="score-btn score-btn-sub" onclick="changeScore(${teamIdx + 1}, -2)">−2</button>
+        <button class="score-btn score-btn-sub" onclick="changeScore(${teamIdx + 1}, -3)">−3</button>
+      </div>
+    </div>
+  `;
+
+  el.innerHTML = `
+    <p class="score-hint">💡 Вести счёт может каждый: +2/+3 — добавить очки, −2/−3 — убрать при ошибке. Счёт сохраняется на игру автоматически.</p>
+    <div class="score-board">
+      ${teamBlock(0)}
+      <div class="score-divider">:</div>
+      ${teamBlock(1)}
+    </div>
+    ${saved}
+  `;
+}
+
+/** Изменить счёт команды teamNum (1 или 2) на delta (+2/+3/−2/−3). */
+function changeScore(teamNum, delta) {
+  const key = 'score' + teamNum;
+  // Не даём уйти в минус: от 0 убирать нечего.
+  const next = Math.max(0, scoreState[key] + delta);
+  if (next === scoreState[key]) return;
+  scoreState[key] = next;
+  scoreUpdatedBy = getLastPlayerName();
+  renderScore();
+  queueSaveScore();
+}
+
+/** Сбросить счёт на 0:0 и сохранить. */
+function resetScore() {
+  if (scoreState.score1 === 0 && scoreState.score2 === 0) return;
+  scoreState = { score1: 0, score2: 0 };
+  scoreUpdatedBy = getLastPlayerName();
+  renderScore();
+  queueSaveScore();
+}
+
+/** Сохранить счёт на сервере (немедленно). */
+function saveScoreNow(hall, date) {
+  if (scoreSaveTimer) { clearTimeout(scoreSaveTimer); scoreSaveTimer = null; }
+  const ctx = (hall && date) ? { hall, date } : getTeamsGameContext();
+  fetch(`${API_BASE_URL}/api/games/${ctx.hall}/${ctx.date}/score`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', ...getTunnelHeaders() },
+    body: JSON.stringify({
+      score1: scoreState.score1,
+      score2: scoreState.score2,
+      updatedBy: scoreUpdatedBy
+    })
+  }).catch((e) => console.warn('Не удалось сохранить счёт:', e));
+}
+
+/** Отложить сохранение счёта (для серии быстрых нажатий). */
+function queueSaveScore() {
+  if (scoreSaveTimer) clearTimeout(scoreSaveTimer);
+  scoreSaveTimer = setTimeout(() => { scoreSaveTimer = null; saveScoreNow(); }, SCORE_SAVE_DELAY_MS);
+}
+
+/** Загрузить сохранённый счёт игры (или 0:0, если счёт ещё не вели). */
+async function loadGameScore() {
+  const { hall, date } = getTeamsGameContext();
+  try {
+    const resp = await fetch(
+      `${API_BASE_URL}/api/games/${hall}/${date}/score`,
+      { headers: getTunnelHeaders() }
+    );
+    if (resp.ok) {
+      const data = await resp.json();
+      if (data.score) {
+        scoreState = { score1: data.score.score1 || 0, score2: data.score.score2 || 0 };
+        scoreUpdatedBy = data.updatedBy || null;
+      } else {
+        scoreState = { score1: 0, score2: 0 };
+        scoreUpdatedBy = null;
+      }
+    }
+  } catch (e) {
+    console.warn('Не удалось загрузить счёт игры:', e);
+  }
+  renderScore();
+}
+
+/** Последнее ФИО игрока с этого устройства (кто ведёт счёт). */
+function getLastPlayerName() {
+  try { return localStorage.getItem('ball76_lastName') || null; } catch (_) { return null; }
+}
+
 // ==================== 7.5. CHANGELOG (модалка истории версий) ====================
 
 const CHANGELOG = [
+  {
+    label: 'v2026.10.13 — счёт игры',
+    items: [
+      '🗂️ Окно команд разделено на вкладки: «Команды» и «Счёт»',
+      '🏀 Счёт игры: начинается с 0:0, кнопки +2/+3 добавляют очки, −2/−3 убирают при ошибке',
+      '👤 Вести счёт может каждый — счёт сохраняется на игру автоматически',
+      '♻️ Кнопка «Сбросить счёт» возвращает 0:0'
+    ]
+  },
   {
     label: 'v2026.10.13 — состав команд сохраняется',
     items: [

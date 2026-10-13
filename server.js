@@ -38,6 +38,7 @@ pool.query('SELECT 1')
   })
   .then(() => ensureGameConfirmSchema())
   .then(() => ensureGameTeamsSchema())
+  .then(() => ensureGameScoreSchema())
   .then(() => loadHallsFromDB())
   .then(() => backfillConfirmedDuration())
   .catch(err => {
@@ -399,6 +400,34 @@ async function ensureGameTeamsSchema() {
       UNIQUE (hall_id, date)
     )
   `);
+}
+
+// Дублирует migrations/007_game_score.sql: таблица счёта игры
+// (зал + дата) — чтобы сервер был самодостаточен.
+async function ensureGameScoreSchema() {
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS public.game_score (
+      id          serial PRIMARY KEY,
+      hall_id     text NOT NULL,
+      date        date NOT NULL,
+      score1      integer NOT NULL DEFAULT 0,
+      score2      integer NOT NULL DEFAULT 0,
+      updated_at  timestamp without time zone NOT NULL DEFAULT now(),
+      updated_by  text,
+      UNIQUE (hall_id, date)
+    )
+  `);
+}
+
+// Нормализовать значение счёта: целое неотрицательное число в пределах
+// 0..999. Возвращает число или null, если значение невалидно.
+function normalizeScoreValue(value) {
+  if (value === null || value === undefined || value === '') return null;
+  const n = Number(value);
+  if (!Number.isFinite(n)) return null;
+  const int = Math.trunc(n);
+  if (int < 0 || int > 999) return null;
+  return int;
 }
 
 // Идемпотентно дозаполнить длительность у уже подтверждённых игр, у которых
@@ -2380,6 +2409,119 @@ app.put('/api/games/:hallId/:date/teams', mutationLimiter, async (req, res) => {
   } catch (err) {
     console.error('Ошибка сохранения состава команд:', err);
     res.status(500).json({ error: 'Failed to save teams' });
+  }
+});
+
+/**
+ * @swagger
+ * /api/games/{hallId}/{date}/score:
+ *   get:
+ *     summary: Счёт игры
+ *     description: Возвращает сохранённый счёт игры (зал + дата) или null, если счёт ещё не вели.
+ *     tags: [Games]
+ *     parameters:
+ *       - in: path
+ *         name: hallId
+ *         required: true
+ *         schema: { type: string }
+ *       - in: path
+ *         name: date
+ *         required: true
+ *         schema: { type: string, format: date }
+ *     responses:
+ *       200:
+ *         description: Счёт игры (score = null, если ещё не вели)
+ *       400:
+ *         description: Неверный зал или дата
+ */
+app.get('/api/games/:hallId/:date/score', readLimiter, async (req, res) => {
+  const { hallId, date } = req.params;
+  if (!isKnownHall(hallId) || !isValidDateStr(date)) {
+    return res.status(400).json({ error: 'Неверный зал или дата' });
+  }
+  try {
+    const result = await pool.query(
+      'SELECT score1, score2, updated_at, updated_by FROM public.game_score WHERE hall_id = $1 AND date = $2',
+      [hallId, date]
+    );
+    if (result.rows.length === 0) {
+      return res.json({ score: null, updatedAt: null, updatedBy: null });
+    }
+    const row = result.rows[0];
+    res.json({
+      score: { score1: row.score1, score2: row.score2 },
+      updatedAt: row.updated_at,
+      updatedBy: row.updated_by
+    });
+  } catch (err) {
+    console.error('Ошибка чтения счёта игры:', err);
+    res.status(500).json({ error: 'Failed to read score' });
+  }
+});
+
+/**
+ * @swagger
+ * /api/games/{hallId}/{date}/score:
+ *   put:
+ *     summary: Сохранить счёт игры
+ *     description: Записывает счёт игры (зал + дата). Вызывается автоматически при изменении счёта на вкладке «Счёт».
+ *     tags: [Games]
+ *     parameters:
+ *       - in: path
+ *         name: hallId
+ *         required: true
+ *         schema: { type: string }
+ *       - in: path
+ *         name: date
+ *         required: true
+ *         schema: { type: string, format: date }
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               score1:
+ *                 type: integer
+ *               score2:
+ *                 type: integer
+ *               updatedBy:
+ *                 type: string
+ *     responses:
+ *       200:
+ *         description: Сохранено
+ *       400:
+ *         description: Неверные параметры
+ */
+app.put('/api/games/:hallId/:date/score', mutationLimiter, async (req, res) => {
+  const { hallId, date } = req.params;
+  if (!isKnownHall(hallId) || !isValidDateStr(date)) {
+    return res.status(400).json({ error: 'Неверный зал или дата' });
+  }
+  const body = req.body || {};
+  const score1 = normalizeScoreValue(body.score1);
+  const score2 = normalizeScoreValue(body.score2);
+  if (score1 === null || score2 === null) {
+    return res.status(400).json({ error: 'Счёт должен быть целым числом от 0 до 999' });
+  }
+  const updatedBy =
+    typeof body.updatedBy === 'string' ? body.updatedBy.slice(0, 120) : null;
+  try {
+    await pool.query(
+      `INSERT INTO public.game_score (hall_id, date, score1, score2, updated_at, updated_by)
+         VALUES ($1, $2, $3, $4, now(), $5)
+       ON CONFLICT (hall_id, date) DO UPDATE SET
+         score1 = EXCLUDED.score1,
+         score2 = EXCLUDED.score2,
+         updated_at = now(),
+         updated_by = EXCLUDED.updated_by`,
+      [hallId, date, score1, score2, updatedBy]
+    );
+    res.json({ ok: true, score: { score1, score2 } });
+  } catch (err) {
+    console.error('Ошибка сохранения счёта игры:', err);
+    res.status(500).json({ error: 'Failed to save score' });
   }
 });
 

@@ -1136,6 +1136,143 @@ th {
   line-height: 1.4;
 }
 
+/* ==== Вкладки модалки команд (Команды / Счёт) ==== */
+
+.modal-tabs {
+  display: flex;
+  gap: 6px;
+  margin-bottom: 12px;
+}
+
+.modal-tab {
+  flex: 1;
+  margin: 0;
+  padding: 8px 10px;
+  border: 1px solid #404040;
+  border-radius: 6px;
+  background: #242424;
+  color: #aaa;
+  font-size: 13.5px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s, border-color 0.15s;
+}
+
+.modal-tab:hover {
+  background: #2e2e2e;
+  color: #e0e0e0;
+}
+
+.modal-tab.active {
+  background: rgba(0, 170, 255, 0.12);
+  border-color: rgba(79, 195, 247, 0.5);
+  color: #4fc3f7;
+}
+
+/* ==== Панель счёта (вкладка «Счёт») ==== */
+
+.score-panel {
+  margin-top: 8px;
+}
+
+.score-hint {
+  margin-bottom: 12px;
+  font-size: 12.5px;
+  color: #999;
+  line-height: 1.4;
+}
+
+.score-board {
+  display: flex;
+  align-items: stretch;
+  justify-content: center;
+  gap: 10px;
+}
+
+.score-team {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  padding: 14px 10px;
+  border: 1px solid rgba(79, 195, 247, 0.2);
+  border-radius: 10px;
+  background: rgba(79, 195, 247, 0.04);
+}
+
+.score-team-name {
+  font-weight: 700;
+  font-size: 13px;
+  color: #4fc3f7;
+  letter-spacing: 0.3px;
+}
+
+.score-value {
+  font-size: 44px;
+  font-weight: 700;
+  line-height: 1;
+  color: #ffffff;
+  font-variant-numeric: tabular-nums;
+}
+
+.score-buttons {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+  width: 100%;
+}
+
+.score-btn {
+  margin: 0;
+  padding: 8px 0;
+  width: 100%;
+  border-radius: 6px;
+  border: 1px solid transparent;
+  font-size: 14px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background 0.15s, transform 0.1s;
+}
+
+.score-btn:active {
+  transform: scale(0.95);
+}
+
+.score-btn-add {
+  background: rgba(46, 204, 113, 0.15);
+  border-color: rgba(46, 204, 113, 0.4);
+  color: #7ee2a8;
+}
+
+.score-btn-add:hover {
+  background: rgba(46, 204, 113, 0.28);
+}
+
+.score-btn-sub {
+  background: rgba(198, 40, 40, 0.15);
+  border-color: rgba(198, 40, 40, 0.4);
+  color: #ff8a80;
+}
+
+.score-btn-sub:hover {
+  background: rgba(198, 40, 40, 0.28);
+}
+
+.score-divider {
+  align-self: center;
+  font-size: 32px;
+  font-weight: 700;
+  color: #666;
+}
+
+.score-updated {
+  margin-top: 10px;
+  font-size: 12px;
+  color: #777;
+  text-align: center;
+}
+
 /* Общий footer модалок: кнопки в ряд, по правому краю */
 .modal-footer {
   margin-top: 16px;

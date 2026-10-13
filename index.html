@@ -19,7 +19,7 @@
 
   <title>Запись на баскетбол в Ярославле — ЛОКОМОТИВ и АТЛАНТ</title>
 
-  <link rel="stylesheet" href="styles.css?v=20261013teams1">
+  <link rel="stylesheet" href="styles.css?v=20261013score1">
 
 </head>
 <body>
@@ -121,10 +121,17 @@
         <span class="modal-close-btn" onclick="closeTeamsModal()">×</span>
       </div>
 
+      <div class="modal-tabs">
+        <button id="tabBtnTeams" class="modal-tab active" onclick="switchTeamsTab('teams')">👥 Команды</button>
+        <button id="tabBtnScore" class="modal-tab" onclick="switchTeamsTab('score')">🏀 Счёт</button>
+      </div>
+
       <div id="teamsContent" class="teams-list"></div>
 
+      <div id="scoreContent" class="score-panel" style="display: none;"></div>
+
       <div class="modal-footer">
-        <button class="modal-btn modal-btn-primary" onclick="rerollTeams()">🎲 Перемешать</button>
+        <button id="teamsFooterBtn" class="modal-btn modal-btn-primary" onclick="rerollTeams()">🎲 Перемешать</button>
         <button class="modal-btn modal-btn-cancel" onclick="closeTeamsModal()">Закрыть</button>
       </div>
     </div>
@@ -300,6 +307,6 @@
     </div>
   </div>
 
-  <script src="app.js?v=20261013teams3"></script>
+  <script src="app.js?v=20261013score2"></script>
 </body>
 </html>

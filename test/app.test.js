@@ -153,3 +153,48 @@ test('reconcileTeams: отбрасывает дубликаты игрока', (
   const out = reconcileTeams(saved, players);
   assert.deepEqual(out.flat().sort(), ['А', 'Б']);
 });
+
+// --- adjustTeamCount: приведение количества команд к целевому ---
+// Правило: ≥ 15 игроков → 3 команды. Если сохранённый состав из 2 команд,
+// а игроков стало 17 — состав делится, без перемешивания.
+
+const adjustTeamCount = extractFunction('app.js', 'adjustTeamCount');
+
+test('adjustTeamCount: 2 команды → 3 (самая большая делится пополам)', () => {
+  const teams = [['А', 'Б', 'В', 'Г'], ['Д', 'Е', 'Ж', 'З']];
+  const out = adjustTeamCount(teams, 3);
+  assert.equal(out.length, 3);
+  assert.deepEqual(out.flat().sort(), ['А', 'Б', 'В', 'Г', 'Д', 'Е', 'Ж', 'З'].sort());
+});
+
+test('adjustTeamCount: 3 команды → 2 (две самые маленькие сливаются)', () => {
+  const teams = [['А', 'Б', 'В', 'Г'], ['Д'], ['Е']];
+  const out = adjustTeamCount(teams, 2);
+  assert.equal(out.length, 2);
+  assert.deepEqual(out.flat().sort(), ['А', 'Б', 'В', 'Г', 'Д', 'Е'].sort());
+  // Слились две самые маленькие (['Д'] и ['Е']) — они теперь вместе.
+  assert.deepEqual(out.find((t) => t.includes('Д')), ['Д', 'Е']);
+});
+
+test('adjustTeamCount: количество уже целевое — состав не меняется', () => {
+  const teams = [['А', 'Б'], ['В', 'Г']];
+  const out = adjustTeamCount(teams, 2);
+  assert.equal(out.length, 2);
+  assert.deepEqual(out.flat().sort(), ['А', 'Б', 'В', 'Г'].sort());
+});
+
+test('adjustTeamCount: не теряет игроков при делении с нечётным размером', () => {
+  const teams = [['А', 'Б', 'В', 'Г', 'Д'], ['Е', 'Ж']];
+  const out = adjustTeamCount(teams, 3);
+  assert.equal(out.length, 3);
+  assert.equal(out.flat().length, 7);
+  assert.deepEqual(out.flat().sort(), ['А', 'Б', 'В', 'Г', 'Д', 'Е', 'Ж'].sort());
+});
+
+test('adjustTeamCount: не делит команду из одного игрока', () => {
+  const teams = [['А'], ['Б']];
+  const out = adjustTeamCount(teams, 3);
+  // Делить нечего — состав остаётся из 2 команд, без потери игроков.
+  assert.equal(out.length, 2);
+  assert.deepEqual(out.flat().sort(), ['А', 'Б']);
+});

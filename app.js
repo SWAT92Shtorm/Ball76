@@ -1661,6 +1661,42 @@ function reconcileTeams(savedTeams, players) {
   return total > 0 ? result : null;
 }
 
+// Привести количество команд к целевому (правило: ≥ 15 игроков → 3 команды).
+// При нехватке — разделить самую большую команду пополам, при избытке —
+// слить две самые маленькие. Сохранённые игроки не перемешиваются.
+function adjustTeamCount(teams, target) {
+  let result = teams.map((t) => t.slice());
+
+  // Команд меньше, чем нужно: делим самую большую.
+  while (result.length < target) {
+    let maxIdx = 0;
+    for (let i = 1; i < result.length; i++) {
+      if (result[i].length > result[maxIdx].length) maxIdx = i;
+    }
+    const big = result[maxIdx];
+    if (big.length < 2) break; // делить нечего
+    const half = Math.ceil(big.length / 2);
+    const moved = big.splice(half);
+    result[maxIdx] = big;
+    result.push(moved);
+  }
+
+  // Команд больше, чем нужно: сливаем две самые маленькие.
+  while (result.length > target && result.length > 1) {
+    let minA = 0, minB = 1;
+    if (result[1].length < result[0].length) { minA = 1; minB = 0; }
+    for (let i = 2; i < result.length; i++) {
+      if (result[i].length < result[minA].length) { minB = minA; minA = i; }
+      else if (result[i].length < result[minB].length) { minB = i; }
+    }
+    const merged = result[minA].concat(result[minB]);
+    result = result.filter((_, i) => i !== minA && i !== minB);
+    result.push(merged);
+  }
+
+  return result.filter((t) => t.length > 0);
+}
+
 async function openTeamsModal() {
   const { hall, date } = getTeamsGameContext();
   const players = playersByHall[hall] || [];
@@ -1696,11 +1732,12 @@ async function openTeamsModal() {
 
   if (reconciled) {
     // Показываем сохранённый состав (с учётом изменений в списке участников).
-    teamsState = reconciled;
+    // Количество команд приводим к целевому: ≥ 15 игроков → 3 команды.
+    teamsState = adjustTeamCount(reconciled, numTeams);
     renderTeams();
     document.getElementById('teamsModal').style.display = 'flex';
     // Если состав изменился (кто-то добавился/отменил) — обновляем сохранённый.
-    if (JSON.stringify(reconciled) !== JSON.stringify(saved)) {
+    if (JSON.stringify(teamsState) !== JSON.stringify(saved)) {
       saveTeamsNow(hall, date);
     }
   } else {
@@ -1987,6 +2024,13 @@ function getLastPlayerName() {
 // ==================== 7.5. CHANGELOG (модалка истории версий) ====================
 
 const CHANGELOG = [
+  {
+    label: 'v2026.10.13 — 3 команды при 15+ игроках',
+    items: [
+      '🏀 Если игроков стало 15 и больше, а сохранённый состав из 2 команд — он сам делится на 3',
+      '⚖️ Деление без перемешивания: самая большая команда разделяется пополам'
+    ]
+  },
   {
     label: 'v2026.10.13 — счёт игры',
     items: [

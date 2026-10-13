@@ -12,3 +12,9 @@ node_modules/
 bot/.env
 bot/node_modules/
 bot/npm-debug.log*
+
+# Дампы БД: содержат персональные данные игроков.
+# В git хранится только анонимизированный пример ball76_dump.sql.
+*.dump
+*.sql.gz
+*_dump.sql

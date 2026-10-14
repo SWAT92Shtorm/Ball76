@@ -1766,6 +1766,19 @@ function queueSaveTeams() {
   teamsSaveTimer = setTimeout(() => { teamsSaveTimer = null; saveTeamsNow(); }, TEAMS_SAVE_DELAY_MS);
 }
 
+// Цвет манишки команды: индекс 0 → синяя, 1 → салатовая, 2 → белая.
+const TEAM_VESTS = [
+  { name: 'Синие',  css: 'vest-blue' },
+  { name: 'Салатовые', css: 'vest-green' },
+  { name: 'Белые',  css: 'vest-white' }
+];
+
+/** HTML-иконка манишки команды (teamIdx: 0, 1, 2). */
+function vestIcon(teamIdx) {
+  const vest = TEAM_VESTS[teamIdx] || TEAM_VESTS[0];
+  return `<span class="vest-icon ${vest.css}" title="${vest.name}"></span>`;
+}
+
 /** Отрисовать команды: каждый игрок — отдельная карточка-панелька. */
 function renderTeams() {
   const content = document.getElementById('teamsContent');
@@ -1799,7 +1812,7 @@ function renderTeams() {
 
     inner += `
       <div class="team-card">
-        <div class="team-title">Команда ${teamIdx + 1} (${team.length} человек)</div>
+        <div class="team-title">${vestIcon(teamIdx)} ${TEAM_VESTS[teamIdx].name} (${team.length} чел.)</div>
         <div class="team-players">${items}</div>
       </div>
     `;
@@ -1903,14 +1916,20 @@ function renderScore() {
   const el = document.getElementById('scoreContent');
   const numTeams = teamsState.length;
 
-  // Выбор пары нужен только при 3 командах: матчи 1-2, 1-3, 2-3.
+  // Выбор пары нужен только при 3 командах: матчи синие-салатовые,
+  // синие-белые, салатовые-белые.
   let pairSelector = '';
   if (numTeams >= 3) {
-    const pairs = [['1-2', '1 ⚔ 2'], ['1-3', '1 ⚔ 3'], ['2-3', '2 ⚔ 3']];
-    const chips = pairs.map(([p, label]) => `
-      <button class="score-pair-chip ${p === scorePair ? 'active' : ''}"
-              onclick="selectScorePair('${p}')">${label}</button>
-    `).join('');
+    const pairs = ['1-2', '1-3', '2-3'];
+    const chips = pairs.map((p) => {
+      const [a, b] = p.split('-').map(Number);
+      const active = p === scorePair ? ' active' : '';
+      return `
+        <button class="score-pair-chip${active}" onclick="selectScorePair('${p}')">
+          ${vestIcon(a - 1)}<span class="score-pair-vs">·</span>${vestIcon(b - 1)}
+        </button>
+      `;
+    }).join('');
     pairSelector = `
       <div class="score-pair-selector">
         <span class="score-pair-label">Кто играет:</span>
@@ -1928,7 +1947,7 @@ function renderScore() {
 
   const teamBlock = (teamNum, scoreKey) => `
     <div class="score-team">
-      <div class="score-team-name">Команда ${teamNum}</div>
+      <div class="score-team-name">${vestIcon(teamNum - 1)} ${TEAM_VESTS[teamNum - 1].name}</div>
       <div class="score-value" id="scoreValue${teamNum}">${scoreState[scoreKey]}</div>
       <div class="score-buttons">
         <button class="score-btn score-btn-add" onclick="changeScore('${scoreKey}', 2)">+2</button>
@@ -2025,6 +2044,13 @@ function getLastPlayerName() {
 // ==================== 7.5. CHANGELOG (модалка истории версий) ====================
 
 const CHANGELOG = [
+  {
+    label: 'v2026.10.14 — манишки вместо номеров',
+    items: [
+      '🦺 Команды теперь подписаны манишками: синяя, салатовая, белая — с иконками',
+      '⚔️ На вкладке счёта выбор пары тоже по манишкам: кто с кем играет'
+    ]
+  },
   {
     label: 'v2026.10.13 — 3 команды при 15+ игроках',
     items: [

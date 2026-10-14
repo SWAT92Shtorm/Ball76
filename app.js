@@ -1709,9 +1709,8 @@ async function openTeamsModal() {
   const numTeams = players.length >= 15 ? 3 : 2;
   selectedTeamPlayer = null;
 
-  // Вкладка «Команды» активна по умолчанию; счёт игры загружаем параллельно.
+  // Вкладка «Команды» активна по умолчанию.
   switchTeamsTab('teams');
-  loadGameScore();
 
   // Пытаемся загрузить ранее сохранённый состав (тот же зал + дата).
   let saved = null;
@@ -1747,6 +1746,10 @@ async function openTeamsModal() {
     document.getElementById('teamsModal').style.display = 'flex';
     saveTeamsNow(hall, date);
   }
+
+  // Счёт загружаем после установки teamsState: от его длины зависит
+  // отображение селектора «Кто играет» на вкладке счёта.
+  loadGameScore();
 }
 
 /** Сохранить состав команд на сервере (немедленно). */

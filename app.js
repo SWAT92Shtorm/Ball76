@@ -533,12 +533,19 @@ async function loadFromAPI({ silent = false, refreshHall = true } = {}) {
     let playersData;
     if (refreshHall) {
       const dateStr = getNearestGameDate(currentHall);
-      const response = await fetch(
-        `${API_BASE_URL}/api/players/${currentHall}/${dateStr}`,
-        { headers: getTunnelHeaders() }
-      );
-      if (!response.ok) throw new Error('Не удалось загрузить участников');
-      playersData = await response.json();
+      // Если ближайшей игры нет (нет расписания или все игры отменены) —
+      // не запрашиваем участников, иначе запрос к /null упадёт и покажет
+      // ложный баннер «Не удалось подключиться к серверу».
+      if (!dateStr) {
+        playersData = { playersByHall };
+      } else {
+        const response = await fetch(
+          `${API_BASE_URL}/api/players/${currentHall}/${dateStr}`,
+          { headers: getTunnelHeaders() }
+        );
+        if (!response.ok) throw new Error('Не удалось загрузить участников');
+        playersData = await response.json();
+      }
     } else {
       playersData = { playersByHall };
     }

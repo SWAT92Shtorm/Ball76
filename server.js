@@ -2092,9 +2092,9 @@ app.get('/api/games/:hallId/time-overrides', readLimiter, async (req, res) => {
   try {
     const today = formatDateMSK(new Date());
     const result = await pool.query(
-      `SELECT date, start_time, time_note
+      `SELECT date, start_time, time_note, cancelled
          FROM games
-        WHERE hall_id = $1 AND start_time IS NOT NULL AND date >= $2
+        WHERE hall_id = $1 AND (start_time IS NOT NULL OR cancelled = true) AND date >= $2
         ORDER BY date`,
       [hallId, today]
     );

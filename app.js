@@ -867,7 +867,7 @@ function getNearestGame(hall) {
     const dayDiff = (dayCode - nowWeekDay + 7) % 7;
     // Пропускаем отменённые дни — ближайшая игра на отменённый день не определяется.
     const dateStr = dateForDayCode(dayCode);
-    const ov = timeOverride(hall, dateStr);
+    const ov = gameTimeCache[`${hall}|${dateStr}`];
     if (ov && ov.cancelled) return;
     if (!nearest || dayDiff < nearest.dayDiff) {
       nearest = { dayDiff, day: item.day, from: item.from, to: item.to };

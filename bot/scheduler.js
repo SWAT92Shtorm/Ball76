@@ -48,7 +48,7 @@ async function broadcast(bot, text) {
  * Группа подходит, если её название содержит название зала ИЛИ одно из
  * ключевых слов, заданных в HALL_KEYWORDS для этого зала.
  */
-function hallMatchesGroup(hallId, hallName, groupTitle) {
+export function hallMatchesGroup(hallId, hallName, groupTitle) {
   if (!groupTitle) return false;
   const t = String(groupTitle).toLowerCase();
   if (hallName && t.includes(String(hallName).toLowerCase())) return true;

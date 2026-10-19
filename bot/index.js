@@ -15,6 +15,7 @@ import {
 } from './handlers/flow.js';
 import { handleText, aiEnabled, confirmAction } from './handlers/ai.js';
 import { registerChat, handleGroupMention } from './handlers/group.js';
+import { handlePoll, handleReaction } from './handlers/poll.js';
 import { startScheduler } from './scheduler.js';
 
 // --- Создание бота (с поддержкой кастомного API-корня для обхода блокировки) ---
@@ -125,6 +126,12 @@ bot.on('message:text', async (ctx) => {
     await sendMenu(ctx, 'ИИ недоступен, но команды работают');
   }
 });
+
+// --- Опросы: бот видит опрос (privacy mode DISABLED), парсит заголовок ---
+bot.on('message:poll', (ctx) => handlePoll(ctx));
+
+// --- Реакции: записываем на игру тех, кто отреагировал на опрос ---
+bot.on('message_reaction', (ctx) => handleReaction(ctx));
 
 // --- Обработка ошибок ---
 bot.catch((err) => {

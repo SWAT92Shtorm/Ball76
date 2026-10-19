@@ -872,8 +872,12 @@ function getNearestGame(hall) {
   hallSchedule(hall).forEach(item => {
     const dayCode = getDayCode(item.day);
     const dayDiff = (dayCode - nowWeekDay + 7) % 7;
-    // Пропускаем отменённые дни — ближайшая игра на отменённый день не определяется.
-    const dateStr = dateForDayCode(dayCode);
+    // Дата ближайшего вхождения этого дня недели (now + dayDiff), а не дата
+    // в текущей неделе (dateForDayCode) — иначе для дней раньше сегодняшнего
+    // проверка отмены смотрела бы на прошедшую дату и пропускала отмену.
+    const nd = new Date(now);
+    nd.setDate(now.getDate() + dayDiff);
+    const dateStr = `${nd.getFullYear()}-${String(nd.getMonth() + 1).padStart(2, '0')}-${String(nd.getDate()).padStart(2, '0')}`;
     const ov = gameTimeCache[`${hall}|${dateStr}`];
     if (ov && ov.cancelled) return;
     if (!nearest || dayDiff < nearest.dayDiff) {

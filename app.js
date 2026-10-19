@@ -2619,6 +2619,9 @@ async function toggleGameCancel() {
     showToast(action, 'success');
     await loadTimeOverrides(hall);
     if (date === getNearestGameDate(hall)) await loadGameTime(hall, date);
+    // После отмены/снятия отмены ближайшая игра могла измениться —
+    // пересчитываем блок «Ближайшая игра» без перезагрузки страницы.
+    showNearestGame();
     showList();
     showSchedule();
   } catch (_) {

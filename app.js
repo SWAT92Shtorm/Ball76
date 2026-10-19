@@ -2821,8 +2821,7 @@ function addScheduleRow(value) {
     <input type="time" class="sched-from" value="${fromVal}" />
     <span class="sched-dash">–</span>
     <input type="time" class="sched-to" value="${toVal}" />
-    <button class="hall-mini-btn sched-del" title="Удалить день">✕</button>`;
-  row.querySelector('.sched-del').addEventListener('click', () => row.remove());
+    <span class="icon-btn sched-del" onclick="this.parentElement.remove()" title="Удалить день">✕</span>`;
   rows.appendChild(row);
 }
 

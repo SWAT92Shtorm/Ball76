@@ -1968,7 +1968,7 @@ async function getGameTime(hallId, dateStr) {
   const result = await pool.query(
     `SELECT start_time, end_time, time_note, time_changed_at,
             confirmed, confirmed_at, confirmed_price, confirmed_players,
-            confirmed_duration
+            confirmed_duration, cancelled
        FROM games WHERE hall_id = $1 AND date = $2
        ORDER BY (start_time IS NOT NULL) DESC, id DESC
        LIMIT 1`,
@@ -1988,6 +1988,7 @@ async function getGameTime(hallId, dateStr) {
     ? Number(row.confirmed_players) : null;
   const confirmedDuration = confirmed && row.confirmed_duration != null
     ? Number(row.confirmed_duration) : null;
+  const cancelled = !!(row && row.cancelled);
 
   if (hasOverride) {
     return {
@@ -2001,6 +2002,7 @@ async function getGameTime(hallId, dateStr) {
       confirmedPrice,
       confirmedPlayers,
       confirmedDuration,
+      cancelled,
       scheduledFrom: schedule ? formatHour(schedule.from) : null,
       scheduledTo: schedule ? formatHour(schedule.to) : null
     };
@@ -2017,6 +2019,7 @@ async function getGameTime(hallId, dateStr) {
     confirmedPrice,
     confirmedPlayers,
     confirmedDuration,
+    cancelled,
     scheduledFrom: schedule ? formatHour(schedule.from) : null,
     scheduledTo: schedule ? formatHour(schedule.to) : null
   };
@@ -2102,7 +2105,8 @@ app.get('/api/games/:hallId/time-overrides', readLimiter, async (req, res) => {
       overrides[dateStr] = {
         startTime: row.start_time,
         note: row.time_note || '',
-        isExtra: !scheduleForDate(hallId, dateStr)
+        isExtra: !scheduleForDate(hallId, dateStr),
+        cancelled: !!row.cancelled
       };
     });
 
@@ -2239,6 +2243,106 @@ app.delete('/api/games/:hallId/:date/time', mutationLimiter, requireAdmin, async
   } catch (err) {
     console.error('Ошибка сброса времени игры:', err);
     res.status(500).json({ error: 'Failed to reset game time' });
+  }
+});
+
+/**
+ * @swagger
+ * /api/games/{hallId}/{date}/cancel:
+ *   patch:
+ *     summary: Отменить игру
+ *     description: Только для администратора. Удаляет всех записавшихся и помечает игру отменённой.
+ *     tags: [Games]
+ *     parameters:
+ *       - in: path
+ *         name: hallId
+ *         required: true
+ *         schema: { type: string }
+ *       - in: path
+ *         name: date
+ *         required: true
+ *         schema: { type: string, format: date }
+ *     responses:
+ *       200:
+ *         description: Игра отменена
+ *       403:
+ *         description: Требуется вход администратора
+ */
+app.patch('/api/games/:hallId/:date/cancel', mutationLimiter, requireAdmin, async (req, res) => {
+  const { hallId, date } = req.params;
+  if (!isKnownHall(hallId) || !isValidDateStr(date)) {
+    return res.status(400).json({ error: 'Неверный зал или дата' });
+  }
+  if (isPastDate(date)) {
+    return res.status(400).json({ error: 'Нельзя отменить прошедшую игру' });
+  }
+  try {
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+      // Удаляем всех записавшихся на эту игру.
+      await client.query(
+        `DELETE FROM game_players
+          WHERE game_id IN (SELECT id FROM games WHERE hall_id = $1 AND date = $2)`,
+        [hallId, date]
+      );
+      // Помечаем игру отменённой.
+      await client.query(
+        `UPDATE games SET cancelled = true WHERE hall_id = $1 AND date = $2`,
+        [hallId, date]
+      );
+      await client.query('COMMIT');
+    } catch (txErr) {
+      try { await client.query('ROLLBACK'); } catch (_) {}
+      throw txErr;
+    } finally {
+      client.release();
+    }
+    const info = await getGameTime(hallId, date);
+    res.json(info);
+  } catch (err) {
+    console.error('Ошибка отмены игры:', err);
+    res.status(500).json({ error: 'Failed to cancel game' });
+  }
+});
+
+/**
+ * @swagger
+ * /api/games/{hallId}/{date}/cancel:
+ *   delete:
+ *     summary: Снять отмену игры
+ *     description: Только для администратора. Снимает отметку об отмене игры.
+ *     tags: [Games]
+ *     parameters:
+ *       - in: path
+ *         name: hallId
+ *         required: true
+ *         schema: { type: string }
+ *       - in: path
+ *         name: date
+ *         required: true
+ *         schema: { type: string, format: date }
+ *     responses:
+ *       200:
+ *         description: Отмена снята
+ *       403:
+ *         description: Требуется вход администратора
+ */
+app.delete('/api/games/:hallId/:date/cancel', mutationLimiter, requireAdmin, async (req, res) => {
+  const { hallId, date } = req.params;
+  if (!isKnownHall(hallId) || !isValidDateStr(date)) {
+    return res.status(400).json({ error: 'Неверный зал или дата' });
+  }
+  try {
+    await pool.query(
+      `UPDATE games SET cancelled = false WHERE hall_id = $1 AND date = $2`,
+      [hallId, date]
+    );
+    const info = await getGameTime(hallId, date);
+    res.json(info);
+  } catch (err) {
+    console.error('Ошибка снятия отмены игры:', err);
+    res.status(500).json({ error: 'Failed to uncancel game' });
   }
 });
 

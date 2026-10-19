@@ -865,6 +865,10 @@ function getNearestGame(hall) {
   hallSchedule(hall).forEach(item => {
     const dayCode = getDayCode(item.day);
     const dayDiff = (dayCode - nowWeekDay + 7) % 7;
+    // Пропускаем отменённые дни — ближайшая игра на отменённый день не определяется.
+    const dateStr = dateForDayCode(dayCode);
+    const ov = timeOverride(hall, dateStr);
+    if (ov && ov.cancelled) return;
     if (!nearest || dayDiff < nearest.dayDiff) {
       nearest = { dayDiff, day: item.day, from: item.from, to: item.to };
     }
@@ -1065,7 +1069,10 @@ function showSchedule() {
     const cntHtml = dayCnt > 0 ? `<div class="sched-stats">+${dayCnt}</div>` : '';
 
     let slotHtml;
-    if (ov) {
+    if (ov && ov.cancelled) {
+      // Игра отменена — красный маркер «отм.».
+      slotHtml = `<div class="sched-slot sched-slot-cancelled">отм.</div>${cntHtml}`;
+    } else if (ov) {
       // Игра с заданным временем: изменение расписания либо игра вне графика.
       const cls = ov.isExtra ? 'sched-slot sched-slot-extra' : 'sched-slot sched-slot-changed';
       const mark = ov.isExtra ? ' ⭐' : ' ⚠️';
@@ -2276,6 +2283,7 @@ async function loadTimeOverrides(hall) {
         note: t.note || '',
         isOverride: true,
         isExtra: !!t.isExtra,
+        cancelled: !!t.cancelled,
         scheduledFrom: null,
         scheduledTo: null
       };
@@ -2288,6 +2296,7 @@ async function loadTimeOverrides(hall) {
 // Здесь остаётся только разовое модальное уведомление для игроков.
 function renderTimeBanner(info, hall, date) {
   if (!info || !info.isOverride) return;
+  if (info.cancelled) return; // отменённая игра — уведомление о времени не нужно
   maybeShowTimeNotice(info, hall, date);
 }
 
@@ -2500,9 +2509,11 @@ async function loadAdminGameTime() {
     adminConfirmState = {
       confirmed: !!info.confirmed,
       price: info.confirmedPrice != null ? info.confirmedPrice : null,
-      players: info.confirmedPlayers != null ? info.confirmedPlayers : null
+      players: info.confirmedPlayers != null ? info.confirmedPlayers : null,
+      cancelled: !!info.cancelled
     };
     updateConfirmButton();
+    updateCancelButton();
 
     if (hint) {
       if (info.scheduledFrom) {
@@ -2579,6 +2590,50 @@ async function saveGameTime() {
   } catch (_) {
     showToast('Ошибка соединения с сервером', 'error');
   }
+}
+
+// Отменить игру / снять отмену. При отмене удаляются все записавшиеся.
+async function toggleGameCancel() {
+  const hall = document.getElementById('adminHallSelect').value;
+  const date = document.getElementById('adminDateInput').value;
+  if (!date) { showToast('Укажите дату', 'error'); return; }
+
+  const isCancelled = adminConfirmState.cancelled;
+  const method = isCancelled ? 'DELETE' : 'PATCH';
+  const action = isCancelled ? 'Отмена снята' : 'Игра отменена';
+
+  try {
+    const resp = await fetch(`${API_BASE_URL}/api/games/${hall}/${date}/cancel`, {
+      method,
+      headers: adminHeaders()
+    });
+    if (resp.status === 403) { adminLogout(); return; }
+    if (!resp.ok) {
+      const e = await resp.json().catch(() => ({}));
+      showToast(e.error || 'Не удалось', 'error');
+      return;
+    }
+    const info = await resp.json();
+    adminConfirmState.cancelled = !!info.cancelled;
+    updateCancelButton();
+    showToast(action, 'success');
+    await loadTimeOverrides(hall);
+    if (date === getNearestGameDate(hall)) await loadGameTime(hall, date);
+    showList();
+    showSchedule();
+  } catch (_) {
+    showToast('Ошибка соединения с сервером', 'error');
+  }
+}
+
+// Отрисовать кнопку отмены: красная (отменена) / обычная.
+function updateCancelButton() {
+  const btn = document.getElementById('adminCancelBtn');
+  if (!btn) return;
+  const on = !!adminConfirmState.cancelled;
+  btn.classList.toggle('cancelled', on);
+  btn.textContent = on ? '✅ Игра отменена' : 'Игра отменена';
+  btn.title = on ? 'Нажмите, чтобы снять отмену' : 'Отменить игру (все записи будут удалены)';
 }
 
 // Отрисовать кнопку подтверждения: красная (не подтверждена) /

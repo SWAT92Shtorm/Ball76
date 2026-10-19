@@ -80,3 +80,26 @@ export async function getAllGroups() {
   );
   return res.rows;
 }
+
+/** Сохранить распознанный опрос (message_id → зал и даты). */
+export async function savePoll({ messageId, chatId, hallId, hallName, dates }) {
+  await pool.query(
+    `INSERT INTO poll_games (message_id, chat_id, hall_id, hall_name, dates)
+       VALUES ($1, $2, $3, $4, $5)
+     ON CONFLICT (message_id) DO UPDATE SET
+       hall_id    = EXCLUDED.hall_id,
+       hall_name  = EXCLUDED.hall_name,
+       dates      = EXCLUDED.dates,
+       created_at = now()`,
+    [messageId, chatId, hallId, hallName, dates]
+  );
+}
+
+/** Получить распознанный опрос по message_id. */
+export async function getPoll(messageId) {
+  const res = await pool.query(
+    'SELECT * FROM poll_games WHERE message_id = $1',
+    [messageId]
+  );
+  return res.rows[0] || null;
+}

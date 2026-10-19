@@ -7,14 +7,9 @@
 // ============================================================
 
 import { getConfigCached, doSignup, upcomingDates } from '../game.js';
-import { getLink } from '../db.js';
+import { getLink, savePoll, getPoll } from '../db.js';
 import { hallMatchesGroup } from '../scheduler.js';
 import { log } from '../logger.js';
-
-// message_id (в чате) → { hallId, hallName, dates: [date, ...] }
-// Храним в памяти: опрос живёт недолго, перезапуск бота сбрасывает карту.
-const pollMap = new Map();
-const MAX_POLLS = 200;
 
 // Дни недели для парсинга заголовка опроса.
 const DAY_ALIASES = {
@@ -162,6 +157,7 @@ export async function handlePoll(ctx) {
 
   const question = poll.question || '';
   const messageId = ctx.message.message_id;
+  const chatId = ctx.chat?.id || 0;
   const groupTitle = ctx.chat?.title || '';
   if (!messageId) return;
 
@@ -172,12 +168,14 @@ export async function handlePoll(ctx) {
       return;
     }
 
-    pollMap.set(messageId, game);
-    // Ограничиваем размер карты.
-    if (pollMap.size > MAX_POLLS) {
-      const firstKey = pollMap.keys().next().value;
-      pollMap.delete(firstKey);
-    }
+    // Сохраняем в БД, чтобы опрос переживал перезапуск бота.
+    await savePoll({
+      messageId,
+      chatId,
+      hallId: game.hallId,
+      hallName: game.hallName,
+      dates: game.dates
+    });
 
     log.info(`Опрос «${question}» → ${game.hallName}, даты: ${game.dates.join(', ')} (msg ${messageId})`);
   } catch (e) {
@@ -197,7 +195,7 @@ export async function handleReaction(ctx) {
   const added = mr.new_reaction && mr.new_reaction.length > 0;
   if (!added) return;
 
-  const game = pollMap.get(mr.message_id);
+  const game = await getPoll(mr.message_id);
   if (!game) return;
 
   const userId = mr.user?.id;
@@ -211,8 +209,8 @@ export async function handleReaction(ctx) {
     }
 
     for (const date of game.dates) {
-      const res = await doSignup(game.hallId, date, link.player_name);
-      log.info(`Реакция от ${userId} → ${game.hallName}, ${date}: ${res.message}`);
+      const res = await doSignup(game.hall_id, date, link.player_name);
+      log.info(`Реакция от ${userId} → ${game.hall_name}, ${date}: ${res.message}`);
     }
   } catch (e) {
     log.warn('handleReaction:', e.message);

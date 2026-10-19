@@ -6,7 +6,7 @@
 // а затем записывает на игру тех, кто отреагировал на опрос.
 // ============================================================
 
-import { getConfigCached, doSignup, upcomingDates } from '../game.js';
+import { getConfigCached, doSignup, doCancel, upcomingDates } from '../game.js';
 import { getLink, savePoll, getPoll, getPollByPollId } from '../db.js';
 import { hallMatchesGroup } from '../scheduler.js';
 import { log } from '../logger.js';
@@ -190,10 +190,14 @@ export async function handlePoll(ctx) {
  */
 export async function handlePollAnswer(ctx) {
   const pa = ctx.pollAnswer;
-  if (!pa) return;
+  if (!pa) {
+    log.info('poll_answer: ctx.pollAnswer пуст');
+    return;
+  }
 
   const pollId = pa.poll_id;
   const userId = pa.user?.id;
+  log.info(`poll_answer: poll_id=${pollId}, user=${userId}`);
   if (!pollId || !userId) return;
 
   try {
@@ -217,15 +221,16 @@ export async function handlePollAnswer(ctx) {
 
 /**
  * Обработать реакцию на сообщение.
- * Если реакцию добавили на сохранённый опрос — записываем пользователя на ВСЕ даты.
+ * Добавление реакции — записываем пользователя на ВСЕ даты,
+ * снятие реакции — отменяем запись.
  */
 export async function handleReaction(ctx) {
   const mr = ctx.messageReaction;
   if (!mr) return;
 
-  // Реагируем только на добавление реакции (new_reaction не пуст).
   const added = mr.new_reaction && mr.new_reaction.length > 0;
-  if (!added) return;
+  const removed = mr.old_reaction && mr.old_reaction.length > 0;
+  if (!added && !removed) return;
 
   const game = await getPoll(mr.message_id);
   if (!game) return;
@@ -241,7 +246,9 @@ export async function handleReaction(ctx) {
     }
 
     for (const date of game.dates) {
-      const res = await doSignup(game.hall_id, date, link.player_name);
+      const res = added
+        ? await doSignup(game.hall_id, date, link.player_name)
+        : await doCancel(game.hall_id, date, link.player_name);
       log.info(`Реакция от ${userId} → ${game.hall_name}, ${date}: ${res.message}`);
     }
   } catch (e) {

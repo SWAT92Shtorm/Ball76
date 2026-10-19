@@ -532,6 +532,9 @@ async function loadFromAPI({ silent = false, refreshHall = true } = {}) {
     // подтянет свежие данные через 30 секунд.
     let playersData;
     if (refreshHall) {
+      // Сначала подтягиваем изменения времени/отмены, чтобы getNearestGameDate
+      // учитывал отменённые игры и не показывал пустой список отменённой игры.
+      await loadTimeOverrides(currentHall);
       const dateStr = getNearestGameDate(currentHall);
       // Если ближайшей игры нет (нет расписания или все игры отменены) —
       // не запрашиваем участников, иначе запрос к /null упадёт и покажет

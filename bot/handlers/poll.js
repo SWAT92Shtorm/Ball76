@@ -7,7 +7,7 @@
 // ============================================================
 
 import { getConfigCached, doSignup, upcomingDates } from '../game.js';
-import { getLink, savePoll, getPoll } from '../db.js';
+import { getLink, savePoll, getPoll, getPollByPollId } from '../db.js';
 import { hallMatchesGroup } from '../scheduler.js';
 import { log } from '../logger.js';
 
@@ -171,6 +171,7 @@ export async function handlePoll(ctx) {
     // Сохраняем в БД, чтобы опрос переживал перезапуск бота.
     await savePoll({
       messageId,
+      pollId: poll.id,
       chatId,
       hallId: game.hallId,
       hallName: game.hallName,
@@ -180,6 +181,37 @@ export async function handlePoll(ctx) {
     log.info(`Опрос «${question}» → ${game.hallName}, даты: ${game.dates.join(', ')} (msg ${messageId})`);
   } catch (e) {
     log.warn('handlePoll:', e.message);
+  }
+}
+
+/**
+ * Обработать ответ на опрос (poll_answer).
+ * Если пользователь ответил на сохранённый опрос — записываем его на ВСЕ даты.
+ */
+export async function handlePollAnswer(ctx) {
+  const pa = ctx.pollAnswer;
+  if (!pa) return;
+
+  const pollId = pa.poll_id;
+  const userId = pa.user?.id;
+  if (!pollId || !userId) return;
+
+  try {
+    const game = await getPollByPollId(pollId);
+    if (!game) return;
+
+    const link = await getLink(userId);
+    if (!link || !link.player_name) {
+      log.info(`Ответ на опрос от ${userId}: нет привязанного ФИО — пропускаем`);
+      return;
+    }
+
+    for (const date of game.dates) {
+      const res = await doSignup(game.hall_id, date, link.player_name);
+      log.info(`Ответ на опрос от ${userId} → ${game.hall_name}, ${date}: ${res.message}`);
+    }
+  } catch (e) {
+    log.warn('handlePollAnswer:', e.message);
   }
 }
 

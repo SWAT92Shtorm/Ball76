@@ -17,6 +17,7 @@
 
 CREATE TABLE IF NOT EXISTS public.poll_games (
   message_id  bigint      NOT NULL PRIMARY KEY,
+  poll_id     text,
   chat_id     bigint      NOT NULL,
   hall_id     text        NOT NULL,
   hall_name   text        NOT NULL,
@@ -24,4 +25,4 @@ CREATE TABLE IF NOT EXISTS public.poll_games (
   created_at  timestamptz NOT NULL DEFAULT now()
 );
 
-COMMENT ON TABLE public.poll_games IS 'Распознанные опросы: message_id → зал и даты игры для записи по реакции';
+COMMENT ON TABLE public.poll_games IS 'Распознанные опросы: message_id/poll_id → зал и даты игры для записи по ответу на опрос';

@@ -81,17 +81,18 @@ export async function getAllGroups() {
   return res.rows;
 }
 
-/** Сохранить распознанный опрос (message_id → зал и даты). */
-export async function savePoll({ messageId, chatId, hallId, hallName, dates }) {
+/** Сохранить распознанный опрос (message_id/poll_id → зал и даты). */
+export async function savePoll({ messageId, pollId = null, chatId, hallId, hallName, dates }) {
   await pool.query(
-    `INSERT INTO poll_games (message_id, chat_id, hall_id, hall_name, dates)
-       VALUES ($1, $2, $3, $4, $5)
+    `INSERT INTO poll_games (message_id, poll_id, chat_id, hall_id, hall_name, dates)
+       VALUES ($1, $2, $3, $4, $5, $6)
      ON CONFLICT (message_id) DO UPDATE SET
+       poll_id    = COALESCE(EXCLUDED.poll_id, poll_games.poll_id),
        hall_id    = EXCLUDED.hall_id,
        hall_name  = EXCLUDED.hall_name,
        dates      = EXCLUDED.dates,
        created_at = now()`,
-    [messageId, chatId, hallId, hallName, dates]
+    [messageId, pollId, chatId, hallId, hallName, dates]
   );
 }
 
@@ -100,6 +101,16 @@ export async function getPoll(messageId) {
   const res = await pool.query(
     'SELECT * FROM poll_games WHERE message_id = $1',
     [messageId]
+  );
+  return res.rows[0] || null;
+}
+
+/** Получить распознанный опрос по poll_id (для ответа на опрос). */
+export async function getPollByPollId(pollId) {
+  if (!pollId) return null;
+  const res = await pool.query(
+    'SELECT * FROM poll_games WHERE poll_id = $1',
+    [pollId]
   );
   return res.rows[0] || null;
 }

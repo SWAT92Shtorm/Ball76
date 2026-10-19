@@ -15,7 +15,7 @@ import {
 } from './handlers/flow.js';
 import { handleText, aiEnabled, confirmAction } from './handlers/ai.js';
 import { registerChat, handleGroupMention } from './handlers/group.js';
-import { handlePoll, handleReaction } from './handlers/poll.js';
+import { handlePoll, handleReaction, handlePollAnswer } from './handlers/poll.js';
 import { startScheduler } from './scheduler.js';
 
 // --- Создание бота (с поддержкой кастомного API-корня для обхода блокировки) ---
@@ -130,6 +130,9 @@ bot.on('message:text', async (ctx) => {
 // --- Опросы: бот видит опрос (privacy mode DISABLED), парсит заголовок ---
 bot.on('message:poll', (ctx) => handlePoll(ctx));
 
+// --- Ответ на опрос: записываем на игру тех, кто ответил на опрос ---
+bot.on('poll_answer', (ctx) => handlePollAnswer(ctx));
+
 // --- Реакции: записываем на игру тех, кто отреагировал на опрос ---
 bot.on('message_reaction', (ctx) => handleReaction(ctx));
 
@@ -172,7 +175,7 @@ async function main() {
   while (!stopping) {
     try {
       await bot.start({
-        allowed_updates: ['message', 'callback_query', 'message_reaction', 'message_reaction_count', 'chat_member', 'my_chat_member'],
+        allowed_updates: ['message', 'callback_query', 'message_reaction', 'message_reaction_count', 'poll_answer', 'chat_member', 'my_chat_member'],
         onStart: (info) => {
           attempt = 0;
           log.info(`Бот @${info.username} запущен (long polling)`);

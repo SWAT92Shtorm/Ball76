@@ -44,11 +44,11 @@ VALUES
   (
     'hall1', 'ЛОКОМОТИВ', '+7 (961) 154-44-11', 'Андрей Дубровин',
     '{"hourly":3000,"full":6000,"short":4500}'::jsonb, NULL,
-    '[{"day":"Tuesday","from":21,"to":23},{"day":"Thursday","from":21,"to":23}]'::jsonb
+    '[{"day":"Tuesday","from":1260,"to":1380},{"day":"Thursday","from":1260,"to":1380}]'::jsonb
   ),
   (
     'hall2', 'АТЛАНТ', '+7 (910) 979-22-99', 'Ярослав Волков',
     '{"hourly":3000,"full":6000,"short":4500}'::jsonb, 300,
-    '[{"day":"Friday","from":21,"to":23}]'::jsonb
+    '[{"day":"Friday","from":1260,"to":1380}]'::jsonb
   )
 ON CONFLICT (sys_name) DO NOTHING;

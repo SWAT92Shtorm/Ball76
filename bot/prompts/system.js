@@ -14,6 +14,15 @@ function nowRu() {
   return { date, wd, time };
 }
 
+// Минуты от полуночи → 'HH:MM' (например 1290 → '21:30').
+function minutesToTime(min) {
+  const m = Number(min);
+  if (!Number.isFinite(m)) return '';
+  const hh = Math.floor(m / 60);
+  const mm = m % 60;
+  return String(hh).padStart(2, '0') + ':' + String(mm).padStart(2, '0');
+}
+
 /** Собирает системный промпт с актуальным контекстом. */
 export function buildSystemPrompt({ playerName = null, halls = {} } = {}) {
   const { date, wd, time } = nowRu();
@@ -26,8 +35,8 @@ export function buildSystemPrompt({ playerName = null, halls = {} } = {}) {
         Tuesday: 'вт', Thursday: 'чт', Friday: 'пт',
         Monday: 'пн', Wednesday: 'ср', Saturday: 'сб', Sunday: 'вс'
       }[s.day])).join('/');
-      const from = String(schedule[0].from).padStart(2, '0');
-      return `- ${h.name} (id: ${id}): ${days}, ${from}:00`;
+      const from = minutesToTime(schedule[0].from);
+      return `- ${h.name} (id: ${id}): ${days}, ${from}`;
     })
     .join('\n');
 

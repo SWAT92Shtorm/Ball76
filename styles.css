@@ -1741,9 +1741,9 @@ th {
   gap: 6px;
   margin-bottom: 8px;
 }
-.sched-row .sched-day { flex: 1; min-width: 0; }
+.sched-row .sched-day { flex: 0 0 auto; width: 64px; min-width: 0; }
 .sched-row .sched-from,
-.sched-row .sched-to { width: 58px; flex: 0 0 58px; }
+.sched-row .sched-to { width: 92px; flex: 0 0 92px; }
 .sched-dash { color: #9e9e9e; }
 .sched-del { width: 30px; height: 30px; }
 .hall-sched-add { width: 100%; margin-bottom: 10px; }

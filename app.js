@@ -295,7 +295,7 @@ function maxPlayers()          { return CONFIG?.maxPlayers || 18; }
 // Используется как значение по умолчанию для дополнительной игры.
 function getDefaultStartTime(hallId) {
   const slot = hallSchedule(hallId)[0];
-  return slot ? `${String(slot.from).padStart(2, '0')}:00` : '';
+  return slot ? minutesToTime(slot.from) : '';
 }
 
 // ==================== 2. UTILS ====================
@@ -874,7 +874,7 @@ function getNearestGame(hall) {
 
   const nearestDate = new Date(now);
   nearestDate.setDate(now.getDate() + nearest.dayDiff);
-  nearestDate.setHours(nearest.from, 0, 0, 0);
+  nearestDate.setHours(Math.floor(nearest.from / 60), nearest.from % 60, 0, 0);
 
   // Дата уже московская (now построен по МСК) — форматируем напрямую,
   // без toISOString(), который перевёл бы её в UTC и мог сдвинуть день
@@ -892,7 +892,7 @@ function getNearestGame(hall) {
 
   // Если для этой игры задано изменённое время — показываем его, а не расписание.
   const ov = timeOverride(hall, dateStr);
-  const scheduledFrom = `${nearest.from}:00`;
+  const scheduledFrom = minutesToTime(nearest.from);
   const startText = ov ? ov.startTime : scheduledFrom;
 
   // «По расписанию было …» показываем только когда время реально сдвинуто
@@ -924,14 +924,14 @@ function getNearestGameText(hall) {
 function selectNearestHall() {
   const now = getMSKNow();
   const nowWeekDay = now.getDay() || 7;
-  const nowHour = now.getHours();
+  const nowMin = now.getHours() * 60 + now.getMinutes();
 
   let nearest = null;
   for (const hallId of Object.keys(CONFIG.halls)) {
     hallSchedule(hallId).forEach(item => {
       const dayCode = getDayCode(item.day);
       const dayDiff = (dayCode - nowWeekDay + 7) % 7;
-      let timeDiff = dayDiff * 24 + (item.from - nowHour);
+      let timeDiff = dayDiff * 24 * 60 + (item.from - nowMin);
       if (timeDiff < 0) timeDiff += 7 * 24;
       if (!nearest || timeDiff < nearest.diff) {
         nearest = { diff: timeDiff, hall: hallId };
@@ -1073,7 +1073,7 @@ function showSchedule() {
     } else if (slots.length) {
       // Показываем только время начала: длительность игры выбирается отдельно.
       slotHtml = slots
-        .map(s => `<div class="sched-slot">${String(s.from).padStart(2, '0')}:00</div>`)
+        .map(s => `<div class="sched-slot">${minutesToTime(s.from)}</div>`)
         .join('') + cntHtml;
     } else {
       slotHtml = cntHtml || '<div class="sched-off">—</div>';
@@ -2738,7 +2738,7 @@ function renderAdminHalls() {
     return;
   }
   box.innerHTML = adminHalls.map(h => {
-    const days = (h.schedule || []).map(s => `${scheduleDayRu(s.day)} ${s.from}:00–${s.to}:00`).join(', ');
+    const days = (h.schedule || []).map(s => `${scheduleDayRu(s.day)} ${minutesToTime(s.from)}–${minutesToTime(s.to)}`).join(', ');
     const inactive = h.active ? '' : ' <span class="hall-badge-inactive">скрыт</span>';
     const perPerson = h.perPerson != null ? ` • ${h.perPerson} ₽/чел` : '';
     const hourly = h.prices && h.prices.hourly != null ? `${h.prices.hourly} ₽/час` : '';
@@ -2803,7 +2803,7 @@ function closeHallForm() {
   editingHallId = null;
 }
 
-// Добавить строку графика: день недели + часы начала/конца.
+// Добавить строку графика: день недели + время начала/конца (часы:минуты).
 function addScheduleRow(value) {
   const rows = document.getElementById('hallScheduleRows');
   const v = value || {};
@@ -2811,16 +2811,28 @@ function addScheduleRow(value) {
   const dayOpts = days.map(d =>
     `<option value="${d}"${v.day === d ? ' selected' : ''}>${scheduleDayRu(d)}</option>`
   ).join('');
+  // Время хранится как минуты от полуночи (from/to) — переводим в HH:MM для поля time.
+  const fromVal = v.from != null ? minutesToTime(v.from) : '';
+  const toVal = v.to != null ? minutesToTime(v.to) : '';
   const row = document.createElement('div');
   row.className = 'sched-row';
   row.innerHTML = `
     <select class="sched-day">${dayOpts}</select>
-    <input type="number" class="sched-from" min="0" max="23" placeholder="21" value="${v.from ?? ''}" />
+    <input type="time" class="sched-from" value="${fromVal}" />
     <span class="sched-dash">–</span>
-    <input type="number" class="sched-to" min="1" max="24" placeholder="23" value="${v.to ?? ''}" />
+    <input type="time" class="sched-to" value="${toVal}" />
     <button class="hall-mini-btn sched-del" title="Удалить день">✕</button>`;
   row.querySelector('.sched-del').addEventListener('click', () => row.remove());
   rows.appendChild(row);
+}
+
+// Минуты от полуночи → 'HH:MM' (например 1290 → '21:30').
+function minutesToTime(min) {
+  if (min == null || !Number.isFinite(Number(min))) return '';
+  const m = Number(min);
+  const h = Math.floor(m / 60);
+  const mm = m % 60;
+  return String(h).padStart(2, '0') + ':' + String(mm).padStart(2, '0');
 }
 
 // Предпросмотр цен: из цены за час считаем 1,5 ч и 2 ч.
@@ -2834,19 +2846,29 @@ function updateHallPricePreview() {
   box.innerHTML = `За 1,5 ч: <strong>${h15} ₽</strong> · за 2 ч: <strong>${h2} ₽</strong>`;
 }
 
-// Собрать график из строк формы.
+// Собрать график из строк формы. Время из полей HH:MM переводим в минуты от полуночи.
 function collectSchedule() {
   const rows = document.querySelectorAll('#hallScheduleRows .sched-row');
   const out = [];
   for (const row of rows) {
     const day = row.querySelector('.sched-day').value;
-    const from = Number(row.querySelector('.sched-from').value);
-    const to = Number(row.querySelector('.sched-to').value);
+    const fromStr = row.querySelector('.sched-from').value;
+    const toStr = row.querySelector('.sched-to').value;
     // Пропускаем полностью пустые строки.
-    if (!row.querySelector('.sched-from').value && !row.querySelector('.sched-to').value) continue;
+    if (!fromStr && !toStr) continue;
+    const from = timeToMinutes(fromStr);
+    const to = timeToMinutes(toStr);
     out.push({ day, from, to });
   }
   return out;
+}
+
+// 'HH:MM' → минуты от полуночи (например '21:30' → 1290). Пусто → null.
+function timeToMinutes(str) {
+  if (!str) return null;
+  const m = String(str).match(/^(\d{1,2}):(\d{2})$/);
+  if (!m) return null;
+  return Number(m[1]) * 60 + Number(m[2]);
 }
 
 async function saveHall() {

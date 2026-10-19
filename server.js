@@ -234,8 +234,8 @@ const DEFAULT_HALLS = {
     responsible: 'Андрей Дубровин',
     prices: { hourly: 3000, full: 6000, short: 4500 },
     schedule: [
-      { day: 'Tuesday', from: 21, to: 23 },
-      { day: 'Thursday', from: 21, to: 23 }
+      { day: 'Tuesday', from: 21 * 60, to: 23 * 60 },
+      { day: 'Thursday', from: 21 * 60, to: 23 * 60 }
     ]
   },
   hall2: {
@@ -246,7 +246,7 @@ const DEFAULT_HALLS = {
     prices: { hourly: 3000, full: 6000, short: 4500 },
     perPerson: 300,
     schedule: [
-      { day: 'Friday', from: 21, to: 23 }
+      { day: 'Friday', from: 21 * 60, to: 23 * 60 }
     ]
   }
 };
@@ -502,11 +502,11 @@ function validateSchedule(raw) {
     if (!HALL_DAYS.includes(day)) return { error: `Неверный день недели: ${day}` };
     const from = Number(item.from);
     const to = Number(item.to);
-    if (!Number.isInteger(from) || from < 0 || from > 23) {
-      return { error: 'Час начала должен быть целым от 0 до 23' };
+    if (!Number.isInteger(from) || from < 0 || from > 24 * 60) {
+      return { error: 'Время начала должно быть от 00:00 до 24:00' };
     }
-    if (!Number.isInteger(to) || to < 1 || to > 24) {
-      return { error: 'Час окончания должен быть целым от 1 до 24' };
+    if (!Number.isInteger(to) || to < 1 || to > 24 * 60) {
+      return { error: 'Время окончания должно быть от 00:01 до 24:00' };
     }
     if (to <= from) return { error: 'Окончание должно быть позже начала' };
     // Защита от дублей одного дня в графике.
@@ -1892,8 +1892,13 @@ function scheduleForDate(hallId, dateStr) {
   return slot ? { from: slot.from, to: slot.to } : null;
 }
 
+// Минуты от полуночи → 'HH:MM' (например 1290 → '21:30').
 function formatHour(h) {
-  return String(h).padStart(2, '0') + ':00';
+  const m = Number(h);
+  if (!Number.isFinite(m)) return '';
+  const hh = Math.floor(m / 60);
+  const mm = m % 60;
+  return String(hh).padStart(2, '0') + ':' + String(mm).padStart(2, '0');
 }
 
 // Снимок суммы на одного человека для подтверждённой игры.

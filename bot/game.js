@@ -171,6 +171,15 @@ export async function nearestGame(hallId) {
   return describeGame(hallId, date, cfg.halls[hallId].name);
 }
 
+// Минуты от полуночи → 'HH:MM' (например 1290 → '21:30').
+function minutesToTime(min) {
+  const m = Number(min);
+  if (!Number.isFinite(m)) return '';
+  const hh = Math.floor(m / 60);
+  const mm = m % 60;
+  return String(hh).padStart(2, '0') + ':' + String(mm).padStart(2, '0');
+}
+
 /** Расписание залов текстом (без системных имён — только названия). */
 export async function scheduleText() {
   const cfg = await getConfigCached();
@@ -184,9 +193,9 @@ export async function scheduleText() {
     const days = schedule
       .map((s) => ({ Tuesday: 'вт', Thursday: 'чт', Friday: 'пт', Monday: 'пн', Wednesday: 'ср', Saturday: 'сб', Sunday: 'вс' }[s.day]))
       .join('/');
-    const from = String(schedule[0].from).padStart(2, '0');
-    const to = String(schedule[0].to).padStart(2, '0');
-    lines.push(`\n${h.name}: ${days}, ${from}:00–${to}:00`);
+    const from = minutesToTime(schedule[0].from);
+    const to = minutesToTime(schedule[0].to);
+    lines.push(`\n${h.name}: ${days}, ${from}–${to}`);
   }
   return lines.join('\n');
 }

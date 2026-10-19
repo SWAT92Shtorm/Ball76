@@ -2629,14 +2629,14 @@ async function toggleGameCancel() {
   }
 }
 
-// Отрисовать кнопку отмены: красная (отменена) / обычная.
+// Отрисовать кнопку отмены: обычная «Отменить игру» / зелёная «Вернуть игру».
 function updateCancelButton() {
   const btn = document.getElementById('adminCancelBtn');
   if (!btn) return;
   const on = !!adminConfirmState.cancelled;
   btn.classList.toggle('cancelled', on);
-  btn.textContent = on ? '✅ Игра отменена' : 'Игра отменена';
-  btn.title = on ? 'Нажмите, чтобы снять отмену' : 'Отменить игру (все записи будут удалены)';
+  btn.textContent = on ? '✅ Вернуть игру' : 'Отменить игру';
+  btn.title = on ? 'Нажмите, чтобы вернуть игру' : 'Отменить игру (все записи будут удалены)';
 }
 
 // Отрисовать кнопку подтверждения: красная (не подтверждена) /

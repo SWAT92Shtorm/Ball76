@@ -38,11 +38,15 @@ export async function getConfigCached({ force = false } = {}) {
 /**
  * Дата (в пределах MAX_DAYS вперёд), на которую игра реально запланирована.
  * Учитываем и обычное расписание, и доп. игры (override из БД).
+ * Отменённую игру (cancelled) не считаем активной.
  * «Сегодняшнюю» игру пропускаем, если время начала уже прошло.
  */
 async function hasGameOn(hallId, halls, date, overrides) {
+  const ov = overrides && overrides[date];
+  if (ov && ov.cancelled) return false; // игра отменена — не предлагаем
+
   const hasSchedule = Boolean(scheduleForDate(halls[hallId], date));
-  const hasExtra = Boolean(overrides && overrides[date]);
+  const hasExtra = Boolean(ov);
   if (!hasSchedule && !hasExtra) return false;
 
   if (date === todayMSK()) {

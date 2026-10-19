@@ -2286,11 +2286,19 @@ app.patch('/api/games/:hallId/:date/cancel', mutationLimiter, requireAdmin, asyn
           WHERE game_id IN (SELECT id FROM games WHERE hall_id = $1 AND date = $2)`,
         [hallId, date]
       );
-      // Помечаем игру отменённой.
-      await client.query(
+      // Помечаем игру отменённой. Уникальность (hall_id, date) не гарантирована,
+      // поэтому обновляем существующую игру, а если её ещё нет — создаём
+      // (иначе отмена не сохранится для игры по расписанию без записей).
+      const upd = await client.query(
         `UPDATE games SET cancelled = true WHERE hall_id = $1 AND date = $2`,
         [hallId, date]
       );
+      if (upd.rowCount === 0) {
+        await client.query(
+          `INSERT INTO games (hall_id, date, cancelled) VALUES ($1, $2, true)`,
+          [hallId, date]
+        );
+      }
       await client.query('COMMIT');
     } catch (txErr) {
       try { await client.query('ROLLBACK'); } catch (_) {}

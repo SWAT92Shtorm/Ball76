@@ -172,6 +172,7 @@ async function main() {
   while (!stopping) {
     try {
       await bot.start({
+        allowed_updates: ['message', 'callback_query', 'message_reaction', 'message_reaction_count', 'chat_member', 'my_chat_member'],
         onStart: (info) => {
           attempt = 0;
           log.info(`Бот @${info.username} запущен (long polling)`);

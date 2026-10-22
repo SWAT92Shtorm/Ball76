@@ -2864,6 +2864,7 @@ function openHallForm(hallId) {
   document.getElementById('hallPerPerson').value = hall && hall.perPerson != null ? hall.perPerson : '';
   document.getElementById('hallPollEnabled').checked = hall ? hall.pollEnabled !== false : true;
   document.getElementById('hallNotifyEnabled').checked = hall ? hall.notifyEnabled !== false : true;
+  document.getElementById('hallNotifyPriceEnabled').checked = hall ? hall.notifyPriceEnabled !== false : true;
   updateHallPricePreview();
 
   // График
@@ -2967,7 +2968,8 @@ async function saveHall() {
       ? null : Number(document.getElementById('hallPerPerson').value),
     schedule: collectSchedule(),
     pollEnabled: document.getElementById('hallPollEnabled').checked,
-    notifyEnabled: document.getElementById('hallNotifyEnabled').checked
+    notifyEnabled: document.getElementById('hallNotifyEnabled').checked,
+    notifyPriceEnabled: document.getElementById('hallNotifyPriceEnabled').checked
   };
 
   const isNew = editingHallId == null;

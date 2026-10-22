@@ -165,6 +165,44 @@ async function checkGather(bot) {
   }
 }
 
+/**
+ * Отправка стоимости в ТГ при подтверждении игры.
+ * Бот периодически опрашивает сервер о ближайших играх залов, у которых
+ * включён флаг notifyPriceEnabled. Если игра подтверждена и стоимость ещё
+ * не отправлялась — шлём сообщение в подходящие группы.
+ */
+async function checkConfirmedPrice(bot) {
+  const cfg = await getConfigCached();
+  for (const [hallId, hall] of Object.entries(cfg.halls)) {
+    // Отправка стоимости для зала отключена — пропускаем.
+    if (hall.notifyPriceEnabled === false) continue;
+
+    const dates = await upcomingDates(hallId, cfg.halls, 3);
+    for (const date of dates) {
+      const time = await api.getGameTime(hallId, date).catch(() => null);
+      if (!time || !time.confirmed) continue;
+      if (time.confirmedPrice == null) continue;
+
+      const key = `price:${hallId}:${date}`;
+      if (alreadySent(key)) continue;
+
+      const g = await describeGame(hallId, date, hall.name);
+      const price = Number(time.confirmedPrice);
+      const players = time.confirmedPlayers != null ? Number(time.confirmedPlayers) : g.count;
+
+      const text =
+        `✅ Игра подтверждена!\n\n` +
+        `🏀 ${g.hallName} — ${g.humanDate}, ${g.startTime}\n` +
+        `Стоимость: ${price} ₽ с человека\n` +
+        `Записано: ${players}/18`;
+
+      await broadcastForHall(bot, text, hallId, hall.name);
+      markSent(key);
+      log.info(`Стоимость подтверждённой игры ${hall.name} ${date} отправлена: ${price} ₽`);
+    }
+  }
+}
+
 /** Запустить планировщик. */
 export function startScheduler(bot) {
   // Напоминания — каждый час в :00 (МСК)
@@ -177,7 +215,12 @@ export function startScheduler(bot) {
     timezone: config.tz
   });
 
-  log.info('Планировщик запущен (напоминания — ежечасно, добор — 12:00 и 18:00 МСК)');
+  // Стоимость подтверждённых игр — каждые 5 минут (быстрая реакция на подтверждение)
+  cron.schedule('*/5 * * * *', () => checkConfirmedPrice(bot).catch((e) => log.error('confirmed-price:', e.message)), {
+    timezone: config.tz
+  });
+
+  log.info('Планировщик запущен (напоминания — ежечасно, добор — 12:00 и 18:00, стоимость — каждые 5 мин)');
 }
 
 export { broadcast, gameSummary };

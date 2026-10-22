@@ -2800,7 +2800,15 @@ async function loadAdminHalls() {
   if (!box) return;
   try {
     const resp = await fetch(`${API_BASE_URL}/api/admin/halls`, { headers: adminHeaders() });
-    if (resp.status === 403) { adminLogout(); return; }
+    if (resp.status === 403) {
+      // Токен недействителен (истёк или сервер перезапущен) — просим войти заново.
+      adminToken = null;
+      try { localStorage.removeItem(ADMIN_TOKEN_KEY); } catch (_) {}
+      updateAdminStatusBar();
+      showToast('Сессия истекла — войдите заново', 'info');
+      openAdminLogin();
+      return;
+    }
     if (!resp.ok) throw new Error('HTTP ' + resp.status);
     const data = await resp.json();
     adminHalls = data.halls || [];

@@ -903,8 +903,21 @@ app.post('/api/players-directory', mutationLimiter, async (req, res) => {
  */
 app.get('/api/players-directory', readLimiter, async (req, res) => {
   try {
+    // Все игроки, которые когда-либо записывались на игры (из game_players),
+    // плюс игроки из справочника players, плюс имена из сохранённых составов
+    // команд (game_teams). Объединяем и сортируем по алфавиту.
     const result = await pool.query(
-      `SELECT name FROM players ORDER BY name`
+      `SELECT DISTINCT name FROM (
+         SELECT name FROM players
+         UNION
+         SELECT p.name FROM game_players gp
+         JOIN players p ON gp.player_id = p.id
+         UNION
+         SELECT jsonb_array_elements_text(team) AS name
+         FROM game_teams, jsonb_array_elements(teams) AS team
+       ) all_players
+       WHERE name IS NOT NULL AND name <> ''
+       ORDER BY name`
     );
     res.json({ players: result.rows.map((r) => r.name) });
   } catch (err) {

@@ -2880,24 +2880,39 @@ function fillBankSelect(selected) {
     BANK_OPTIONS.map(b => `<option value="${b.value}"${b.value === selected ? ' selected' : ''}>${b.label}</option>`).join('');
 }
 
+// Кэш справочника игроков (чтобы не дёргать API при каждом открытии формы).
+let responsiblePlayersCache = null;
+
 // Заполнить выпадающий список ответственных из справочника игроков.
 async function fillResponsibleSelect(selected) {
   const sel = document.getElementById('hallResponsible');
   if (!sel) return;
-  let players = [];
-  try {
-    const resp = await fetch(`${API_BASE_URL}/api/players-directory`, { headers: getTunnelHeaders() });
-    if (resp.ok) {
-      const data = await resp.json();
-      players = (data && data.players) || [];
-    }
-  } catch (_) { /* сеть недоступна — оставляем пустым */ }
+  let players = responsiblePlayersCache;
+  if (players === null) {
+    try {
+      const resp = await fetch(`${API_BASE_URL}/api/players-directory`, { headers: getTunnelHeaders() });
+      if (resp.ok) {
+        const data = await resp.json();
+        players = (data && data.players) || [];
+      } else {
+        players = [];
+      }
+    } catch (_) { players = []; /* сеть недоступна — оставляем пустым */ }
+    responsiblePlayersCache = players;
+  }
+  // Если текущий ответственный не входит в справочник — добавляем его
+  // отдельной опцией, чтобы его можно было сохранить без потери.
+  const hasSelected = selected && players.includes(selected);
+  const extra = (selected && !hasSelected)
+    ? `<option value="${escapeHtml(selected)}" selected>${escapeHtml(selected)}</option>`
+    : '';
   sel.innerHTML = '<option value="">— не выбран —</option>' +
+    extra +
     players.map(p => `<option value="${escapeHtml(p)}"${p === selected ? ' selected' : ''}>${escapeHtml(p)}</option>`).join('');
 }
 
 // Открыть форму зала. hallId = null → новый зал.
-function openHallForm(hallId) {
+async function openHallForm(hallId) {
   editingHallId = hallId;
   const hall = hallId == null ? null : adminHalls.find(h => h.id === hallId);
   const wrap = document.getElementById('hallFormWrap');
@@ -2907,7 +2922,7 @@ function openHallForm(hallId) {
   document.getElementById('hallFormTitle').textContent = hall ? 'Редактирование зала' : 'Новый зал';
   document.getElementById('hallName').value = hall ? hall.name : '';
   document.getElementById('hallPhone').value = hall ? (hall.phone || '') : '';
-  fillResponsibleSelect(hall ? (hall.responsible || '') : '');
+  await fillResponsibleSelect(hall ? (hall.responsible || '') : '');
   fillBankSelect(hall ? (hall.bank || '') : '');
   document.getElementById('hallPriceHourly').value = hall && hall.prices ? (hall.prices.hourly ?? '') : '';
   document.getElementById('hallPerPerson').value = hall && hall.perPerson != null ? hall.perPerson : '';

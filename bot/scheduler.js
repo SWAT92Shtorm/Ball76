@@ -202,7 +202,7 @@ async function checkConfirmedPrice(bot) {
       const players = time.confirmedPlayers != null ? Number(time.confirmedPlayers) : g.count;
 
       const text =
-        `✅ Игра подтверждена!\n\n` +
+        `✅ Игра состоялась!\n\n` +
         `🏀 ${g.hallName} — ${g.humanDate}, ${g.startTime}\n` +
         `Стоимость: ${price} ₽ с человека\n` +
         `Записано: ${players}/18\n` +

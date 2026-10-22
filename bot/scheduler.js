@@ -206,6 +206,7 @@ async function checkConfirmedPrice(bot) {
         `🏀 ${g.hallName} — ${g.humanDate}, ${g.startTime}\n` +
         `Стоимость: ${price} ₽ с человека\n` +
         `Записано: ${players}/18\n` +
+        (hall.responsible ? `👤 Получатель: ${hall.responsible}\n` : '') +
         (hall.phone ? `💳 Оплата переводом на Сбербанк: ${hall.phone}` : '');
 
       await broadcastForHall(bot, text, hallId, hall.name);

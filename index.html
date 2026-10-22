@@ -19,7 +19,7 @@
 
   <title>Запись на баскетбол в Ярославле — ЛОКОМОТИВ и АТЛАНТ</title>
 
-  <link rel="stylesheet" href="styles.css?v=20261019cancel">
+  <link rel="stylesheet" href="styles.css?v=20261022bot">
 
 </head>
 <body>
@@ -252,25 +252,28 @@
             <input type="number" id="hallPerPerson" min="0" step="50" placeholder="пусто = делить аренду" />
           </div>
 
-          <h4 class="admin-subtitle">Бот</h4>
-          <div class="form-row form-row-check">
-            <label class="check-label">
-              <input type="checkbox" id="hallPollEnabled" checked />
-              <span>1. Формирование опроса — бот обрабатывает опросы и реакции для зала</span>
-            </label>
-          </div>
-          <div class="form-row form-row-check">
-            <label class="check-label">
-              <input type="checkbox" id="hallNotifyEnabled" checked />
-              <span>2. Отправка уведомлений — бот шлёт напоминания и добор для зала</span>
-            </label>
-          </div>
-
           <h4 class="admin-subtitle">График игр</h4>
           <div id="hallScheduleRows"></div>
           <button class="modal-btn modal-btn-cancel hall-sched-add" onclick="addScheduleRow()">
             ➕ Добавить день
           </button>
+
+          <h4 class="admin-subtitle">Бот</h4>
+          <div class="form-row form-row-check">
+            <label class="check-label">
+              <input type="checkbox" id="hallPollEnabled" checked />
+              <span class="check-text">
+                <span class="check-title">Формирование опроса</span>
+                <span class="check-hint">бот обрабатывает опросы и реакции для зала</span>
+              </span>
+            </label>
+          </div>
+          <div class="form-row form-row-check">
+            <label class="check-label">
+              <input type="checkbox" id="hallNotifyEnabled" checked />
+              <span>Отправка уведомлений — бот шлёт напоминания и добор для зала</span>
+            </label>
+          </div>
 
           <div id="hallFormError" class="admin-error"></div>
           <div class="modal-footer hall-form-footer">
@@ -322,6 +325,6 @@
     </div>
   </div>
 
-  <script src="app.js?v=20261019cancel"></script>
+  <script src="app.js?v=20261022bot"></script>
 </body>
 </html>

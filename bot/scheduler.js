@@ -262,7 +262,7 @@ export async function createPollForHall(bot, hallId) {
   let n = 0;
   for (const chatId of targetIds) {
     try {
-      const sent = await bot.api.sendPoll(chatId, question, ['➕ за себя', '➕ за товарища'], {
+      const sent = await bot.api.sendPoll(chatId, question, ['✅ за себя', '✅ за товарища'], {
         is_anonymous: false,
         allows_multiple_answers: true
       });

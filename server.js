@@ -2429,6 +2429,18 @@ app.patch('/api/games/:hallId/:date/confirm', mutationLimiter, requireAdmin, asy
       // Текущее время игры (override или расписание) — для расчёта длительности.
       const info = await getGameTime(hallId, date);
 
+      // Подтверждать игру можно только ПОСЛЕ времени её начала (например,
+      // игра в 20:30 — подтверждение доступно с 20:30 до 00:00 следующего дня).
+      // До начала игры подтверждение запрещено.
+      if (confirmed && info.startTime) {
+        const startMs = new Date(`${date}T${info.startTime}:00+03:00`).getTime();
+        if (Date.now() < startMs) {
+          return res.status(400).json({
+            error: `Игру можно подтвердить только после начала (${info.startTime}).`
+          });
+        }
+      }
+
       // Число записавшихся на эту игру.
       const cnt = await client.query(
         `SELECT COUNT(*)::int AS n

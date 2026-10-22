@@ -244,6 +244,21 @@ export async function handleReaction(ctx) {
   const mr = ctx.messageReaction;
   if (!mr) return;
 
+  // Если на сообщении появилась реакция 👎 (дизлайк) — удаляем это сообщение.
+  // Работает ВСЕГДА, независимо от разрешительных признаков в админке
+  // (pollEnabled / notifyEnabled / notifyPriceEnabled).
+  const hasDislike = (mr.new_reaction || []).some(
+    (r) => r.type === 'emoji' && r.emoji === '👎'
+  );
+  if (hasDislike) {
+    try {
+      await ctx.api.deleteMessage(mr.chat?.id, mr.message_id);
+      log.info(`Удалено сообщение ${mr.message_id} из-за реакции 👎`);
+    } catch (e) {
+      log.warn(`Не удалось удалить сообщение ${mr.message_id} (👎): ${e.message}`);
+    }
+  }
+
   const added = mr.new_reaction && mr.new_reaction.length > 0;
   const removed = mr.old_reaction && mr.old_reaction.length > 0;
   if (!added && !removed) return;

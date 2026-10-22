@@ -6,7 +6,7 @@
 import cron from 'node-cron';
 import { config } from './config.js';
 import { api, todayMSK, humanDate, addDays } from './api.js';
-import { getConfigCached, describeGame, upcomingDates } from './game.js';
+import { getConfigCached, describeGame, upcomingDates, nearestGame } from './game.js';
 import { getNotifyChats, getAllGroups, getTelegramIdsByPlayerIds, savePoll, isNotifySent, markNotifySent } from './db.js';
 import { log } from './logger.js';
 
@@ -289,6 +289,56 @@ async function checkPollCreation(bot) {
       }
     }
   }
+}
+
+/**
+ * Запустить опрос вручную для конкретного зала на его ближайшую игру.
+ * Возвращает { ok, message } — сообщение для пользователя.
+ */
+export async function createPollForHall(bot, hallId) {
+  const cfg = await getConfigCached();
+  const hall = cfg.halls[hallId];
+  if (!hall) return { ok: false, message: 'Зал не найден.' };
+
+  const g = await nearestGame(hallId);
+  if (!g || !g.startTime || g.startTime === '—') {
+    return { ok: false, message: `Для зала «${hall.name}» не найдена ближайшая игра.` };
+  }
+
+  // Название опроса: зал + дата и время игры (с учётом изменений времени и причины).
+  let question = `🏀 ${g.hallName} — ${g.humanDate}, ${g.startTime}`;
+  if (g.isOverride) {
+    question += g.note ? `\n⚠️ Время изменено: ${g.note}` : '\n⚠️ Время изменено';
+  }
+
+  const targetIds = await hallTargetIds(hallId, hall.name);
+  let n = 0;
+  for (const chatId of targetIds) {
+    try {
+      const sent = await bot.api.sendPoll(chatId, question, ['➕ за себя', '➕ за товарища'], {
+        is_anonymous: false,
+        allows_multiple_answers: true
+      });
+      await savePoll({
+        messageId: sent.message_id,
+        pollId: sent.poll && sent.poll.id,
+        chatId,
+        hallId,
+        hallName: hall.name,
+        dates: [g.date]
+      });
+      n++;
+    } catch (e) {
+      log.warn(`Опрос в ${chatId} не создан: ${e.message}`);
+    }
+    await new Promise((r) => setTimeout(r, 120)); // ~8 msg/сек — ниже лимитов
+  }
+
+  if (n > 0) {
+    log.info(`Опрос для «${hall.name}» ${g.date} создан вручную в ${n} чат(ах): «${question}»`);
+    return { ok: true, message: `Опрос для «${hall.name}» на ${g.humanDate} запущен в ${n} чат(ах).` };
+  }
+  return { ok: false, message: `Не удалось запустить опрос для «${hall.name}»: нет подходящих чатов.` };
 }
 
 /** Запустить планировщик. */

@@ -15,6 +15,8 @@ export function mainMenu() {
     .text('📋 Мои игры', 'act:mygames')
     .text('📅 Расписание', 'act:schedule')
     .row()
+    .text('📊 Запустить опрос', 'act:poll')
+    .row()
     .url('🌐 Все записи на сайте', siteUrl);
 }
 

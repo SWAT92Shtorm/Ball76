@@ -13,10 +13,12 @@ import {
   doAction, myGames, showSchedule, tryLinkByName, sendMenu,
   confirmCreatePlayer, cancelCreatePlayer
 } from './handlers/flow.js';
+import { getConfigCached } from './game.js';
+import { hallPicker } from './keyboards.js';
 import { handleText, aiEnabled, confirmAction } from './handlers/ai.js';
 import { registerChat, handleGroupMention } from './handlers/group.js';
 import { handlePoll, handleReaction, handlePollAnswer } from './handlers/poll.js';
-import { startScheduler } from './scheduler.js';
+import { startScheduler, createPollForHall } from './scheduler.js';
 
 // --- Создание бота (с поддержкой кастомного API-корня для обхода блокировки) ---
 const botConfig = {};
@@ -61,6 +63,20 @@ bot.callbackQuery('act:signup', async (ctx) => { await ctx.answerCallbackQuery()
 bot.callbackQuery('act:cancel', async (ctx) => { await ctx.answerCallbackQuery(); await startCancel(ctx); });
 bot.callbackQuery('act:mygames', async (ctx) => { await ctx.answerCallbackQuery(); await myGames(ctx); });
 bot.callbackQuery('act:schedule', async (ctx) => { await ctx.answerCallbackQuery(); await showSchedule(ctx); });
+
+// Запустить опрос: показать выбор зала.
+bot.callbackQuery('act:poll', async (ctx) => {
+  await ctx.answerCallbackQuery();
+  const cfg = await getConfigCached();
+  await ctx.reply('Выберите зал для опроса:', { reply_markup: hallPicker(cfg.halls, 'poll') });
+});
+
+// Выбран зал → запустить опрос на ближайшую игру.
+bot.callbackQuery(/^poll:hall:([a-z0-9_-]+)$/, async (ctx) => {
+  await ctx.answerCallbackQuery();
+  const res = await createPollForHall(bot, ctx.match[1]);
+  await ctx.reply(res.message);
+});
 
 // Добавление нового игрока в базу по ФИО из Telegram
 bot.callbackQuery('link:create', (ctx) => confirmCreatePlayer(ctx));

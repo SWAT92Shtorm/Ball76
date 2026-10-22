@@ -39,6 +39,7 @@ pool.query('SELECT 1')
   .then(() => ensureGameConfirmSchema())
   .then(() => ensureGameTeamsSchema())
   .then(() => ensureGameScoreSchema())
+  .then(() => ensureNotifySentSchema())
   .then(() => loadHallsFromDB())
   .then(() => backfillConfirmedDuration())
   .catch(err => {
@@ -302,7 +303,7 @@ const HALL_DAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Satu
 async function loadHallsFromDB() {
   try {
     const result = await pool.query(
-      `SELECT sys_name, name, phone, responsible, prices, per_person, schedule, active,
+      `SELECT sys_name, name, phone, responsible, bank, prices, per_person, schedule, active,
               poll_enabled, notify_enabled, notify_price_enabled
          FROM public.halls
         ORDER BY id`
@@ -315,6 +316,7 @@ async function loadHallsFromDB() {
         name: r.name,
         phone: r.phone || '',
         responsible: r.responsible || '',
+        bank: r.bank || '',
         prices: normalizePrices(r.prices),
         schedule: Array.isArray(r.schedule) ? r.schedule : [],
         pollEnabled: r.poll_enabled !== false,
@@ -347,6 +349,7 @@ async function ensureHallsSchema() {
       name         text NOT NULL,
       phone        text,
       responsible  text,
+      bank         text,
       prices       jsonb NOT NULL DEFAULT '{}'::jsonb,
       per_person   integer,
       schedule     jsonb NOT NULL DEFAULT '[]'::jsonb,
@@ -364,7 +367,8 @@ async function ensureHallsSchema() {
     ALTER TABLE public.halls
       ADD COLUMN IF NOT EXISTS poll_enabled   boolean NOT NULL DEFAULT true,
       ADD COLUMN IF NOT EXISTS notify_enabled boolean NOT NULL DEFAULT true,
-      ADD COLUMN IF NOT EXISTS notify_price_enabled boolean NOT NULL DEFAULT false
+      ADD COLUMN IF NOT EXISTS notify_price_enabled boolean NOT NULL DEFAULT false,
+      ADD COLUMN IF NOT EXISTS bank text
   `);
   // Начальное наполнение — только если таблица пуста.
   const cnt = await pool.query('SELECT COUNT(*)::int AS n FROM public.halls');
@@ -445,6 +449,18 @@ async function ensureGameScoreSchema() {
   await pool.query(`
     CREATE UNIQUE INDEX IF NOT EXISTS game_score_hall_date_pair_key
       ON public.game_score (hall_id, date, pair)
+  `);
+}
+
+// Дублирует migrations/013_notify_sent.sql: таблица персистентных отметок
+// отправленных уведомлений (стоимость, напоминания, добор, опросы) — чтобы
+// сервер был самодостаточен и таблица создавалась автоматически при старте.
+async function ensureNotifySentSchema() {
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS public.notify_sent (
+      key     text PRIMARY KEY,
+      sent_at timestamptz NOT NULL DEFAULT now()
+    )
   `);
 }
 
@@ -574,6 +590,10 @@ function validateHallInput(body, { partial } = {}) {
 
   if (b.responsible !== undefined || !partial) {
     out.responsible = String(b.responsible || '').trim().slice(0, 80);
+  }
+
+  if (b.bank !== undefined || !partial) {
+    out.bank = String(b.bank || '').trim().slice(0, 40);
   }
 
   if (b.prices !== undefined || !partial) {
@@ -1674,7 +1694,7 @@ app.post('/api/admin/login', mutationLimiter, (req, res) => {
 // для админ-панели, с флагом hasGames (есть ли по залу игры в БД).
 async function listHallsForAdmin() {
   const result = await pool.query(
-    `SELECT h.id, h.sys_name, h.name, h.phone, h.responsible, h.prices,
+    `SELECT h.id, h.sys_name, h.name, h.phone, h.responsible, h.bank, h.prices,
             h.per_person, h.schedule, h.active, h.poll_enabled, h.notify_enabled,
             h.notify_price_enabled,
             h.created_at, h.updated_at,
@@ -1688,6 +1708,7 @@ async function listHallsForAdmin() {
     name: r.name,
     phone: r.phone || '',
     responsible: r.responsible || '',
+    bank: r.bank || '',
     prices: normalizePrices(r.prices),
     perPerson: r.per_person,
     schedule: Array.isArray(r.schedule) ? r.schedule : [],
@@ -1747,13 +1768,13 @@ app.post('/api/admin/halls', mutationLimiter, requireAdmin, async (req, res) => 
       d.sysName = await generateHallSysName();
     }
     const result = await pool.query(
-      `INSERT INTO public.halls (sys_name, name, phone, responsible, prices, per_person, schedule, active,
+      `INSERT INTO public.halls (sys_name, name, phone, responsible, bank, prices, per_person, schedule, active,
                                  poll_enabled, notify_enabled, notify_price_enabled)
-       VALUES ($1,$2,$3,$4,$5::jsonb,$6,$7::jsonb,$8,$9,$10,$11)
+       VALUES ($1,$2,$3,$4,$5,$6::jsonb,$7,$8::jsonb,$9,$10,$11,$12)
        ON CONFLICT (sys_name) DO NOTHING
        RETURNING id`,
       [
-        d.sysName, d.name, d.phone, d.responsible,
+        d.sysName, d.name, d.phone, d.responsible, d.bank,
         JSON.stringify(d.prices), d.perPerson,
         JSON.stringify(d.schedule), d.active !== false,
         d.pollEnabled !== false, d.notifyEnabled !== false,
@@ -1798,7 +1819,7 @@ app.patch('/api/admin/halls/:hallId', mutationLimiter, requireAdmin, async (req,
   const vals = [];
   let i = 1;
   const map = {
-    sysName: 'sys_name', name: 'name', phone: 'phone', responsible: 'responsible',
+    sysName: 'sys_name', name: 'name', phone: 'phone', responsible: 'responsible', bank: 'bank',
     perPerson: 'per_person', active: 'active',
     pollEnabled: 'poll_enabled', notifyEnabled: 'notify_enabled',
     notifyPriceEnabled: 'notify_price_enabled'

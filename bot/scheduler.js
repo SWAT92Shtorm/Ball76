@@ -7,20 +7,16 @@ import cron from 'node-cron';
 import { config } from './config.js';
 import { api, todayMSK, humanDate, addDays } from './api.js';
 import { getConfigCached, describeGame, upcomingDates } from './game.js';
-import { getNotifyChats, getAllGroups, getTelegramIdsByPlayerIds, savePoll } from './db.js';
+import { getNotifyChats, getAllGroups, getTelegramIdsByPlayerIds, savePoll, isNotifySent, markNotifySent } from './db.js';
 import { log } from './logger.js';
 
-// Отметки отправленного, чтобы не дублировать (в пределах суток).
-const sent = new Map(); // key → timestamp
-
-function alreadySent(key) {
-  return sent.has(key);
+// Отметки отправленного хранятся в БД (таблица notify_sent), чтобы переживать
+// перезапуски бота и не дублировать уведомления (стоимость, напоминания и т.п.).
+async function alreadySent(key) {
+  return isNotifySent(key);
 }
-function markSent(key) {
-  sent.set(key, Date.now());
-  // чистим старые записи (> 24 ч)
-  const dayAgo = Date.now() - 24 * 3600 * 1000;
-  for (const [k, t] of sent) if (t < dayAgo) sent.delete(k);
+async function markSent(key) {
+  await markNotifySent(key);
 }
 
 /** Отправить текст во все чаты, подписанные на рассылки, с антифлуд-паузой. */
@@ -137,10 +133,10 @@ async function checkReminders(bot) {
       if (diffH < 0 || diffH > config.reminderHoursBefore) continue;
 
       const key = `remind:${hallId}:${date}`;
-      if (alreadySent(key)) continue;
+      if (await alreadySent(key)) continue;
 
       await broadcastForHall(bot, `⏰ Напоминание!\n${gameSummary(g)}`, hallId, hall.name);
-      markSent(key);
+      await markSent(key);
     }
   }
 }
@@ -163,7 +159,7 @@ async function checkGather(bot) {
       if (diffH < 0 || diffH > config.gatherHoursBefore) continue;
 
       const key = `gather:${hallId}:${date}`;
-      if (alreadySent(key)) continue;
+      if (await alreadySent(key)) continue;
 
       // Недобор шлём только при 7–9 участниках: меньше 7 — игра фактически
       // ещё не собирается, 10+ — уже достаточно для полноценной игры.
@@ -171,7 +167,7 @@ async function checkGather(bot) {
 
       const free = 18 - g.count;
       await broadcastForHall(bot, `📣 Недобор!\n${gameSummary(g)}\nСвободно мест: ${free}`, hallId, hall.name);
-      markSent(key);
+      await markSent(key);
     }
   }
 }
@@ -200,22 +196,23 @@ async function checkConfirmedPrice(bot) {
       if (time.confirmedPrice == null) continue;
 
       const key = `price:${hallId}:${date}`;
-      if (alreadySent(key)) continue;
+      if (await alreadySent(key)) continue;
 
       const g = await describeGame(hallId, date, hall.name);
       const price = Number(time.confirmedPrice);
       const players = time.confirmedPlayers != null ? Number(time.confirmedPlayers) : g.count;
 
+      const bank = hall.bank || 'Сбербанк';
       const text =
         `✅ Игра состоялась!\n\n` +
         `🏀 ${g.hallName} — ${g.humanDate}, ${g.startTime}\n` +
         `Стоимость: ${price} ₽ с человека\n` +
         `Записано: ${players}/18\n` +
         (hall.responsible ? `👤 Получатель: ${hall.responsible}\n` : '') +
-        (hall.phone ? `💳 Оплата переводом на Сбербанк: ${hall.phone}` : '');
+        (hall.phone ? `💳 Оплата переводом на ${bank}: ${hall.phone}` : '');
 
       await broadcastForHall(bot, text, hallId, hall.name);
-      markSent(key);
+      await markSent(key);
       log.info(`Стоимость подтверждённой игры ${hall.name} ${date} отправлена: ${price} ₽`);
     }
   }
@@ -247,7 +244,7 @@ async function checkPollCreation(bot) {
       if (!g.startTime || g.startTime === '—') continue;
 
       const key = `poll:${hallId}:${date}`;
-      if (alreadySent(key)) continue;
+      if (await alreadySent(key)) continue;
 
       // Название опроса: зал + дата и время игры (с учётом изменений времени и причины).
       let question = `🏀 ${g.hallName} — ${g.humanDate}, ${g.startTime}`;
@@ -280,7 +277,7 @@ async function checkPollCreation(bot) {
       }
 
       if (n > 0) {
-        markSent(key);
+        await markSent(key);
         log.info(`Опрос для «${hall.name}» ${date} создан в ${n} чат(ах): «${question}»`);
       }
     }

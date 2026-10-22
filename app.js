@@ -2848,6 +2848,38 @@ function scheduleDayRu(day) {
 
 let editingHallId = null; // null = создание нового зала
 
+// Список российских банков для поля «Банк оплаты» (сокращения).
+const BANK_OPTIONS = [
+  { value: 'СБ', label: 'Сбербанк (СБ)' },
+  { value: 'Т-Банк', label: 'Т-Банк' },
+  { value: 'Альфа', label: 'Альфа-Банк (Альфа)' },
+  { value: 'ВТБ', label: 'ВТБ' },
+  { value: 'ГПБ', label: 'Газпромбанк (ГПБ)' },
+  { value: 'РСХБ', label: 'Россельхозбанк (РСХБ)' },
+  { value: 'Райффайзен', label: 'Райффайзенбанк (Райффайзен)' },
+  { value: 'Озон', label: 'Озон Банк (Озон)' },
+  { value: 'Совком', label: 'Совкомбанк (Совком)' },
+  { value: 'ПСБ', label: 'Промсвязьбанк (ПСБ)' },
+  { value: 'МТС', label: 'МТС Банк (МТС)' },
+  { value: 'Почта', label: 'Почта Банк (Почта)' },
+  { value: 'Росбанк', label: 'Росбанк' },
+  { value: 'Уралсиб', label: 'Уралсиб' },
+  { value: 'Ак Барс', label: 'Ак Барс Банк (Ак Барс)' },
+  { value: 'ХКБ', label: 'Хоум Кредит (ХКБ)' },
+  { value: 'Открытие', label: 'Банк Открытие (Открытие)' },
+  { value: 'ДОМ.РФ', label: 'Банк ДОМ.РФ' },
+  { value: 'Синара', label: 'Синара' },
+  { value: 'КЭБ', label: 'Кредит Европа Банк (КЭБ)' }
+];
+
+// Заполнить выпадающий список банков.
+function fillBankSelect(selected) {
+  const sel = document.getElementById('hallBank');
+  if (!sel) return;
+  sel.innerHTML = '<option value="">— не выбран —</option>' +
+    BANK_OPTIONS.map(b => `<option value="${b.value}"${b.value === selected ? ' selected' : ''}>${b.label}</option>`).join('');
+}
+
 // Открыть форму зала. hallId = null → новый зал.
 function openHallForm(hallId) {
   editingHallId = hallId;
@@ -2860,6 +2892,7 @@ function openHallForm(hallId) {
   document.getElementById('hallName').value = hall ? hall.name : '';
   document.getElementById('hallPhone').value = hall ? (hall.phone || '') : '';
   document.getElementById('hallResponsible').value = hall ? (hall.responsible || '') : '';
+  fillBankSelect(hall ? (hall.bank || '') : '');
   document.getElementById('hallPriceHourly').value = hall && hall.prices ? (hall.prices.hourly ?? '') : '';
   document.getElementById('hallPerPerson').value = hall && hall.perPerson != null ? hall.perPerson : '';
   document.getElementById('hallPollEnabled').checked = hall ? hall.pollEnabled !== false : true;
@@ -2961,6 +2994,7 @@ async function saveHall() {
     name: document.getElementById('hallName').value.trim(),
     phone: document.getElementById('hallPhone').value.trim(),
     responsible: document.getElementById('hallResponsible').value.trim(),
+    bank: document.getElementById('hallBank').value,
     prices: {
       hourly: Number(document.getElementById('hallPriceHourly').value || 0)
     },

@@ -114,3 +114,18 @@ export async function getPollByPollId(pollId) {
   );
   return res.rows[0] || null;
 }
+
+/** Проверить, отправлялось ли уведомление с данным ключом. */
+export async function isNotifySent(key) {
+  const res = await pool.query('SELECT 1 FROM notify_sent WHERE key = $1', [key]);
+  return res.rowCount > 0;
+}
+
+/** Отметить уведомление как отправленное (идемпотентно). */
+export async function markNotifySent(key) {
+  await pool.query(
+    `INSERT INTO notify_sent (key) VALUES ($1)
+     ON CONFLICT (key) DO NOTHING`,
+    [key]
+  );
+}

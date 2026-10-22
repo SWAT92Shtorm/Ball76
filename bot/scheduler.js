@@ -299,8 +299,8 @@ export function startScheduler(bot) {
     timezone: config.tz
   });
 
-  // Стоимость подтверждённых игр — каждые 5 минут (быстрая реакция на подтверждение)
-  cron.schedule('*/5 * * * *', () => checkConfirmedPrice(bot).catch((e) => log.error('confirmed-price:', e.message)), {
+  // Стоимость подтверждённых игр — каждую минуту (мгновенная реакция на подтверждение)
+  cron.schedule('* * * * *', () => checkConfirmedPrice(bot).catch((e) => log.error('confirmed-price:', e.message)), {
     timezone: config.tz
   });
 

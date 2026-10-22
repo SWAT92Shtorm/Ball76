@@ -253,7 +253,8 @@ async function checkPollCreation(bot) {
       for (const chatId of targetIds) {
         try {
           const sent = await bot.api.sendPoll(chatId, question, ['+', '+ за товарища'], {
-            is_anonymous: false
+            is_anonymous: false,
+            allows_multiple_answers: true
           });
           // Сохраняем опрос, чтобы ответы на него обрабатывались как обычно.
           await savePoll({

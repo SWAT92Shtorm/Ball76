@@ -124,6 +124,11 @@ export async function getPollByHallAndDate(hallId, date) {
   return res.rows[0] || null;
 }
 
+/** Удалить запись опроса по message_id (когда сообщение удалено). */
+export async function deletePollByMessageId(messageId) {
+  await pool.query('DELETE FROM poll_games WHERE message_id = $1', [messageId]);
+}
+
 /** Проверить, отправлялось ли уведомление с данным ключом. */
 export async function isNotifySent(key) {
   const res = await pool.query('SELECT 1 FROM notify_sent WHERE key = $1', [key]);

@@ -7,7 +7,7 @@
 // ============================================================
 
 import { getConfigCached, doSignup, doCancel, upcomingDates } from '../game.js';
-import { getLink, savePoll, getPoll, getPollByPollId, upsertLink } from '../db.js';
+import { getLink, savePoll, getPoll, getPollByPollId, upsertLink, deletePollByMessageId } from '../db.js';
 import { hallMatchesGroup } from '../scheduler.js';
 import { log } from '../logger.js';
 
@@ -307,6 +307,12 @@ export async function handleReaction(ctx) {
       log.info(`Удалено сообщение ${mr.message_id} из-за реакции 👎/🔥`);
     } catch (e) {
       log.warn(`Не удалось удалить сообщение ${mr.message_id} (👎/🔥): ${e.message}`);
+    }
+    // Сообщение удалено — убираем запись опроса, чтобы можно было запустить заново.
+    try {
+      await deletePollByMessageId(mr.message_id);
+    } catch (e) {
+      log.warn(`Не удалось удалить запись опроса ${mr.message_id}: ${e.message}`);
     }
   }
 

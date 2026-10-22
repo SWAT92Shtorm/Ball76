@@ -92,6 +92,20 @@ function prettifyName(name) {
 
 /** Привязать telegram_id к ФИО (после проверки/создания игрока). */
 async function linkPlayer(ctx, playerName) {
+  // Если у пользователя было старое имя из Telegram (короткое) — переименовываем
+  // его в полное ФИО, чтобы не было дублей в базе.
+  try {
+    const old = await getLink(ctx.from.id);
+    if (old && old.player_name && old.player_name !== playerName) {
+      const words = old.player_name.trim().split(/\s+/).length;
+      if (words < 3) {
+        await api.renamePlayer(ctx.from.id, playerName);
+      }
+    }
+  } catch (e) {
+    log.warn(`Не удалось переименовать игрока для ${ctx.from.id}: ${e.message}`);
+  }
+
   await upsertLink({
     telegramId: ctx.from.id,
     playerName,

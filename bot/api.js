@@ -79,6 +79,10 @@ export const api = {
     return (data && data.playersByHall && data.playersByHall[hallId]) || [];
   },
 
+  /** Переименовать игрока, связанного с telegram_id (чтобы не было дублей). */
+  renamePlayer: (telegramId, newName) =>
+    call('PATCH', '/api/player/rename', { telegramId, newName }),
+
   /** Отменить запись. */
   async cancel(hallId, date, name) {
     const data = await call('DELETE', `/api/players/${hallId}/${date}/${encodeURIComponent(name)}`);

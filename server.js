@@ -1381,6 +1381,62 @@ app.patch('/api/player/name', mutationLimiter, requireAdmin, async (req, res) =>
   }
 });
 
+/**
+ * Переименовать игрока, связанного с telegram_id (вызывается ботом).
+ * Используется, когда пользователь записался под именем из Telegram,
+ * а потом привязал полное ФИО — чтобы не было дублей в базе.
+ */
+app.patch('/api/player/rename', mutationLimiter, async (req, res) => {
+  const { telegramId, newName } = req.body || {};
+  if (!telegramId || !newName) {
+    return res.status(400).json({ error: 'telegramId и newName обязательны' });
+  }
+  const nameError = validateFullName(newName);
+  if (nameError) {
+    return res.status(400).json({ error: nameError });
+  }
+  const trimmed = newName.trim();
+
+  try {
+    // Найти игрока, связанного с telegram_id.
+    const link = await pool.query(
+      'SELECT player_name FROM telegram_links WHERE telegram_id = $1',
+      [String(telegramId)]
+    );
+    if (link.rows.length === 0 || !link.rows[0].player_name) {
+      return res.status(404).json({ error: 'Профиль не привязан' });
+    }
+    const oldName = link.rows[0].player_name;
+    if (oldName === trimmed) {
+      return res.json({ success: true, oldName, newName: trimmed });
+    }
+
+    // Переименовать игрока со старым именем в новое.
+    const upd = await pool.query(
+      'UPDATE players SET name = $1 WHERE name = $2',
+      [trimmed, oldName]
+    );
+    if (upd.rowCount === 0) {
+      // Старого имени нет в players — просто обновляем связку.
+      await pool.query(
+        'UPDATE telegram_links SET player_name = $1 WHERE telegram_id = $2',
+        [trimmed, String(telegramId)]
+      );
+      return res.json({ success: true, oldName, newName: trimmed, renamed: false });
+    }
+
+    // Обновить связку telegram_id → новое имя.
+    await pool.query(
+      'UPDATE telegram_links SET player_name = $1 WHERE telegram_id = $2',
+      [trimmed, String(telegramId)]
+    );
+    res.json({ success: true, oldName, newName: trimmed, renamed: true });
+  } catch (err) {
+    console.error('API player/rename:', err);
+    res.status(500).json({ error: 'Не удалось переименовать игрока' });
+  }
+});
+
 
 /**
  * @swagger

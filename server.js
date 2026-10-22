@@ -1411,7 +1411,42 @@ app.patch('/api/player/rename', mutationLimiter, async (req, res) => {
       return res.json({ success: true, oldName, newName: trimmed });
     }
 
-    // Переименовать игрока со старым именем в новое.
+    // Проверить, есть ли уже игрок с новым именем.
+    const existing = await pool.query(
+      'SELECT id FROM players WHERE name = $1',
+      [trimmed]
+    );
+
+    if (existing.rows.length > 0) {
+      // Новое имя уже существует — объединяем: переносим game_players
+      // со старого имени на новое и удаляем старое (чтобы не было дублей).
+      const oldRes = await pool.query(
+        'SELECT id FROM players WHERE name = $1',
+        [oldName]
+      );
+      if (oldRes.rows.length > 0) {
+        const oldId = oldRes.rows[0].id;
+        const newId = existing.rows[0].id;
+        // Перенести все записи со старого игрока на нового (игнорируя дубли).
+        await pool.query(
+          `INSERT INTO game_players (game_id, player_id)
+           SELECT game_id, $1 FROM game_players WHERE player_id = $2
+           ON CONFLICT (game_id, player_id) DO NOTHING`,
+          [newId, oldId]
+        );
+        // Удалить старого игрока (и его связи).
+        await pool.query('DELETE FROM game_players WHERE player_id = $1', [oldId]);
+        await pool.query('DELETE FROM players WHERE id = $1', [oldId]);
+      }
+      // Обновить связку telegram_id → новое имя.
+      await pool.query(
+        'UPDATE telegram_links SET player_name = $1 WHERE telegram_id = $2',
+        [trimmed, String(telegramId)]
+      );
+      return res.json({ success: true, oldName, newName: trimmed, merged: true });
+    }
+
+    // Нового имени нет — просто переименовываем.
     const upd = await pool.query(
       'UPDATE players SET name = $1 WHERE name = $2',
       [trimmed, oldName]

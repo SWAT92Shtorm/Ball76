@@ -879,6 +879,40 @@ app.post('/api/players-directory', mutationLimiter, async (req, res) => {
   }
 });
 
+/**
+ * @swagger
+ * /api/players-directory:
+ *   get:
+ *     summary: Список всех игроков из справочника
+ *     description: Возвращает массив ФИО всех игроков из таблицы players (для выпадающего списка ответственных в админке).
+ *     tags: [Players]
+ *     responses:
+ *       200:
+ *         description: Список игроков
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 players:
+ *                   type: array
+ *                   items:
+ *                     type: string
+ *       500:
+ *         description: Ошибка чтения из БД
+ */
+app.get('/api/players-directory', readLimiter, async (req, res) => {
+  try {
+    const result = await pool.query(
+      `SELECT name FROM players ORDER BY name`
+    );
+    res.json({ players: result.rows.map((r) => r.name) });
+  } catch (err) {
+    console.error('API players-directory GET:', err);
+    res.status(500).json({ error: 'Не удалось получить список игроков' });
+  }
+});
+
 
 
 /**

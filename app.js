@@ -2880,6 +2880,22 @@ function fillBankSelect(selected) {
     BANK_OPTIONS.map(b => `<option value="${b.value}"${b.value === selected ? ' selected' : ''}>${b.label}</option>`).join('');
 }
 
+// Заполнить выпадающий список ответственных из справочника игроков.
+async function fillResponsibleSelect(selected) {
+  const sel = document.getElementById('hallResponsible');
+  if (!sel) return;
+  let players = [];
+  try {
+    const resp = await fetch(`${API_BASE_URL}/api/players-directory`, { headers: getTunnelHeaders() });
+    if (resp.ok) {
+      const data = await resp.json();
+      players = (data && data.players) || [];
+    }
+  } catch (_) { /* сеть недоступна — оставляем пустым */ }
+  sel.innerHTML = '<option value="">— не выбран —</option>' +
+    players.map(p => `<option value="${escapeHtml(p)}"${p === selected ? ' selected' : ''}>${escapeHtml(p)}</option>`).join('');
+}
+
 // Открыть форму зала. hallId = null → новый зал.
 function openHallForm(hallId) {
   editingHallId = hallId;
@@ -2891,7 +2907,7 @@ function openHallForm(hallId) {
   document.getElementById('hallFormTitle').textContent = hall ? 'Редактирование зала' : 'Новый зал';
   document.getElementById('hallName').value = hall ? hall.name : '';
   document.getElementById('hallPhone').value = hall ? (hall.phone || '') : '';
-  document.getElementById('hallResponsible').value = hall ? (hall.responsible || '') : '';
+  fillResponsibleSelect(hall ? (hall.responsible || '') : '');
   fillBankSelect(hall ? (hall.bank || '') : '');
   document.getElementById('hallPriceHourly').value = hall && hall.prices ? (hall.prices.hourly ?? '') : '';
   document.getElementById('hallPerPerson').value = hall && hall.perPerson != null ? hall.perPerson : '';

@@ -74,7 +74,8 @@ export const api = {
 
   /** Записать игрока. */
   async signup(hallId, date, name) {
-    const data = await call('POST', `/api/players/${hallId}`, { name, date });
+    // source: 'telegram' — ослабленная валидация ФИО (имя из Telegram может быть короче 3 слов).
+    const data = await call('POST', `/api/players/${hallId}`, { name, date, source: 'telegram' });
     return (data && data.playersByHall && data.playersByHall[hallId]) || [];
   },
 

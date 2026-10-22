@@ -7,7 +7,7 @@
 // ============================================================
 
 import { getConfigCached, doSignup, doCancel, upcomingDates } from '../game.js';
-import { getLink, savePoll, getPoll, getPollByPollId } from '../db.js';
+import { getLink, savePoll, getPoll, getPollByPollId, upsertLink } from '../db.js';
 import { hallMatchesGroup } from '../scheduler.js';
 import { log } from '../logger.js';
 
@@ -221,14 +221,48 @@ export async function handlePollAnswer(ctx) {
     }
 
     const link = await getLink(userId);
-    if (!link || !link.player_name) {
-      log.info(`Ответ на опрос от ${userId}: нет привязанного ФИО — пропускаем`);
+    // Имя для записи: привязанное ФИО, либо имя из Telegram (first_name + last_name).
+    let name = link && link.player_name;
+    if (!name) {
+      const fn = (pa.user?.first_name || '').trim();
+      const ln = (pa.user?.last_name || '').trim();
+      name = [fn, ln].filter(Boolean).join(' ').trim();
+      if (name) {
+        // Сохраняем связку telegram_id → имя из Telegram (для идентификации по логину).
+        try {
+          await upsertLink({
+            telegramId: userId,
+            playerName: name,
+            username: pa.user?.username || null,
+            firstName: fn || null,
+            lastName: ln || null
+          });
+        } catch (e) {
+          log.warn(`Не удалось сохранить связку для ${userId}: ${e.message}`);
+        }
+      }
+    }
+
+    if (!name) {
+      log.info(`Ответ на опрос от ${userId}: нет имени для записи — пропускаем`);
       return;
     }
 
     for (const date of game.dates) {
-      const res = await doSignup(game.hall_id, date, link.player_name);
+      const res = await doSignup(game.hall_id, date, name);
       log.info(`Ответ на опрос от ${userId} → ${game.hall_name}, ${date}: ${res.message}`);
+      // Если запись не удалась (например, имя короче 3 слов) — сообщаем пользователю.
+      if (!res.ok) {
+        try {
+          await ctx.api.sendMessage(
+            userId,
+            `Не удалось записать вас на игру: ${res.message}\n` +
+            'Отправьте мне в личку ваше полное ФИО (Фамилия Имя Отчество).'
+          );
+        } catch (e) {
+          log.warn(`Не удалось написать ${userId}: ${e.message}`);
+        }
+      }
     }
   } catch (e) {
     log.warn('handlePollAnswer:', e.message);
@@ -279,16 +313,50 @@ export async function handleReaction(ctx) {
 
   try {
     const link = await getLink(userId);
-    if (!link || !link.player_name) {
-      log.info(`Реакция от ${userId}: нет привязанного ФИО — пропускаем`);
+    // Имя для записи: привязанное ФИО, либо имя из Telegram (first_name + last_name).
+    let name = link && link.player_name;
+    if (!name) {
+      const fn = (mr.user?.first_name || '').trim();
+      const ln = (mr.user?.last_name || '').trim();
+      name = [fn, ln].filter(Boolean).join(' ').trim();
+      if (name) {
+        // Сохраняем связку telegram_id → имя из Telegram (для идентификации по логину).
+        try {
+          await upsertLink({
+            telegramId: userId,
+            playerName: name,
+            username: mr.user?.username || null,
+            firstName: fn || null,
+            lastName: ln || null
+          });
+        } catch (e) {
+          log.warn(`Не удалось сохранить связку для ${userId}: ${e.message}`);
+        }
+      }
+    }
+
+    if (!name) {
+      log.info(`Реакция от ${userId}: нет имени для записи — пропускаем`);
       return;
     }
 
     for (const date of game.dates) {
       const res = added
-        ? await doSignup(game.hall_id, date, link.player_name)
-        : await doCancel(game.hall_id, date, link.player_name);
+        ? await doSignup(game.hall_id, date, name)
+        : await doCancel(game.hall_id, date, name);
       log.info(`Реакция от ${userId} → ${game.hall_name}, ${date}: ${res.message}`);
+      // Если запись не удалась (например, имя короче 3 слов) — сообщаем пользователю.
+      if (added && !res.ok) {
+        try {
+          await ctx.api.sendMessage(
+            userId,
+            `Не удалось записать вас на игру: ${res.message}\n` +
+            'Отправьте мне в личку ваше полное ФИО (Фамилия Имя Отчество).'
+          );
+        } catch (e) {
+          log.warn(`Не удалось написать ${userId}: ${e.message}`);
+        }
+      }
     }
   } catch (e) {
     log.warn('handleReaction:', e.message);

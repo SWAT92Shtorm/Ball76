@@ -660,11 +660,18 @@ const NAME_REGEX = /^[A-Za-zА-Яа-яЁё][A-Za-zА-Яа-яЁё'\-]*(?:\s+[A-Za
 /**
  * Проверяет строку как ФИО. Возвращает null при успехе или текст ошибки.
  */
-function validateFullName(name) {
+function validateFullName(name, loose = false) {
   if (typeof name !== 'string') return 'ФИО должно быть строкой';
   const trimmed = name.trim();
   if (!trimmed) return 'ФИО не может быть пустым';
   if (trimmed.length > 80) return 'ФИО слишком длинное (максимум 80 символов)';
+  // Ослабленная валидация (запись через Telegram): достаточно 1+ слов из букв.
+  if (loose) {
+    if (!/^[A-Za-zА-Яа-яЁё][A-Za-zА-Яа-яЁё'\-]*(?:\s+[A-Za-zА-Яа-яЁё][A-Za-zА-Яа-яЁё'\-]*)*$/.test(trimmed)) {
+      return 'Имя должно состоять из букв (можно несколько слов)';
+    }
+    return null;
+  }
   if (!NAME_REGEX.test(trimmed)) {
     return 'ФИО должно состоять из 3–5 слов: Фамилия Имя Отчество (только буквы, дефис и апостроф)';
   }
@@ -1002,7 +1009,7 @@ app.get('/api/players-directory', readLimiter, async (req, res) => {
  */
 app.post('/api/players/:hallId', mutationLimiter, async (req, res) => {
   const { hallId } = req.params;
-  let { name, date } = req.body;
+  let { name, date, source } = req.body;
 
   console.log('1️⃣ addPlayer: name=' + name + ', date=' + date + ', hallId=' + hallId);
 
@@ -1013,8 +1020,9 @@ app.post('/api/players/:hallId', mutationLimiter, async (req, res) => {
     });
   }
 
-  // Серверная валидация ФИО (защита от прямых вызовов API без клиента)
-  const nameError = validateFullName(name);
+  // Серверная валидация ФИО (защита от прямых вызовов API без клиента).
+  // source === 'telegram' — ослабленная валидация (имя из Telegram может быть короче 3 слов).
+  const nameError = validateFullName(name, source === 'telegram');
   if (nameError) {
     return res.status(400).json({ error: nameError });
   }

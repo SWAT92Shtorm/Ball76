@@ -89,13 +89,13 @@ async function hallTargetIds(hallId, hallName) {
  * HALL_KEYWORDS), плюс явно заданные NOTIFY_GROUP_IDS.
  * Если HALL_KEYWORDS не задан — поведение прежнее: все подписанные чаты.
  */
-async function broadcastForHall(bot, text, hallId, hallName) {
+async function broadcastForHall(bot, text, hallId, hallName, parseMode) {
   const targetIds = await hallTargetIds(hallId, hallName);
 
   let n = 0;
   for (const chatId of targetIds) {
     try {
-      await bot.api.sendMessage(chatId, text);
+      await bot.api.sendMessage(chatId, text, parseMode ? { parse_mode: parseMode } : undefined);
       n++;
     } catch (e) {
       log.warn(`Рассылка в ${chatId} не удалась: ${e.message}`);
@@ -203,15 +203,22 @@ async function checkConfirmedPrice(bot) {
       const players = time.confirmedPlayers != null ? Number(time.confirmedPlayers) : g.count;
 
       const bank = hall.bank || 'Сбербанк';
+      // Номер телефона делаем кликабельной ссылкой (tel:). Остальной текст
+      // экранируем, т.к. отправляем с parse_mode: 'HTML'.
+      const esc = (s) => String(s).replace(/&/g, '&').replace(/</g, '<').replace(/>/g, '>');
+      const phoneDigits = hall.phone ? hall.phone.replace(/[^\d+]/g, '') : '';
+      const phoneLink = hall.phone
+        ? `<a href="tel:${esc(phoneDigits)}">${esc(hall.phone)}</a>`
+        : '';
       const text =
         `✅ Игра состоялась!\n\n` +
-        `🏀 ${g.hallName} — ${g.humanDate}, ${g.startTime}\n` +
-        `Стоимость: ${price} ₽ с человека\n` +
-        `Записано: ${players}/18\n` +
-        (hall.responsible ? `👤 Получатель: ${hall.responsible}\n` : '') +
-        (hall.phone ? `💳 Оплата переводом на ${bank}: ${hall.phone}` : '');
+        `🏀 ${esc(g.hallName)} — ${esc(g.humanDate)}, ${esc(g.startTime)}\n` +
+        `Стоимость: ${esc(price)} ₽ с человека\n` +
+        `Записано: ${esc(players)}/18\n` +
+        (hall.responsible ? `👤 Получатель: ${esc(hall.responsible)}\n` : '') +
+        (phoneLink ? `💳 Оплата переводом на ${esc(bank)}: ${phoneLink}` : '');
 
-      await broadcastForHall(bot, text, hallId, hall.name);
+      await broadcastForHall(bot, text, hallId, hall.name, 'HTML');
       await markSent(key);
       log.info(`Стоимость подтверждённой игры ${hall.name} ${date} отправлена: ${price} ₽`);
     }

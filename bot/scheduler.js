@@ -189,6 +189,11 @@ async function checkConfirmedPrice(bot) {
     if (hall.notifyPriceEnabled === false) continue;
 
     const dates = await upcomingDates(hallId, cfg.halls, 3);
+    // Сегодняшнюю игру тоже проверяем на отправку стоимости, даже если она
+    // уже началась/прошла (upcomingDates её исключает после начала). Это нужно,
+    // чтобы бот отправлял стоимость, когда игру подтвердили до 23:59.
+    const today = todayMSK();
+    if (!dates.includes(today)) dates.push(today);
     for (const date of dates) {
       const time = await api.getGameTime(hallId, date).catch(() => null);
       if (!time || !time.confirmed) continue;

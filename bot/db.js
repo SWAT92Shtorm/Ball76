@@ -129,6 +129,19 @@ export async function deletePollByMessageId(messageId) {
   await pool.query('DELETE FROM poll_games WHERE message_id = $1', [messageId]);
 }
 
+/**
+ * Удалить ВСЕ записи опросов для зала и дат (когда опрос удалён через реакцию).
+ * Опрос может быть создан в нескольких чатах — удаляем все, чтобы
+ * getPollByHallAndDate не считал опрос «уже запущенным».
+ */
+export async function deletePollByHallAndDate(hallId, dates) {
+  if (!dates || dates.length === 0) return;
+  await pool.query(
+    `DELETE FROM poll_games WHERE hall_id = $1 AND dates && $2::text[]`,
+    [hallId, dates]
+  );
+}
+
 /** Проверить, отправлялось ли уведомление с данным ключом. */
 export async function isNotifySent(key) {
   const res = await pool.query('SELECT 1 FROM notify_sent WHERE key = $1', [key]);

@@ -7,7 +7,7 @@
 // ============================================================
 
 import { getConfigCached, doSignup, doCancel, upcomingDates } from '../game.js';
-import { getLink, savePoll, getPoll, getPollByPollId, upsertLink, deletePollByMessageId } from '../db.js';
+import { getLink, savePoll, getPoll, getPollByPollId, upsertLink, deletePollByMessageId, deletePollByHallAndDate } from '../db.js';
 import { hallMatchesGroup } from '../scheduler.js';
 import { log } from '../logger.js';
 
@@ -302,17 +302,25 @@ export async function handleReaction(ctx) {
     (r) => r.type === 'emoji' && (r.emoji === '👎' || r.emoji === '🔥')
   );
   if (hasDislike) {
+    // Сначала получаем запись опроса, чтобы знать зал и даты — опрос мог быть
+    // создан в нескольких чатах, и нужно удалить ВСЕ его записи, иначе
+    // getPollByHallAndDate будет считать опрос «уже запущенным».
+    const game = await getPoll(mr.message_id);
     try {
       await ctx.api.deleteMessage(mr.chat?.id, mr.message_id);
       log.info(`Удалено сообщение ${mr.message_id} из-за реакции 👎/🔥`);
     } catch (e) {
       log.warn(`Не удалось удалить сообщение ${mr.message_id} (👎/🔥): ${e.message}`);
     }
-    // Сообщение удалено — убираем запись опроса, чтобы можно было запустить заново.
+    // Сообщение удалено — убираем записи опроса (все чаты), чтобы можно было запустить заново.
     try {
-      await deletePollByMessageId(mr.message_id);
+      if (game && game.hall_id && game.dates && game.dates.length > 0) {
+        await deletePollByHallAndDate(game.hall_id, game.dates);
+      } else {
+        await deletePollByMessageId(mr.message_id);
+      }
     } catch (e) {
-      log.warn(`Не удалось удалить запись опроса ${mr.message_id}: ${e.message}`);
+      log.warn(`Не удалось удалить записи опроса ${mr.message_id}: ${e.message}`);
     }
   }
 

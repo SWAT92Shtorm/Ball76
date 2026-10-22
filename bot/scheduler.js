@@ -113,6 +113,8 @@ async function checkReminders(bot) {
   const now = Date.now();
 
   for (const [hallId, hall] of Object.entries(cfg.halls)) {
+    // Уведомления для зала отключены в кабинете ответственного — пропускаем.
+    if (hall.notifyEnabled === false) continue;
     const dates = await upcomingDates(hallId, cfg.halls, 3);
     for (const date of dates) {
       const g = await describeGame(hallId, date, hall.name);
@@ -138,6 +140,8 @@ async function checkGather(bot) {
   const now = Date.now();
 
   for (const [hallId, hall] of Object.entries(cfg.halls)) {
+    // Уведомления для зала отключены в кабинете ответственного — пропускаем.
+    if (hall.notifyEnabled === false) continue;
     const dates = await upcomingDates(hallId, cfg.halls, 3);
     for (const date of dates) {
       const g = await describeGame(hallId, date, hall.name);

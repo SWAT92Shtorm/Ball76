@@ -173,6 +173,34 @@ th {
   line-height: 1.4;
 }
 
+/* Галочки-настройки бота в форме зала (1. Формирование опроса, 2. Уведомления) */
+.form-row-check {
+  height: auto;
+  min-height: 40px;
+  align-items: flex-start;
+}
+.form-row-check .check-label {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: auto;
+  flex: 1;
+  white-space: normal;
+  cursor: pointer;
+  font-size: 15px;
+  line-height: 1.4;
+  padding: 8px 0;
+}
+.form-row-check input[type="checkbox"] {
+  flex: 0 0 auto;
+  width: 18px;
+  height: 18px;
+  margin: 0;
+  padding: 0;
+  accent-color: #4caf50;
+  cursor: pointer;
+}
+
 /* ==== Автодополнение ФИО (кастомный dropdown) ==== */
 
 .autocomplete-wrap {

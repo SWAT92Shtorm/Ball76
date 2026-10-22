@@ -168,6 +168,14 @@ export async function handlePoll(ctx) {
       return;
     }
 
+    // Формирование опроса для зала отключено в кабинете ответственного — игнорируем.
+    const cfg = await getConfigCached();
+    const hallCfg = cfg.halls && cfg.halls[game.hallId];
+    if (hallCfg && hallCfg.pollEnabled === false) {
+      log.info(`Опрос «${question}»: формирование опроса для зала «${game.hallName}» отключено — пропускаем`);
+      return;
+    }
+
     // Сохраняем в БД, чтобы опрос переживал перезапуск бота.
     await savePoll({
       messageId,
@@ -204,6 +212,14 @@ export async function handlePollAnswer(ctx) {
     const game = await getPollByPollId(pollId);
     if (!game) return;
 
+    // Формирование опроса для зала отключено — не записываем на игру.
+    const cfg = await getConfigCached();
+    const hallCfg = cfg.halls && cfg.halls[game.hall_id];
+    if (hallCfg && hallCfg.pollEnabled === false) {
+      log.info(`Ответ на опрос от ${userId}: формирование опроса для зала «${game.hall_name}» отключено — пропускаем`);
+      return;
+    }
+
     const link = await getLink(userId);
     if (!link || !link.player_name) {
       log.info(`Ответ на опрос от ${userId}: нет привязанного ФИО — пропускаем`);
@@ -234,6 +250,14 @@ export async function handleReaction(ctx) {
 
   const game = await getPoll(mr.message_id);
   if (!game) return;
+
+  // Формирование опроса для зала отключено — не записываем на игру.
+  const cfg = await getConfigCached();
+  const hallCfg = cfg.halls && cfg.halls[game.hall_id];
+  if (hallCfg && hallCfg.pollEnabled === false) {
+    log.info(`Реакция от ${mr.user?.id}: формирование опроса для зала «${game.hall_name}» отключено — пропускаем`);
+    return;
+  }
 
   const userId = mr.user?.id;
   if (!userId) return;

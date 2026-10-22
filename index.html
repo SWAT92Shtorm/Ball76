@@ -252,6 +252,20 @@
             <input type="number" id="hallPerPerson" min="0" step="50" placeholder="пусто = делить аренду" />
           </div>
 
+          <h4 class="admin-subtitle">Бот</h4>
+          <div class="form-row form-row-check">
+            <label class="check-label">
+              <input type="checkbox" id="hallPollEnabled" checked />
+              <span>1. Формирование опроса — бот обрабатывает опросы и реакции для зала</span>
+            </label>
+          </div>
+          <div class="form-row form-row-check">
+            <label class="check-label">
+              <input type="checkbox" id="hallNotifyEnabled" checked />
+              <span>2. Отправка уведомлений — бот шлёт напоминания и добор для зала</span>
+            </label>
+          </div>
+
           <h4 class="admin-subtitle">График игр</h4>
           <div id="hallScheduleRows"></div>
           <button class="modal-btn modal-btn-cancel hall-sched-add" onclick="addScheduleRow()">

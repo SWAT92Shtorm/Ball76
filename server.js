@@ -302,7 +302,8 @@ const HALL_DAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Satu
 async function loadHallsFromDB() {
   try {
     const result = await pool.query(
-      `SELECT sys_name, name, phone, responsible, prices, per_person, schedule, active
+      `SELECT sys_name, name, phone, responsible, prices, per_person, schedule, active,
+              poll_enabled, notify_enabled
          FROM public.halls
         ORDER BY id`
     );
@@ -315,7 +316,9 @@ async function loadHallsFromDB() {
         phone: r.phone || '',
         responsible: r.responsible || '',
         prices: normalizePrices(r.prices),
-        schedule: Array.isArray(r.schedule) ? r.schedule : []
+        schedule: Array.isArray(r.schedule) ? r.schedule : [],
+        pollEnabled: r.poll_enabled !== false,
+        notifyEnabled: r.notify_enabled !== false
       };
       if (r.per_person != null) hall.perPerson = r.per_person;
       map[r.sys_name] = hall;
@@ -347,9 +350,18 @@ async function ensureHallsSchema() {
       per_person   integer,
       schedule     jsonb NOT NULL DEFAULT '[]'::jsonb,
       active       boolean NOT NULL DEFAULT true,
+      poll_enabled   boolean NOT NULL DEFAULT true,
+      notify_enabled boolean NOT NULL DEFAULT true,
       created_at   timestamp without time zone NOT NULL DEFAULT now(),
       updated_at   timestamp without time zone NOT NULL DEFAULT now()
     )
+  `);
+  // Идемпотентно добавить флаги бота (миграция 011) — на случай, если
+  // таблица уже существовала до этой версии кода.
+  await pool.query(`
+    ALTER TABLE public.halls
+      ADD COLUMN IF NOT EXISTS poll_enabled   boolean NOT NULL DEFAULT true,
+      ADD COLUMN IF NOT EXISTS notify_enabled boolean NOT NULL DEFAULT true
   `);
   // Начальное наполнение — только если таблица пуста.
   const cnt = await pool.query('SELECT COUNT(*)::int AS n FROM public.halls');
@@ -596,6 +608,14 @@ function validateHallInput(body, { partial } = {}) {
 
   if (b.active !== undefined) {
     out.active = !!b.active;
+  }
+
+  if (b.pollEnabled !== undefined) {
+    out.pollEnabled = !!b.pollEnabled;
+  }
+
+  if (b.notifyEnabled !== undefined) {
+    out.notifyEnabled = !!b.notifyEnabled;
   }
 
   return { data: out };
@@ -1648,7 +1668,8 @@ app.post('/api/admin/login', mutationLimiter, (req, res) => {
 async function listHallsForAdmin() {
   const result = await pool.query(
     `SELECT h.id, h.sys_name, h.name, h.phone, h.responsible, h.prices,
-            h.per_person, h.schedule, h.active, h.created_at, h.updated_at,
+            h.per_person, h.schedule, h.active, h.poll_enabled, h.notify_enabled,
+            h.created_at, h.updated_at,
             EXISTS (SELECT 1 FROM games g WHERE g.hall_id = h.sys_name) AS has_games
        FROM public.halls h
       ORDER BY h.id`
@@ -1663,6 +1684,8 @@ async function listHallsForAdmin() {
     perPerson: r.per_person,
     schedule: Array.isArray(r.schedule) ? r.schedule : [],
     active: r.active,
+    pollEnabled: r.poll_enabled !== false,
+    notifyEnabled: r.notify_enabled !== false,
     hasGames: r.has_games,
     createdAt: r.created_at,
     updatedAt: r.updated_at
@@ -1715,14 +1738,16 @@ app.post('/api/admin/halls', mutationLimiter, requireAdmin, async (req, res) => 
       d.sysName = await generateHallSysName();
     }
     const result = await pool.query(
-      `INSERT INTO public.halls (sys_name, name, phone, responsible, prices, per_person, schedule, active)
-       VALUES ($1,$2,$3,$4,$5::jsonb,$6,$7::jsonb,$8)
+      `INSERT INTO public.halls (sys_name, name, phone, responsible, prices, per_person, schedule, active,
+                                 poll_enabled, notify_enabled)
+       VALUES ($1,$2,$3,$4,$5::jsonb,$6,$7::jsonb,$8,$9,$10)
        ON CONFLICT (sys_name) DO NOTHING
        RETURNING id`,
       [
         d.sysName, d.name, d.phone, d.responsible,
         JSON.stringify(d.prices), d.perPerson,
-        JSON.stringify(d.schedule), d.active !== false
+        JSON.stringify(d.schedule), d.active !== false,
+        d.pollEnabled !== false, d.notifyEnabled !== false
       ]
     );
     if (result.rowCount === 0) {
@@ -1764,7 +1789,8 @@ app.patch('/api/admin/halls/:hallId', mutationLimiter, requireAdmin, async (req,
   let i = 1;
   const map = {
     sysName: 'sys_name', name: 'name', phone: 'phone', responsible: 'responsible',
-    perPerson: 'per_person', active: 'active'
+    perPerson: 'per_person', active: 'active',
+    pollEnabled: 'poll_enabled', notifyEnabled: 'notify_enabled'
   };
   for (const [key, col] of Object.entries(map)) {
     if (d[key] !== undefined) {

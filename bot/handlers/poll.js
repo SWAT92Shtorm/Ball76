@@ -223,7 +223,8 @@ export async function handlePollAnswer(ctx) {
     const link = await getLink(userId);
     // Имя для записи: привязанное ФИО, либо имя из Telegram (first_name + last_name).
     let name = link && link.player_name;
-    const usedTelegramName = !name;
+    // Спрашиваем о полном ФИО, только если имя короткое (1–2 слова — «просто из тг»).
+    const usedTelegramName = !name || name.trim().split(/\s+/).length < 3;
     if (!name) {
       const fn = (pa.user?.first_name || '').trim();
       const ln = (pa.user?.last_name || '').trim();
@@ -331,7 +332,8 @@ export async function handleReaction(ctx) {
     const link = await getLink(userId);
     // Имя для записи: привязанное ФИО, либо имя из Telegram (first_name + last_name).
     let name = link && link.player_name;
-    const usedTelegramName = !name;
+    // Спрашиваем о полном ФИО, только если имя короткое (1–2 слова — «просто из тг»).
+    const usedTelegramName = !name || name.trim().split(/\s+/).length < 3;
     if (!name) {
       const fn = (mr.user?.first_name || '').trim();
       const ln = (mr.user?.last_name || '').trim();

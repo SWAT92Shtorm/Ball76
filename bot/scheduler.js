@@ -7,7 +7,7 @@ import cron from 'node-cron';
 import { config } from './config.js';
 import { api, todayMSK, humanDate, addDays } from './api.js';
 import { getConfigCached, describeGame, upcomingDates, nearestGame } from './game.js';
-import { getNotifyChats, getAllGroups, getTelegramIdsByPlayerIds, savePoll, isNotifySent, markNotifySent } from './db.js';
+import { getNotifyChats, getAllGroups, getTelegramIdsByPlayerIds, savePoll, isNotifySent, markNotifySent, getPollByHallAndDate } from './db.js';
 import { log } from './logger.js';
 
 // Отметки отправленного хранятся в БД (таблица notify_sent), чтобы переживать
@@ -303,6 +303,12 @@ export async function createPollForHall(bot, hallId) {
   const g = await nearestGame(hallId);
   if (!g || !g.startTime || g.startTime === '—') {
     return { ok: false, message: `Для зала «${hall.name}» не найдена ближайшая игра.` };
+  }
+
+  // Если опрос на эту дату уже запущен — повторно запускать нельзя.
+  const existingPoll = await getPollByHallAndDate(hallId, g.date);
+  if (existingPoll) {
+    return { ok: false, message: `Опрос для «${hall.name}» на ${g.humanDate} уже запущен.` };
   }
 
   // Название опроса: зал + дата и время игры (с учётом изменений времени и причины).

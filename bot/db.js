@@ -115,6 +115,15 @@ export async function getPollByPollId(pollId) {
   return res.rows[0] || null;
 }
 
+/** Найти опрос по залу и дате (чтобы не запускать повторно). */
+export async function getPollByHallAndDate(hallId, date) {
+  const res = await pool.query(
+    `SELECT * FROM poll_games WHERE hall_id = $1 AND $2 = ANY(dates)`,
+    [hallId, date]
+  );
+  return res.rows[0] || null;
+}
+
 /** Проверить, отправлялось ли уведомление с данным ключом. */
 export async function isNotifySent(key) {
   const res = await pool.query('SELECT 1 FROM notify_sent WHERE key = $1', [key]);

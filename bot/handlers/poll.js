@@ -223,6 +223,7 @@ export async function handlePollAnswer(ctx) {
     const link = await getLink(userId);
     // Имя для записи: привязанное ФИО, либо имя из Telegram (first_name + last_name).
     let name = link && link.player_name;
+    const usedTelegramName = !name;
     if (!name) {
       const fn = (pa.user?.first_name || '').trim();
       const ln = (pa.user?.last_name || '').trim();
@@ -262,6 +263,21 @@ export async function handlePollAnswer(ctx) {
         } catch (e) {
           log.warn(`Не удалось написать ${userId}: ${e.message}`);
         }
+      }
+    }
+
+    // Если записали под именем из Telegram — предложим указать полное ФИО,
+    // чтобы в дальнейшем идентифицировать по правилам формы.
+    if (usedTelegramName && name) {
+      try {
+        await ctx.api.sendMessage(
+          userId,
+          `Вы записаны на игру под именем «${name}».\n` +
+          'Если это не ваше полное ФИО — напишите его в личку (Фамилия Имя Отчество), ' +
+          'и я привяжу его к вашему профилю.'
+        );
+      } catch (e) {
+        log.warn(`Не удалось написать ${userId} о полном ФИО: ${e.message}`);
       }
     }
   } catch (e) {
@@ -315,6 +331,7 @@ export async function handleReaction(ctx) {
     const link = await getLink(userId);
     // Имя для записи: привязанное ФИО, либо имя из Telegram (first_name + last_name).
     let name = link && link.player_name;
+    const usedTelegramName = !name;
     if (!name) {
       const fn = (mr.user?.first_name || '').trim();
       const ln = (mr.user?.last_name || '').trim();
@@ -356,6 +373,21 @@ export async function handleReaction(ctx) {
         } catch (e) {
           log.warn(`Не удалось написать ${userId}: ${e.message}`);
         }
+      }
+    }
+
+    // Если записали под именем из Telegram — предложим указать полное ФИО,
+    // чтобы в дальнейшем идентифицировать по правилам формы.
+    if (usedTelegramName && name && added) {
+      try {
+        await ctx.api.sendMessage(
+          userId,
+          `Вы записаны на игру под именем «${name}».\n` +
+          'Если это не ваше полное ФИО — напишите его в личку (Фамилия Имя Отчество), ' +
+          'и я привяжу его к вашему профилю.'
+        );
+      } catch (e) {
+        log.warn(`Не удалось написать ${userId} о полном ФИО: ${e.message}`);
       }
     }
   } catch (e) {

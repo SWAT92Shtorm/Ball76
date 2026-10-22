@@ -5,9 +5,9 @@
 
 import cron from 'node-cron';
 import { config } from './config.js';
-import { api, todayMSK, humanDate } from './api.js';
+import { api, todayMSK, humanDate, addDays } from './api.js';
 import { getConfigCached, describeGame, upcomingDates } from './game.js';
-import { getNotifyChats, getAllGroups, getTelegramIdsByPlayerIds } from './db.js';
+import { getNotifyChats, getAllGroups, getTelegramIdsByPlayerIds, savePoll } from './db.js';
 import { log } from './logger.js';
 
 // Отметки отправленного, чтобы не дублировать (в пределах суток).
@@ -60,11 +60,11 @@ export function hallMatchesGroup(hallId, hallName, groupTitle) {
 }
 
 /**
- * Отправить текст в группы, подходящие под зал (по названию группы и
- * HALL_KEYWORDS), плюс явно заданные NOTIFY_GROUP_IDS.
+ * Собрать ID чатов, подходящих под зал (по названию группы и HALL_KEYWORDS),
+ * плюс явно заданные NOTIFY_GROUP_IDS.
  * Если HALL_KEYWORDS не задан — поведение прежнее: все подписанные чаты.
  */
-async function broadcastForHall(bot, text, hallId, hallName) {
+async function hallTargetIds(hallId, hallName) {
   const hasKeywords = Object.keys(config.hallKeywords).length > 0;
 
   // Явные группы из .env получают всегда (админ сам указал их для зала).
@@ -84,6 +84,17 @@ async function broadcastForHall(bot, text, hallId, hallName) {
     const chats = await getNotifyChats();
     for (const c of chats) targetIds.add(String(c.chat_id));
   }
+
+  return targetIds;
+}
+
+/**
+ * Отправить текст в группы, подходящие под зал (по названию группы и
+ * HALL_KEYWORDS), плюс явно заданные NOTIFY_GROUP_IDS.
+ * Если HALL_KEYWORDS не задан — поведение прежнее: все подписанные чаты.
+ */
+async function broadcastForHall(bot, text, hallId, hallName) {
+  const targetIds = await hallTargetIds(hallId, hallName);
 
   let n = 0;
   for (const chatId of targetIds) {
@@ -203,6 +214,71 @@ async function checkConfirmedPrice(bot) {
   }
 }
 
+/**
+ * Автоматическое формирование опроса для зала.
+ * Если у зала включён флаг pollEnabled — бот сам создаёт открытый опрос
+ * с вариантами «+» и «+ за товарища» в подходящих группах.
+ * Название опроса: название зала + дата и время игры (с учётом изменений
+ * времени и причины). Опрос сохраняется в БД, чтобы ответы на него
+ * обрабатывались как обычно.
+ */
+async function checkPollCreation(bot) {
+  const cfg = await getConfigCached();
+  // Опрос создаём за 2 дня до игры.
+  const targetDate = addDays(todayMSK(), 2);
+
+  for (const [hallId, hall] of Object.entries(cfg.halls)) {
+    // Формирование опроса для зала отключено — пропускаем.
+    if (hall.pollEnabled === false) continue;
+
+    const dates = await upcomingDates(hallId, cfg.halls, 3);
+    for (const date of dates) {
+      // Создаём опрос только за 2 дня до игры.
+      if (date !== targetDate) continue;
+
+      const g = await describeGame(hallId, date, hall.name);
+      if (!g.startTime || g.startTime === '—') continue;
+
+      const key = `poll:${hallId}:${date}`;
+      if (alreadySent(key)) continue;
+
+      // Название опроса: зал + дата и время игры (с учётом изменений времени и причины).
+      let question = `🏀 ${g.hallName} — ${g.humanDate}, ${g.startTime}`;
+      if (g.isOverride) {
+        question += g.note ? `\n⚠️ Время изменено: ${g.note}` : '\n⚠️ Время изменено';
+      }
+
+      const targetIds = await hallTargetIds(hallId, hall.name);
+      let n = 0;
+      for (const chatId of targetIds) {
+        try {
+          const sent = await bot.api.sendPoll(chatId, question, ['+', '+ за товарища'], {
+            is_anonymous: false
+          });
+          // Сохраняем опрос, чтобы ответы на него обрабатывались как обычно.
+          await savePoll({
+            messageId: sent.message_id,
+            pollId: sent.poll && sent.poll.id,
+            chatId,
+            hallId,
+            hallName: hall.name,
+            dates: [date]
+          });
+          n++;
+        } catch (e) {
+          log.warn(`Опрос в ${chatId} не создан: ${e.message}`);
+        }
+        await new Promise((r) => setTimeout(r, 120)); // ~8 msg/сек — ниже лимитов
+      }
+
+      if (n > 0) {
+        markSent(key);
+        log.info(`Опрос для «${hall.name}» ${date} создан в ${n} чат(ах): «${question}»`);
+      }
+    }
+  }
+}
+
 /** Запустить планировщик. */
 export function startScheduler(bot) {
   // Напоминания — каждый час в :00 (МСК)
@@ -220,7 +296,12 @@ export function startScheduler(bot) {
     timezone: config.tz
   });
 
-  log.info('Планировщик запущен (напоминания — ежечасно, добор — 12:00 и 18:00, стоимость — каждые 5 мин)');
+  // Автоматическое формирование опросов — каждые 5 минут
+  cron.schedule('*/5 * * * *', () => checkPollCreation(bot).catch((e) => log.error('poll-creation:', e.message)), {
+    timezone: config.tz
+  });
+
+  log.info('Планировщик запущен (напоминания — ежечасно, добор — 12:00 и 18:00, стоимость — каждые 5 мин, опросы — каждые 5 мин)');
 }
 
 export { broadcast, gameSummary };

@@ -234,13 +234,6 @@ export async function createPollForHall(bot, hallId) {
   const hall = cfg.halls[hallId];
   if (!hall) return { ok: false, message: 'Зал не найден.' };
 
-  // Формирование опроса для зала отключено в кабинете ответственного —
-  // не создаём опрос, иначе ответы на него всё равно будут игнорироваться
-  // (см. handlePollAnswer / handleReaction в handlers/poll.js).
-  if (hall.pollEnabled === false) {
-    return { ok: false, message: `Формирование опроса для зала «${hall.name}» отключено в кабинете ответственного.` };
-  }
-
   const g = await nearestGame(hallId);
   if (!g || !g.startTime || g.startTime === '—') {
     return { ok: false, message: `Для зала «${hall.name}» не найдена ближайшая игра.` };

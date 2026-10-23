@@ -62,6 +62,16 @@ export async function getMessages() {
   return store.messages;
 }
 
+/** Получить сообщения за последние N часов (в пределах текущего дня). */
+export async function getMessagesSince(hours) {
+  const store = await load();
+  const cutoff = Date.now() - hours * 60 * 60 * 1000;
+  return store.messages.filter((m) => {
+    const t = new Date(m.ts).getTime();
+    return Number.isFinite(t) && t >= cutoff;
+  });
+}
+
 /** Очистить хранилище (например, вручную). */
 export async function clear() {
   cache = { date: todayMSK(), messages: [] };

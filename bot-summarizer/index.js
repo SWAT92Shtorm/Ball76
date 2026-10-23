@@ -8,7 +8,7 @@
 import { Bot } from 'grammy';
 import { config, aiEnabled } from './config.js';
 import { log } from './logger.js';
-import { addMessage, getMessages } from './store.js';
+import { addMessage, getMessagesSince } from './store.js';
 import { summarize } from './llm.js';
 
 // --- Создание бота (с поддержкой кастомного API-корня для обхода блокировки) ---
@@ -62,12 +62,13 @@ async function handleSummaryRequest(ctx) {
     return;
   }
 
-  const messages = await getMessages();
+  // Пересказ за последние 2 часа.
+  const messages = await getMessagesSince(2);
   // Исключаем сам запрос пересказа из истории, чтобы не пересказывать вопрос.
   const history = messages.filter((m) => m.id !== ctx.message.message_id);
 
   if (history.length === 0) {
-    await ctx.reply('Сегодня сообщений пока не было — пересказывать нечего.');
+    await ctx.reply('За последние 2 часа сообщений не было — пересказывать нечего.');
     return;
   }
 
@@ -77,11 +78,12 @@ async function handleSummaryRequest(ctx) {
     .join('\n');
 
   const systemPrompt =
-    'Ты — ассистент, который делает краткий пересказ обсуждения в Telegram-группе. ' +
-    'Прочитай сообщения и составь сжатый, структурированный пересказ: ' +
-    'основные темы, ключевые решения и договорённости. ' +
-    'Отвечай кратко и по делу, на русском языке. ' +
-    'Если сообщений мало — просто коротко перескажи их суть.';
+    'Ты — ассистент, который делает краткий пересказ обсуждения в Telegram-группе за последние 2 часа. ' +
+    'Прочитай сообщения и выдели ТОЛЬКО интересные и важные моменты: ключевые темы, ' +
+    'решения, договорённости, вопросы, требующие внимания. ' +
+    'НЕ пересказывай дословно и не повторяй приветствия и пустые фразы. ' +
+    'Отвечай сжато, структурированно, на русском языке. ' +
+    'Если важного ничего нет — так и напиши.';
 
   try {
     const summary = await summarize(systemPrompt, transcript);

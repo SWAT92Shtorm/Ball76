@@ -72,10 +72,8 @@ async function handleSummaryRequest(ctx) {
     return;
   }
 
-  // Экономим токены: берём только последние 50 сообщений и обрезаем длинные.
-  const MAX_MSGS = 50;
+  // Экономим токены: обрезаем слишком длинные сообщения.
   const MAX_LEN = 200;
-  if (history.length > MAX_MSGS) history = history.slice(-MAX_MSGS);
   const transcript = history
     .map((m) => `${m.from}: ${m.text.length > MAX_LEN ? m.text.slice(0, MAX_LEN) + '…' : m.text}`)
     .join('\n');

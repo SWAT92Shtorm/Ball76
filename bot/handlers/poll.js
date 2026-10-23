@@ -250,11 +250,15 @@ export async function handlePollAnswer(ctx) {
       return;
     }
 
+    // option_ids пуст — пользователь снял все голоса → отменяем запись с сайта.
+    const removed = !pa.option_ids || pa.option_ids.length === 0;
     for (const date of game.dates) {
-      const res = await doSignup(game.hall_id, date, name);
+      const res = removed
+        ? await doCancel(game.hall_id, date, name)
+        : await doSignup(game.hall_id, date, name);
       log.info(`Ответ на опрос от ${userId} → ${game.hall_name}, ${date}: ${res.message}`);
       // Если запись не удалась (например, имя короче 3 слов) — сообщаем пользователю.
-      if (!res.ok) {
+      if (!removed && !res.ok) {
         try {
           await ctx.api.sendMessage(
             userId,
@@ -269,7 +273,7 @@ export async function handlePollAnswer(ctx) {
 
     // Если записали под именем из Telegram — предложим указать полное ФИО,
     // чтобы в дальнейшем идентифицировать по правилам формы.
-    if (usedTelegramName && name) {
+    if (usedTelegramName && name && !removed) {
       try {
         await ctx.api.sendMessage(
           userId,

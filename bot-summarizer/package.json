@@ -1,0 +1,16 @@
+{
+  "name": "bot-summarizer",
+  "version": "1.0.0",
+  "description": "Telegram-бот: читает сообщения в группе и делает краткий пересказ через ИИ (GigaChat)",
+  "type": "module",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js"
+  },
+  "dependencies": {
+    "grammy": "^1.30.0"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

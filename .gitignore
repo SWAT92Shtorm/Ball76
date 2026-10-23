@@ -13,6 +13,11 @@ bot/.env
 bot/node_modules/
 bot/npm-debug.log*
 
+# Бот-пересказчик: секреты и артефакты сборки
+bot-summarizer/.env
+bot-summarizer/node_modules/
+bot-summarizer/npm-debug.log*
+
 # Дампы БД: содержат персональные данные игроков.
 # В git хранится только анонимизированный пример ball76_dump.sql.
 *.dump

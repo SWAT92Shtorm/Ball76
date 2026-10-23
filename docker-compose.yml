@@ -69,8 +69,27 @@ services:
     networks:
       - ball76
 
+  # ==== Бот-пересказчик (не связан с Ball76) ====
+  summarizer:
+    build: ./bot-summarizer
+    container_name: ball76-summarizer
+    env_file:
+      - ./bot-summarizer/.env
+    environment:
+      TZ: Europe/Moscow
+    # Обход блокировки Telegram: пиннинг api.telegram.org на рабочий IP.
+    extra_hosts:
+      - "api.telegram.org:149.154.167.220"
+    volumes:
+      - summarizer-data:/data
+    mem_limit: 256m
+    restart: unless-stopped
+    networks:
+      - ball76
+
 volumes:
   pgdata:
+  summarizer-data:
 
 networks:
   ball76:

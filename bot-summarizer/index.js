@@ -94,6 +94,24 @@ async function handleSummaryRequest(ctx) {
   }
 }
 
+// --- Реакция 🔥 (огонь) на сообщение бота → удаляем это сообщение ---
+bot.on('message_reaction', async (ctx) => {
+  const mr = ctx.messageReaction;
+  if (!mr) return;
+
+  const hasFire = (mr.new_reaction || []).some(
+    (r) => r.type === 'emoji' && r.emoji === '🔥'
+  );
+  if (hasFire) {
+    try {
+      await ctx.api.deleteMessage(mr.chat?.id, mr.message_id);
+      log.info(`Удалено сообщение ${mr.message_id} из-за реакции 🔥`);
+    } catch (e) {
+      log.warn(`Не удалось удалить сообщение ${mr.message_id} (🔥): ${e.message}`);
+    }
+  }
+});
+
 // --- Обработка ошибок ---
 bot.catch((err) => {
   log.error('Bot error:', err?.error?.message || err?.message || err);
@@ -121,7 +139,7 @@ async function main() {
   while (!stopping) {
     try {
       await bot.start({
-        allowed_updates: ['message'],
+        allowed_updates: ['message', 'message_reaction'],
         onStart: (info) => {
           attempt = 0;
           log.info(`Бот @${info.username} запущен (long polling)`);
